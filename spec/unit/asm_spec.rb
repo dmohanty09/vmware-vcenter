@@ -20,6 +20,7 @@ describe ASM do
       @tmp_dir = Dir.mktmpdir
       @basic_data_1 = {'id' => 'foo'}
       @basic_data_2 = {'id' => 'bar'}
+      ASM.init
     end
 
     it 'should only manage deployment processing state one at a time' do
@@ -50,6 +51,17 @@ describe ASM do
     ASM.complete_deployment('one')
     ASM.complete_deployment('two')
     ASM.track_service_deployments('one').should be_true
+  end
+
+  it 'should fail if we call ASM.init twice' do
+    expect do
+      ASM.init
+      ASM.init
+    end.to raise_error(Exception, 'Can not initialize ASM class twice')
+  end
+
+  after do
+    ASM.clear_mutex
   end
 
 end
