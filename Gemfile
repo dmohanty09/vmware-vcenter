@@ -1,7 +1,6 @@
 source 'https://rubygems.org'
 
 gem 'sinatra'
-gem 'puppet'
 
 #group :development, :test do
 #  gem 'rake'

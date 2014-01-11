@@ -1,6 +1,5 @@
 require 'sinatra'
 require 'json'
-require 'puppet'
 require 'logger'
 require 'asm'
 require 'asm/service_deployment'

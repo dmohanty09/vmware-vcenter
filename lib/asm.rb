@@ -1,6 +1,8 @@
 require 'logger'
-require 'puppet'
 require 'fileutils'
+require 'open3'
+require 'io/wait'
+
 class ASM
 
   # TODO these methods shoudl be initialized from sinatra b/c their first invocation
@@ -12,24 +14,9 @@ class ASM
 
   def self.base_dir
     @base_dir ||= begin
-      Puppet.initialize_settings
-      work_dir = File.join(Puppet[:confdir], 'asm_working')
-      unless File.exists?(work_dir)
-        FileUtils.mkdir(work_dir)
-      end
-      work_dir
-    end
-  end
-
-
-  def self.service_deployment_base_dir
-    @service_deployment_basedir ||= begin
-      work_dir = File.join(ASM.base_dir, 'service_deployments')
-      unless File.exists?(work_dir)
-        logger.info("Creating new asm service deployment working directory #{work_dir}")
-        FileUtils.mkdir(work_dir)
-      end
-      work_dir
+      dir = '/opt/Dell/ASM/deployments'
+      FileUtils.mkdir_p(dir)
+      dir
     end
   end
 
@@ -65,6 +52,37 @@ class ASM
 
   def self.complete_deployment(id)
     @running_deployments.delete(id)
+  end
+
+  def self.run_command(cmd, outfile)
+    logger.info("Executing command: #{cmd}")
+    if File.exists?(outfile)
+      raise(Exception, "Cowardly refusing to overwrite #{outfile}")
+    end
+    File.open(outfile, 'w') do |fh|
+      Open3.popen3(cmd) do |stdin, stdout, stderr, wait_thr|
+        stdin.close
+
+        # Drain stdout
+        while line = stdout.gets
+          fh.puts(line)
+          # Interleave stderr if available
+          while stderr.ready?
+            if err = stderr.gets
+              fh.puts(err)
+            end
+          end
+        end
+
+        # Drain stderr
+        while line = stderr.gets
+          fh.puts(line)
+        end
+
+        fh.close
+        raise(Exception, "#{cmd} failed; output in #{outfile}") unless wait_thr.value.exitstatus == 0
+      end
+    end
   end
 
 end

@@ -2,10 +2,9 @@ require 'asm'
 require 'yaml'
 require 'logger'
 require 'fileutils'
-require 'puppet/face'
+require 'open3'
 
 class ASM::ServiceDeployment
-
 
   def initialize(id)
     @id = id
@@ -54,7 +53,7 @@ class ASM::ServiceDeployment
     end
   end
 
-  def process_generic(component, puppet_run_type = 'device')
+  def process_generic(component, puppet_run_type = 'device', override = nil)
     puppet_cert_name = component['id']
     resource_hash = {}
     (component['resources'] || []).each do |resource|
@@ -69,11 +68,11 @@ class ASM::ServiceDeployment
       if param_hash.has_key?('title')
         unless title = param_hash.delete('title')
           raise(Exception, "Resource from component type #{component['type']}" +
-                           " has resource #{resource['id']} with no title value")
+                " has resource #{resource['id']} with no title value")
         end
       else
         raise(Exception, "Resource from component type #{component['type']}" +
-                         " has resource #{resource['id']} with no title")
+              " has resource #{resource['id']} with no title")
 
       end
       resource_hash[resource_type][title] = param_hash
@@ -81,15 +80,14 @@ class ASM::ServiceDeployment
       File.open(resource_file, 'w') do |fh|
         fh.write(resource_hash.to_yaml)
       end
-      Puppet::Face[:asm, :current].process_node(puppet_cert_name,
-        :filename => resource_file,
-        :run_type => puppet_run_type
-      )
+      override_opt = override ? "--always-override " : ""
+      cmd = "sudo puppet asm process_node --filename #{resource_file} --run_type #{puppet_run_type} #{override_opt}#{puppet_cert_name}"
+      ASM.run_command(cmd, File.join(deployment_dir, "#{puppet_cert_name}.out"))
     end
   end
 
   def process_test(component)
-    process_generic(component, 'apply')
+    process_generic(component, 'apply', true)
   end
 
   def process_storage(component)
@@ -124,28 +122,28 @@ class ASM::ServiceDeployment
 
   private
 
-    def deployment_dir
-      @deployment_dir ||= begin
-        deployment_dir = File.join(ASM.service_deployment_base_dir, @id.to_s)
-        if File.exists?(deployment_dir)
-          ASM.logger.warn("Service profile for #{@id} already exists")
-        else
-          FileUtils.mkdir(deployment_dir)
-        end
-        @deployment_dir = deployment_dir
-      end
+  def deployment_dir
+    @deployment_dir ||= begin
+      deployment_dir = File.join(ASM.base_dir, @id.to_s)
+      if File.exists?(deployment_dir)
+        ASM.logger.warn("Service profile for #{@id} already exists")
+      else
+        FileUtils.mkdir_p(deployment_dir)
+       end
+      @deployment_dir = deployment_dir
     end
+  end
 
-    def resources_dir
-      dir = File.join(deployment_dir, "resources")
-      FileUtils.mkdir_p(dir)
-      dir
-    end
+  def resources_dir
+    dir = File.join(deployment_dir, "resources")
+    FileUtils.mkdir_p(dir)
+    dir
+  end
 
-    def create_logger
-      id_log_file = File.join(deployment_dir, "deployment.log")
-      file = File.open(id_log_file, 'w')
-      Logger.new(file)
-    end
+  def create_logger
+    id_log_file = File.join(deployment_dir, "deployment.log")
+    file = File.open(id_log_file, 'w')
+    Logger.new(file)
+  end
 
 end
