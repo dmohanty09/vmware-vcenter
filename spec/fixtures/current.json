@@ -1,0 +1,352 @@
+{
+    "id": 8000,
+    "deploymentName": "Default Deployment", 
+    "serviceTemplate": {
+        "components": [
+            {
+                "resources": [
+                    {
+                        "id": "compellent::create_volume", 
+                        "display_name": "Storage Settings", 
+                        "parameters": [
+                            {
+                                "id": "title", 
+                                "display_name": "Storage Volume", 
+                                "possibleValues": [], 
+                                "possibleValuesDisplayName": [], 
+                                "required": true, 
+                                "type": "STRING",
+                                "value": "my_volume"
+                            },
+                            {
+                                "id": "size",
+                                "display_name": "foo",
+                                "value": "2"
+                            }
+                        ]
+                    }
+                ], 
+                "id": "fed1df5c-d07b-4b0c-83a2-4e573a6a38dd", 
+                "name": "compellent", 
+                "endpoint_type": "?",
+                "relatedComponents": {},
+                "type": "STORAGE"
+            }, 
+            {
+                "resources": [
+                    {
+                        "id": "ServerCategory_1", 
+                        "name": "Hardware Settings", 
+                        "parameters": [
+                            {
+                                "currentValue": "HD", 
+                                "id": "TargetBootDevice", 
+                                "name": "Target Boot Device", 
+                                "possibleValues": [
+                                    "SD", 
+                                    "HD"
+                                ], 
+                                "possibleValuesDisplayName": [
+                                    "SD Card", 
+                                    "Local Hard Drive"
+                                ], 
+                                "required": true, 
+                                "type": "ENUMERATED"
+                            }, 
+                            {
+                                "currentValue": "-1", 
+                                "id": "ServerPool", 
+                                "name": "Server Pool", 
+                                "possibleValues": [
+                                    "-1"
+                                ], 
+                                "possibleValuesDisplayName": [
+                                    "Global"
+                                ], 
+                                "required": true, 
+                                "type": "ENUMERATED"
+                            },
+                            {
+                                "id": "title",
+                                "diplay_name": "server name",
+                                "value": "server_name"
+
+                            }
+                        ]
+                    }, 
+                    {
+                        "id": "ServerCategory_2", 
+                        "name": "OS Settings", 
+                        "parameters": [
+                            {
+                                "currentValue": "-1", 
+                                "id": "IdentityPool", 
+                                "name": "Identity Pool", 
+                                "possibleValues": [
+                                    "-1"
+                                ], 
+                                "possibleValuesDisplayName": [
+                                    "Global"
+                                ], 
+                                "required": true, 
+                                "type": "ENUMERATED"
+                            }, 
+                            {
+                                "id": "title", 
+                                "name": "Host Name", 
+                                "value": "host2",
+                                "possibleValues": [], 
+                                "possibleValuesDisplayName": [], 
+                                "required": true, 
+                                "type": "STRING"
+                            }, 
+                            {
+                                "id": "HypervisorNetwork", 
+                                "name": "Hypervisor Management Network", 
+                                "possibleValues": [
+                                    "8a52f08b43457c6c0143457f08e10000"
+                                ], 
+                                "possibleValuesDisplayName": [
+                                    "my hypervisor network"
+                                ], 
+                                "required": true, 
+                                "type": "ENUMERATED"
+                            }, 
+                            {
+                                "id": "VMotionNetwork", 
+                                "name": "Hypervisor vMotion Network", 
+                                "possibleValues": [
+                                    "8a52f08b43457c6c0143457f08e10000"
+                                ], 
+                                "possibleValuesDisplayName": [
+                                    "my hypervisor network"
+                                ], 
+                                "required": true, 
+                                "type": "ENUMERATED"
+                            }, 
+                            {
+                                "id": "StorageNetwork", 
+                                "name": "Storage Network", 
+                                "possibleValues": [], 
+                                "possibleValuesDisplayName": [], 
+                                "required": true, 
+                                "type": "ENUMERATED"
+                            }, 
+                            {
+                                "id": "WorkloadNetwork", 
+                                "name": "Workload Networks", 
+                                "possibleValues": [], 
+                                "possibleValuesDisplayName": [], 
+                                "required": true, 
+                                "type": "LIST"
+                            }, 
+                            {
+                                "id": "AdminPassword", 
+                                "name": "Administrator password", 
+                                "possibleValues": [], 
+                                "possibleValuesDisplayName": [], 
+                                "required": true, 
+                                "type": "PASSWORD"
+                            }, 
+                            {
+                                "id": "RazorImage", 
+                                "name": "OS Image", 
+                                "possibleValues": [
+                                    "esxi-5.1"
+                                ], 
+                                "possibleValuesDisplayName": [
+                                    "esxi-5.1"
+                                ], 
+                                "required": true, 
+                                "type": "ENUMERATED"
+                            }, 
+                            {
+                                "id": "OSImageType", 
+                                "name": "OS Image Type", 
+                                "possibleValues": [
+                                    "Linux", 
+                                    "Windows", 
+                                    "ESXi"
+                                ], 
+                                "possibleValuesDisplayName": [
+                                    "Linux", 
+                                    "Windows", 
+                                    "ESXi"
+                                ], 
+                                "required": true, 
+                                "type": "ENUMERATED"
+                            }, 
+                            {
+                                "id": "CustomScript", 
+                                "name": "Custom OS Installation script", 
+                                "possibleValues": [], 
+                                "possibleValuesDisplayName": [], 
+                                "required": true, 
+                                "type": "TEXT"
+                            }
+                        ]
+                    }
+                ], 
+                "id": "c674e981-0227-4005-8234-250a699e15af", 
+                "name": "Server", 
+                "relatedComponents": {
+                    "fed1df5c-d07b-4b0c-83a2-4e573a6a38dd": "Storage"
+                }, 
+                "type": "SERVER"
+            }, 
+            {
+                "resources": [
+                    {
+                        "id": "ClusterCategory_1", 
+                        "name": "Cluster Settings", 
+                        "parameters": [
+                            {
+                                "id": "TargetVCenter", 
+                                "name": "Target vCenter", 
+                                "possibleValues": [], 
+                                "possibleValuesDisplayName": [], 
+                                "required": true, 
+                                "type": "ENUMERATED"
+                            }, 
+                            {
+                                "id": "DataCenter", 
+                                "name": "Data Center Name", 
+                                "possibleValues": [], 
+                                "possibleValuesDisplayName": [], 
+                                "required": true, 
+                                "type": "STRING"
+                            }, 
+                            {
+                                "id": "title", 
+                                "name": "Cluster Name", 
+                                "possibleValues": [], 
+                                "possibleValuesDisplayName": [], 
+                                "value": "cluster1",
+                                "required": true, 
+                                "type": "STRING"
+                            }
+                        ]
+                    }
+                ], 
+                "id": "6ac52474-063f-4eec-9fc6-c27840ef5bd5", 
+                "name": "Cluster", 
+                "relatedComponents": {
+                    "c674e981-0227-4005-8234-250a699e15af": "Server"
+                }, 
+                "type": "CLUSTER"
+            }, 
+            {
+                "resources": [
+                    {
+                        "id": "VMCategory_1", 
+                        "name": "Virtual Machine Settings", 
+                        "parameters": [
+                            {
+                                "currentValue": "1", 
+                                "id": "VMCPU", 
+                                "max": 8, 
+                                "min": 1, 
+                                "name": "Number of CPUs", 
+                                "possibleValues": [], 
+                                "possibleValuesDisplayName": [], 
+                                "required": true, 
+                                "type": "INTEGER"
+                            }, 
+                            {
+                                "currentValue": "8", 
+                                "id": "VMMemory", 
+                                "max": 256, 
+                                "min": 1, 
+                                "name": "Memory in GB", 
+                                "possibleValues": [], 
+                                "possibleValuesDisplayName": [], 
+                                "required": true, 
+                                "type": "INTEGER"
+                            }, 
+                            {
+                                "currentValue": "1", 
+                                "id": "VMNICs", 
+                                "max": 16, 
+                                "min": 1, 
+                                "name": "Number of NICs", 
+                                "possibleValues": [], 
+                                "possibleValuesDisplayName": [], 
+                                "required": true, 
+                                "type": "INTEGER"
+                            },
+                            {
+                                "id": "title",
+                                "value": "vm one"
+                            }
+                        ]
+                    }, 
+                    {
+                        "id": "VMCategory_2", 
+                        "name": "Virtual Machine OS Settings", 
+                        "parameters": [
+                            {
+                                "id": "title", 
+                                "name": "Host Name", 
+                                "value": "hostname",
+                                "possibleValues": [], 
+                                "possibleValuesDisplayName": [], 
+                                "required": true, 
+                                "type": "STRING"
+                            }, 
+                            {
+                                "id": "VMAdminPassword", 
+                                "name": "Administrator password", 
+                                "possibleValues": [], 
+                                "possibleValuesDisplayName": [], 
+                                "required": true, 
+                                "type": "PASSWORD"
+                            }, 
+                            {
+                                "id": "VMRazorImage", 
+                                "name": "OS Image", 
+                                "possibleValues": [], 
+                                "possibleValuesDisplayName": [], 
+                                "required": true, 
+                                "type": "ENUMERATED"
+                            }, 
+                            {
+                                "id": "VMOSImageType", 
+                                "name": "OS Image Type", 
+                                "possibleValues": [
+                                    "Linux", 
+                                    "Windows"
+                                ], 
+                                "possibleValuesDisplayName": [
+                                    "Linux", 
+                                    "Windows"
+                                ], 
+                                "required": true, 
+                                "type": "ENUMERATED"
+                            }, 
+                            {
+                                "id": "VMCustomScript", 
+                                "name": "Custom OS Installation script", 
+                                "possibleValues": [], 
+                                "possibleValuesDisplayName": [], 
+                                "required": true, 
+                                "type": "TEXT"
+                            }
+                        ]
+                    }
+                ], 
+                "id": "a17f0deb-da59-4a46-938d-8faa23e3cb02", 
+                "name": "Virtual Machine", 
+                "relatedComponents": {
+                    "6ac52474-063f-4eec-9fc6-c27840ef5bd5": "Cluster"
+                }, 
+                "type": "VIRTUALMACHINE"
+            }
+        ], 
+        "createdBy": "Administrator", 
+        "draft": false, 
+        "id": "1000", 
+        "templateDescription": "Default Template Description", 
+        "templateName": "Default Template", 
+        "updatedBy": "Administrator"
+    }
+}

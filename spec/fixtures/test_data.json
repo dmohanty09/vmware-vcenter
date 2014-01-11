@@ -1,0 +1,37 @@
+{
+    "id": 8080,
+    "deploymentName": "Default Deployment", 
+    "serviceTemplate": {
+        "components": [
+            {
+                "resources": [
+                    {
+                        "id": "notify", 
+                        "display_name": "Storage Settings", 
+                        "parameters": [
+                            {
+                                "id": "title", 
+                                "value": "my_volume"
+                            },
+                            {
+                                "id": "message",
+                                "value": "2"
+                            }
+                        ]
+                    }
+                ], 
+                "id": "fed1df5c-d07b-4b0c-83a2-4e573a6a38dd", 
+                "name": "compellent", 
+                "endpoint_type": "?",
+                "relatedComponents": {},
+                "type": "TEST"
+            }
+        ], 
+        "createdBy": "Administrator", 
+        "draft": false, 
+        "id": "1000", 
+        "templateDescription": "Default Template Description", 
+        "templateName": "Default Template", 
+        "updatedBy": "Administrator"
+    }
+}
