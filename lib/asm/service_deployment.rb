@@ -60,13 +60,13 @@ class ASM::ServiceDeployment
   end
 
   def process_generic(component, puppet_run_type = 'device', override = nil)
-    puppet_cert_name = component['id']
+    puppet_cert_name = component['id'] || raise(Exception, 'Component has no certname')
     resource_hash = {}
     (component['resources'] || []).each do |resource|
-      resource_type = resource['id']
+      resource_type = resource['id'] || raise(Exception, 'resource found with no type')
       resource_hash[resource_type] ||= {}
       param_hash = {}
-      raise(Exception, "resource has no parameters") unless resource['parameters']
+      raise(Exception, "resource of type #{resource_type} has no parameters") unless resource['parameters']
       resource['parameters'].each do |param|
         param_hash[param['id']] = param['value']
       end
