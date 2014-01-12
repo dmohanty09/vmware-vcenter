@@ -8,10 +8,9 @@ class ASM::ServiceDeployment
 
   def initialize(id)
     @id = id
-    logger(id)
   end
 
-  def logger(id)
+  def logger
     @logger ||= create_logger
   end
 
@@ -21,13 +20,20 @@ class ASM::ServiceDeployment
 
   def process(service_deployment)
     ASM.logger.info("Deploying #{service_deployment['deploymentName']} with id #{service_deployment['id']}")
-    component_hash     = component_hash(service_deployment)
+    component_hash = component_hash(service_deployment)
     process_components(component_hash)
   end
 
   def component_hash(service_deployment)
     component_hash = {}
-    service_deployment['serviceTemplate']['components'].each do |component|
+    if service_deployment['serviceTemplate']
+      unless service_deployment['serviceTemplate']['components']
+        logger.warn("service deployment data has no components")
+      end
+    else
+      logger.warn("Service deployment data has no serviceTemplate defined")
+    end
+    ((service_deployment['serviceTemplate'] || {})['components'] || []).each do |component|
       component_hash[component['type']] ||= []
       component_hash[component['type']].push(component)
     end
