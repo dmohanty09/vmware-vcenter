@@ -1,4 +1,6 @@
 {
+    "id": 8181,
+    "deploymentName": "Server bare metal test",
     "serviceTemplate": {
         "components": [
             {
@@ -12,9 +14,14 @@
                 },
                 "resources": [
                     {
-                        "id": "SerialName",
+                        "id": "ASM::Server",
                         "displayName": "OS Settings",
                         "parameters": [
+                            {
+                                "id": "title",
+                                "displayName": "Serial Number",
+                                "value": "JH870W1"
+                            },
                             {
                                 "id": "IdentityPool",
                                 "displayName": "Identity Pool",
@@ -28,7 +35,8 @@
                                 "id": "OSHostName",
                                 "displayName": "Host Name",
                                 "required": true,
-                                "type": "STRING"
+                                "type": "STRING",
+                                "value": "host1"
                             },
                             {
                                 "id": "HypervisorNetwork",
@@ -67,7 +75,8 @@
                                 "id": "AdminPassword",
                                 "displayName": "Administrator password",
                                 "required": true,
-                                "type": "PASSWORD"
+                                "type": "PASSWORD",
+                                "value": "foo"
                             },
                             {
                                 "id": "RazorImage",
@@ -82,7 +91,7 @@
                                 ],
                                 "required": true,
                                 "type": "ENUMERATED",
-                                "value": -1
+                                "value": "esxi-5.1"
                             },
                             {
                                 "id": "OSImageType",
@@ -101,7 +110,7 @@
                                 ],
                                 "required": true,
                                 "type": "ENUMERATED",
-                                "value": -1
+                                "value": "vmware_esxi"
                             },
                             {
                                 "id": "CustomScript",
