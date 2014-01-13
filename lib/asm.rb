@@ -5,8 +5,23 @@ require 'io/wait'
 
 class ASM
 
+  require 'asm/service_deployment'
+
   # TODO these methods shoudl be initialized from sinatra b/c their first invocation
   # is not thread safe
+
+  # provides a single call that can be used to initialize our mutex
+  def self.init
+    if @deployment_mutex
+      raise("Can not initialize ASM class twice")
+    else
+      @deployment_mutex = Mutex.new
+    end
+  end
+
+  def self.clear_mutex
+    @deployment_mutex = nil
+  end
 
   def self.logger
     @logger ||= Logger.new(File.join("#{base_dir}", 'asm_puppet.log'))
@@ -26,7 +41,9 @@ class ASM
   def self.process_deployment(data)
     id = data['id']
     service_deployment = nil
-    @deployment_mutex ||= Mutex.new
+    unless @deployment_mutex
+      raise(Exception, "Must call ASM.init to initialize mutex")
+    end
     @deployment_mutex.synchronize do
       unless track_service_deployments(id)
         raise(Exception, "Already processing id #{id}. Cannot handle simultaneous requests " +
@@ -38,8 +55,10 @@ class ASM
       service_deployment = ASM::ServiceDeployment.new(id)
       service_deployment.process(data)
     ensure
-      complete_deployment(id)
-      service_deployment.log("Deployment has completed")
+      @deployment_mutex.synchronize do
+        complete_deployment(id)
+        service_deployment.log("Deployment has completed")
+      end
     end
   end
 

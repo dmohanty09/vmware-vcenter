@@ -10,6 +10,7 @@ class ASM::App < Sinatra::Base
     set :bind, '0.0.0.0'
     # only allow a single request to be processed at a time
     set :lock, true
+    ASM.init
   end
 
   # TODO make sure that only one of these can be done at a time
