@@ -8,26 +8,33 @@ class ASM::ServiceDeployment
 
   def initialize(id)
     @id = id
-    logger(id)
   end
 
-  def logger(id)
+  def logger
     @logger ||= create_logger
   end
 
   def log(msg)
-    @logger.info(msg)
+    logger.info(msg)
   end
 
   def process(service_deployment)
     ASM.logger.info("Deploying #{service_deployment['deploymentName']} with id #{service_deployment['id']}")
-    component_hash     = component_hash(service_deployment)
+    log("Starting deployment #{service_deployment['deploymentName']}")
+    component_hash = component_hash(service_deployment)
     process_components(component_hash)
   end
 
   def component_hash(service_deployment)
     component_hash = {}
-    service_deployment['serviceTemplate']['components'].each do |component|
+    if service_deployment['serviceTemplate']
+      unless service_deployment['serviceTemplate']['components']
+        logger.warn("service deployment data has no components")
+      end
+    else
+      logger.warn("Service deployment data has no serviceTemplate defined")
+    end
+    ((service_deployment['serviceTemplate'] || {})['components'] || []).each do |component|
       component_hash[component['type']] ||= []
       component_hash[component['type']].push(component)
     end
@@ -38,6 +45,7 @@ class ASM::ServiceDeployment
     dir = resources_dir
     ['STORAGE', 'TOR', 'SERVER', 'CLUSTER', 'VIRTUALMACHINE', 'SERVICE', 'TEST'].each do |type|
       if components = component_hash[type]
+        log("Processing components of type #{type}")
         components.collect do |comp|
           #
           # TODO: this is some pretty primitive thread management, we need to use
@@ -49,18 +57,20 @@ class ASM::ServiceDeployment
         end.each do |thrd|
           thrd.join
         end
+        log("Finsished components of type #{type}")
       end
     end
   end
 
   def process_generic(component, puppet_run_type = 'device', override = nil)
-    puppet_cert_name = component['id']
+    puppet_cert_name = component['id'] || raise(Exception, 'Component has no certname')
+    log("Starting processing resources for endpoint #{puppet_cert_name}")
     resource_hash = {}
     (component['resources'] || []).each do |resource|
-      resource_type = resource['id']
+      resource_type = resource['id'] || raise(Exception, 'resource found with no type')
       resource_hash[resource_type] ||= {}
       param_hash = {}
-      raise(Exception, "resource has no parameters") unless resource['parameters']
+      raise(Exception, "resource of type #{resource_type} has no parameters") unless resource['parameters']
       resource['parameters'].each do |param|
         param_hash[param['id']] = param['value']
       end
@@ -82,7 +92,16 @@ class ASM::ServiceDeployment
       end
       override_opt = override ? "--always-override " : ""
       cmd = "sudo puppet asm process_node --filename #{resource_file} --run_type #{puppet_run_type} #{override_opt}#{puppet_cert_name}"
-      ASM.run_command(cmd, File.join(deployment_dir, "#{puppet_cert_name}.out"))
+      puppet_out = File.join(deployment_dir, "#{puppet_cert_name}.out")
+      ASM.run_command(cmd, puppet_out)
+      last_line = File.readlines(puppet_out).last
+      if last_line =~ /Results: For (\d+) resources. (\d+) failed. (\d+) updated successfully./
+        log("Results for endpoint #{puppet_cert_name} configuration")
+        log("  #{last_line.chomp}")
+        return {'total' => $1, 'failed' => $2 ,'updated' => $3}
+      else
+        raise(Exception, 'Puppet output did not have expected result line')
+      end
     end
   end
 
@@ -142,8 +161,8 @@ class ASM::ServiceDeployment
 
   def create_logger
     id_log_file = File.join(deployment_dir, "deployment.log")
-    file = File.open(id_log_file, 'w')
-    Logger.new(file)
+    File.open(id_log_file, 'w')
+    Logger.new(id_log_file)
   end
 
 end

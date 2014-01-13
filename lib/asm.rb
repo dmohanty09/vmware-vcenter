@@ -39,6 +39,7 @@ class ASM
       service_deployment.process(data)
     ensure
       complete_deployment(id)
+      service_deployment.log("Deployment has completed")
     end
   end
 
