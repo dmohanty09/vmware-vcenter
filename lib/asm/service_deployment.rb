@@ -123,7 +123,7 @@ class ASM::ServiceDeployment
 
   def process_server(component)
     log("Processing server component: #{component['id']}")
-    process_generic(component)
+    process_generic(component, 'apply', 'true')
   end
 
   def process_cluster(component)
