@@ -7,6 +7,9 @@ require 'open3'
 class ASM::ServiceDeployment
 
   def initialize(id)
+    unless id
+      raise(Exception, "Service deployment must have an id")
+    end
     @id = id
   end
 
