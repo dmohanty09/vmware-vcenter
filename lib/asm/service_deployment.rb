@@ -75,15 +75,14 @@ class ASM::ServiceDeployment
       param_hash = {}
       raise(Exception, "resource of type #{resource_type} has no parameters") unless resource['parameters']
       resource['parameters'].each do |param|
-        param_hash[param['id']] = param['value']
+        if param['value']
+          param_hash[param['id']] = param['value']
+        else
+          logger.warn("Parameter #{param['id']} of type #{resource_type} for #{puppet_cert_name} has no value, skipping")
+        end
       end
 
-      if param_hash.has_key?('title')
-        unless title = param_hash.delete('title')
-          raise(Exception, "Resource from component type #{component['type']}" +
-                " has resource #{resource['id']} with no title value")
-        end
-      else
+      unless title = param_hash.delete('title')
         raise(Exception, "Resource from component type #{component['type']}" +
               " has resource #{resource['id']} with no title")
 
