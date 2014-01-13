@@ -1,0 +1,125 @@
+{
+    "serviceTemplate": {
+        "components": [
+            {
+                "id": "bd36856d-ce88-4538-acdd-131e9f00c874",
+                "name": "Server",
+                "relatedComponents": {
+                    "entry": {
+                        "key": "c9ac7879-9752-40f9-b2a0-b9107a708a82",
+                        "value": "Storage"
+                    }
+                },
+                "resources": [
+                    {
+                        "id": "SerialName",
+                        "displayName": "OS Settings",
+                        "parameters": [
+                            {
+                                "id": "IdentityPool",
+                                "displayName": "Identity Pool",
+                                "possibleValues": -1,
+                                "possibleValuesDisplayName": "Global",
+                                "required": true,
+                                "type": "ENUMERATED",
+                                "value": -1
+                            },
+                            {
+                                "id": "OSHostName",
+                                "displayName": "Host Name",
+                                "required": true,
+                                "type": "STRING"
+                            },
+                            {
+                                "id": "HypervisorNetwork",
+                                "displayName": "Hypervisor Management Network",
+                                "possibleValues": -1,
+                                "possibleValuesDisplayName": "Select...",
+                                "required": true,
+                                "type": "ENUMERATED",
+                                "value": -1
+                            },
+                            {
+                                "id": "VMotionNetwork",
+                                "displayName": "Hypervisor vMotion Network",
+                                "possibleValues": -1,
+                                "possibleValuesDisplayName": "Select...",
+                                "required": true,
+                                "type": "ENUMERATED",
+                                "value": -1
+                            },
+                            {
+                                "id": "StorageNetwork",
+                                "displayName": "Storage Network",
+                                "possibleValues": -1,
+                                "possibleValuesDisplayName": "Select...",
+                                "required": true,
+                                "type": "ENUMERATED",
+                                "value": -1
+                            },
+                            {
+                                "id": "WorkloadNetwork",
+                                "displayName": "Workload Networks",
+                                "required": true,
+                                "type": "LIST"
+                            },
+                            {
+                                "id": "AdminPassword",
+                                "displayName": "Administrator password",
+                                "required": true,
+                                "type": "PASSWORD"
+                            },
+                            {
+                                "id": "RazorImage",
+                                "displayName": "OS Image",
+                                "possibleValues": [
+                                    -1,
+                                    "esxi-5.1"
+                                ],
+                                "possibleValuesDisplayName": [
+                                    "Select...",
+                                    "esxi-5.1"
+                                ],
+                                "required": true,
+                                "type": "ENUMERATED",
+                                "value": -1
+                            },
+                            {
+                                "id": "OSImageType",
+                                "displayName": "OS Image Type",
+                                "possibleValues": [
+                                    -1,
+                                    "Linux",
+                                    "Windows",
+                                    "ESXi"
+                                ],
+                                "possibleValuesDisplayName": [
+                                    "Select...",
+                                    "Linux",
+                                    "Windows",
+                                    "ESXi"
+                                ],
+                                "required": true,
+                                "type": "ENUMERATED",
+                                "value": -1
+                            },
+                            {
+                                "id": "CustomScript",
+                                "displayName": "Custom OS Installation script",
+                                "required": true,
+                                "type": "TEXT"
+                            }
+                        ]
+                    }
+                ],
+                "type": "SERVER"
+            }
+        ],
+        "createdBy": "Administrator",
+        "draft": false,
+        "id": 1000,
+        "templateDescription": "Default Template Description",
+        "templateName": "Default Template Name",
+        "updatedBy": "Administrator"
+    }
+}
