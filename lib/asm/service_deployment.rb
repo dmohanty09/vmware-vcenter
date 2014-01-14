@@ -138,7 +138,32 @@ class ASM::ServiceDeployment
 
   def process_server(component)
     log("Processing server component: #{component['id']}")
-    process_generic(component, 'apply', 'true')
+    component['resources'].each_with_index do |r, index=0|
+      if r['id'].downcase == 'asm::server'
+        # add a rule_number
+        r['parameters'].each do |param|
+          if param['id'] == 'rule_number'
+            raise(Exception, "Did not expect rule_number in asm::server")
+          end
+        end
+        component['resources'][index]['parameters'].push({
+          'id' => 'rule_number',
+          'value' => rule_number
+        })
+        # configure razor
+        process_generic(component, 'apply', 'true')
+      else
+        logger.warn("Unexpected resource type for server: #{r['id']}")
+      end 
+    end
+  end
+
+  #
+  # Razor requires unique rule numbers per deployment that set priotity.
+  # This routine is able to safely generate 100 per second.
+  #
+  def rule_number
+    (Integer(Time.now.strftime("%s")) * 100) + (ASM.counter % 100)
   end
 
   def process_cluster(component)
