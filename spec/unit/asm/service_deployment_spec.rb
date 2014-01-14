@@ -7,9 +7,7 @@ describe ASM::ServiceDeployment do
 
   before do
     @tmp_dir = Dir.mktmpdir
-    data_file = File.join(File.dirname(__FILE__), '..', '..', 'fixtures', 'current.json')
-    @data = JSON.parse(File.read(data_file))
-    @sd = ASM::ServiceDeployment.new(@data['id'])
+    @sd = ASM::ServiceDeployment.new('8000')
     ASM.stubs(:base_dir).returns(@tmp_dir)
   end
 
@@ -18,7 +16,11 @@ describe ASM::ServiceDeployment do
     it 'should be able to process data for a single resource' do
       r_file = "#{@tmp_dir}/8000/resources/cert.yaml"
       ASM.expects(:run_command).with(
-        "sudo puppet asm process_node --filename #{r_file} --run_type apply --always-override cert", "#{@tmp_dir}/8000/cert.out")
+        "sudo puppet asm process_node --filename #{r_file} --run_type apply --always-override cert", "#{@tmp_dir}/8000/cert.out") do |cmd|
+        File.open("#{@tmp_dir}/8000/cert.out", 'w') do |fh|
+          fh.write('Results: For 0 resources. 0 failed. 0 updated successfully.')
+        end  
+      end
       @sd.process({'serviceTemplate' => {'components' => [
         {'type' => 'TEST', 'id' => 'cert', 'resources' => [
           {'id' => 'user', 'parameters' => [
@@ -36,14 +38,18 @@ describe ASM::ServiceDeployment do
 
     it 'should warn when no serviceTemplate is defined' do
       @mock_log = mock('foo')
-      @sd.expects(:logger).returns(@mock_log)
+      @sd.expects(:logger).at_least_once.returns(@mock_log)
+      @mock_log.expects(:debug).with('Found 0 components')
+      @mock_log.expects(:info).with('Starting deployment ')
       @mock_log.expects(:warn).with('Service deployment data has no serviceTemplate defined')
       @sd.process({})
     end
 
     it 'should warn when there are no components' do
       @mock_log = mock('foo')
-      @sd.expects(:logger).returns(@mock_log)
+      @sd.expects(:logger).at_least_once.returns(@mock_log)
+      @mock_log.expects(:debug).with('Found 0 components')
+      @mock_log.expects(:info).with('Starting deployment ')
       @mock_log.expects(:warn).with('service deployment data has no components')
       @sd.process({'serviceTemplate' => {}})
     end
@@ -86,13 +92,6 @@ describe ASM::ServiceDeployment do
           ]}
         ]}})
       end.to raise_error(Exception, 'Resource from component type TEST has resource user with no title')
-      expect do
-        @sd.process({'serviceTemplate' => {'components' => [
-          {'type' => 'TEST', 'id' => 'cert3', 'resources' => [
-            {'id' => 'user', 'parameters' => [{'id' => 'title'}]}
-          ]}
-        ]}})
-      end.to raise_error(Exception, 'Resource from component type TEST has resource user with no title value')
     end
 
   end

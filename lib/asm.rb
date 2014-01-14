@@ -57,9 +57,9 @@ class ASM
     ensure
       @deployment_mutex.synchronize do
         complete_deployment(id)
-        service_deployment.log("Deployment has completed")
       end
     end
+    service_deployment.log("Deployment has completed")
   end
 
   def self.track_service_deployments(id)
