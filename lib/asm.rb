@@ -105,4 +105,12 @@ class ASM
     end
   end
 
+  # thread safe counter
+  def self.counter
+    @deployment_mutex.synchronize do
+      @counter ||= 0
+      @counter = @counter +1
+    end
+  end
+
 end

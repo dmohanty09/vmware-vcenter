@@ -13,23 +13,67 @@ describe ASM::ServiceDeployment do
 
   describe 'when data is valid' do
 
+    before do
+      @r_file = "#{@tmp_dir}/8000/resources/cert.yaml"
+      @o_file = "#{@tmp_dir}/8000/cert.out"
+      @data = {'serviceTemplate' => {'components' => [
+        {'id' => 'cert', 'resources' => []}
+      ]}}
+    end
+
     it 'should be able to process data for a single resource' do
-      r_file = "#{@tmp_dir}/8000/resources/cert.yaml"
       ASM.expects(:run_command).with(
-        "sudo puppet asm process_node --filename #{r_file} --run_type apply --always-override cert", "#{@tmp_dir}/8000/cert.out") do |cmd|
-        File.open("#{@tmp_dir}/8000/cert.out", 'w') do |fh|
+        "sudo puppet asm process_node --filename #{@r_file} --run_type apply --always-override cert", "#{@o_file}") do |cmd|
+        File.open(@o_file, 'w') do |fh|
           fh.write('Results: For 0 resources. 0 failed. 0 updated successfully.')
         end  
       end
-      @sd.process({'serviceTemplate' => {'components' => [
-        {'type' => 'TEST', 'id' => 'cert', 'resources' => [
-          {'id' => 'user', 'parameters' => [
-            {'id' => 'title', 'value' => 'foo'},
-            {'id' => 'foo', 'value' => 'bar'}
-          ]}
+      @data['serviceTemplate']['components'][0]['type'] = 'TEST'
+      @data['serviceTemplate']['components'][0]['resources'].push(
+        {'id' => 'user', 'parameters' => [
+          {'id' => 'title', 'value' => 'foo'},
+          {'id' => 'foo', 'value' => 'bar'}
         ]}
-      ]}})
-      YAML.load_file(r_file)['user']['foo']['foo'].should == 'bar'
+      )
+      @sd.process(@data)
+      YAML.load_file(@r_file)['user']['foo']['foo'].should == 'bar'
+    end
+
+    describe 'for server bare metal provisioining' do
+      before do
+        ASM.init
+      end
+      after do
+        ASM.clear_mutex
+      end
+      it 'should fail is rule_number was already set' do
+        @data['serviceTemplate']['components'][0]['type'] = 'SERVER'
+        @data['serviceTemplate']['components'][0]['resources'].push(
+          {'id' => 'asm::server', 'parameters' => [
+            {'id' => 'title', 'value' => 'foo'},
+            {'id' => 'rule_number', 'value' => 1},
+          ]}
+        )
+        expect do
+          @sd.process(@data)
+        end.to raise_error(Exception, 'Did not expect rule_number in asm::server')
+      end
+      it 'should add rule_number' do
+        ASM.expects(:run_command).with(
+          "sudo puppet asm process_node --filename #{@r_file} --run_type apply --always-override cert", "#{@o_file}") do |cmd|
+          File.open(@o_file, 'w') do |fh|
+            fh.write('Results: For 0 resources. 0 failed. 0 updated successfully.')
+          end  
+        end
+        @data['serviceTemplate']['components'][0]['type'] = 'SERVER'
+        @data['serviceTemplate']['components'][0]['resources'].push(
+          {'id' => 'asm::server', 'parameters' => [
+            {'id' => 'title', 'value' => 'foo'},
+          ]}
+        )
+        @sd.process(@data)
+        (YAML.load_file(@r_file)['asm::server']['foo']['rule_number'].to_s =~ /\d+/).should == 0
+      end
     end
 
   end
