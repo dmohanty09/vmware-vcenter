@@ -37,7 +37,17 @@ class ASM::ServiceDeployment
     else
       logger.warn("Service deployment data has no serviceTemplate defined")
     end
-    ((service_deployment['serviceTemplate'] || {})['components'] || []).each do |component|
+    components = ((service_deployment['serviceTemplate'] || {})['components'] || [])
+
+    # API is sending hash for single element and array for list
+    if components.is_a?(Hash)
+      logger.debug("Received single hash for components")
+      components = [ components ]
+    end
+
+    logger.debug("Found #{components.length} components")
+    components.each do |component|
+      logger.debug("Found component id #{component['id']}")
       component_hash[component['type']] ||= []
       component_hash[component['type']].push(component)
     end
@@ -45,7 +55,6 @@ class ASM::ServiceDeployment
   end
 
   def process_components(component_hash)
-    dir = resources_dir
     ['STORAGE', 'TOR', 'SERVER', 'CLUSTER', 'VIRTUALMACHINE', 'SERVICE', 'TEST'].each do |type|
       if components = component_hash[type]
         log("Processing components of type #{type}")
@@ -69,7 +78,13 @@ class ASM::ServiceDeployment
     puppet_cert_name = component['id'] || raise(Exception, 'Component has no certname')
     log("Starting processing resources for endpoint #{puppet_cert_name}")
     resource_hash = {}
-    (component['resources'] || []).each do |resource|
+    resources = (component['resources'] || [])
+    # API is sending hash for single element and array for list
+    if resources.is_a?(Hash)
+      logger.debug("Received single hash for resources")
+      resources = [ resources ]
+    end
+    resources.each do |resource|
       resource_type = resource['id'] || raise(Exception, 'resource found with no type')
       resource_hash[resource_type] ||= {}
       param_hash = {}
@@ -150,7 +165,7 @@ class ASM::ServiceDeployment
         ASM.logger.warn("Service profile for #{@id} already exists")
       else
         FileUtils.mkdir_p(deployment_dir)
-       end
+      end
       @deployment_dir = deployment_dir
     end
   end

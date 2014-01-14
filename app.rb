@@ -16,7 +16,7 @@ class ASM::App < Sinatra::Base
   # TODO make sure that only one of these can be done at a time
   post '/process_service_profile' do
     data = JSON.parse(request.body.read)
-    ASM.process_deployment(data)
+    ASM.process_deployment(data['Deployment'])
   end
 
   get '/logs/:id' do | id |

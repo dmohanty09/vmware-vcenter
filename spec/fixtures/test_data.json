@@ -1,4 +1,4 @@
-{
+{"Deployment": {
     "id": 8080,
     "deploymentName": "Default Deployment", 
     "serviceTemplate": {
@@ -34,4 +34,4 @@
         "templateName": "Default Template", 
         "updatedBy": "Administrator"
     }
-}
+}}
