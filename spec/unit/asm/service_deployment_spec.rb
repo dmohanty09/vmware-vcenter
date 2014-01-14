@@ -7,9 +7,7 @@ describe ASM::ServiceDeployment do
 
   before do
     @tmp_dir = Dir.mktmpdir
-    data_file = File.join(File.dirname(__FILE__), '..', '..', 'fixtures', 'current.json')
-    @data = JSON.parse(File.read(data_file))
-    @sd = ASM::ServiceDeployment.new(@data['id'])
+    @sd = ASM::ServiceDeployment.new('8000')
     ASM.stubs(:base_dir).returns(@tmp_dir)
   end
 
@@ -40,7 +38,8 @@ describe ASM::ServiceDeployment do
 
     it 'should warn when no serviceTemplate is defined' do
       @mock_log = mock('foo')
-      @sd.expects(:logger).twice.returns(@mock_log)
+      @sd.expects(:logger).at_least_once.returns(@mock_log)
+      @mock_log.expects(:debug).with('Found 0 components')
       @mock_log.expects(:info).with('Starting deployment ')
       @mock_log.expects(:warn).with('Service deployment data has no serviceTemplate defined')
       @sd.process({})
@@ -48,7 +47,8 @@ describe ASM::ServiceDeployment do
 
     it 'should warn when there are no components' do
       @mock_log = mock('foo')
-      @sd.expects(:logger).twice.returns(@mock_log)
+      @sd.expects(:logger).at_least_once.returns(@mock_log)
+      @mock_log.expects(:debug).with('Found 0 components')
       @mock_log.expects(:info).with('Starting deployment ')
       @mock_log.expects(:warn).with('service deployment data has no components')
       @sd.process({'serviceTemplate' => {}})
