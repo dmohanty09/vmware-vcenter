@@ -1,4 +1,5 @@
 require 'asm'
+require 'asm/util'
 require 'yaml'
 require 'logger'
 require 'fileutils'
@@ -120,7 +121,7 @@ class ASM::ServiceDeployment
       override_opt = override ? "--always-override " : ""
       cmd = "sudo puppet asm process_node --filename #{resource_file} --run_type #{puppet_run_type} #{override_opt}#{puppet_cert_name}"
       puppet_out = File.join(deployment_dir, "#{puppet_cert_name}.out")
-      ASM.run_command(cmd, puppet_out)
+      ASM::Util.run_command(cmd, puppet_out)
       last_line = File.readlines(puppet_out).last
       if last_line =~ /Results: For (\d+) resources. (\d+) failed. (\d+) updated successfully./
         log("Results for endpoint #{puppet_cert_name} configuration")
@@ -209,7 +210,7 @@ class ASM::ServiceDeployment
     if type == 'vmware_esxi'
       ip_address = nil
       log("Waiting until #{hostname} has checked in with Razor")
-      ASM.block_and_retry_until_ready(timeout, CommandException) do
+      ASM::Util.block_and_retry_until_ready(timeout, CommandException) do
         results = get('nodes').each do |node|
           results = get('nodes', node['name'])
           serial  = results['facts']['serialnumber']
@@ -226,10 +227,10 @@ class ASM::ServiceDeployment
         log("#{hostname} has checked in with Razor with ip address #{ip_address}")
       end
       log("Waiting until #{hostname} is ready")
-      ASM.block_and_retry_until_ready(timeout, CommandException) do
+      ASM::Util.block_and_retry_until_ready(timeout, CommandException) do
         esx_command =  "system uuid get"
         cmd = "esxcli --server=#{ip_address} --username=root --password=#{password} #{esx_command}"
-        results = ASM.run_command_simple(cmd)
+        results = ASM::Util.run_command_simple(cmd)
         logger.debug(results.inspect)
         unless results['exit_status'] == 0 and results['stdout'] =~ /[1-9a-z-]+/
           raise(CommandException, results['stderr'])

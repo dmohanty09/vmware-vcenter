@@ -33,6 +33,37 @@ END
     
   end
 
+  describe 'retries and timeouts' do
+
+    it 'should reraise unhandled exceptions' do
+      expect do
+        ASM::Util.block_and_retry_until_ready(1) do
+          raise(Exception)
+        end
+      end.to raise_error(Exception)
+    end
+
+    it 'should raise an exception on timeout' do
+      expect do
+        ASM::Util.block_and_retry_until_ready(1) do
+          sleep 2
+        end
+      end.to raise_error(Timeout::Error)
+    end
+
+    it 'should forgive a single exception' do
+      mock_log = mock('foo')
+      ASM.expects(:logger).returns(mock_log)
+      mock_log.expects(:info).with('Caught exception Exception: Exception')
+      self.expects(:foo).twice.raises(Exception).then.returns('bar')
+      ASM::Util.block_and_retry_until_ready(5, Exception) do
+        foo
+      end.should == 'bar'
+    end
+
+  end
+
+
 
   # TODO: test invalid device config files
 
