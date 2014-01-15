@@ -2,6 +2,7 @@ require 'logger'
 require 'fileutils'
 require 'open3'
 require 'io/wait'
+require 'timeout'
 
 class ASM
 
@@ -122,6 +123,33 @@ class ASM
     @deployment_mutex.synchronize do
       @counter ||= 0
       @counter = @counter +1
+    end
+  end
+
+  def self.block_and_retry_until_ready(timeout, exceptions=nil, &block)
+    failures = 0
+    status = Timeout::timeout(timeout) do
+      begin
+        yield
+      rescue Exception => e
+
+        exceptions = Array(exceptions)
+
+        if ! exceptions.empty? and (
+           exceptions.include?(key = e.class) or
+           exceptions.include?(key = key.name.to_s) or
+           exceptions.include?(key = key.to_sym))
+        then
+          logger.info("Caught exception #{e.class}: #{e}")
+          failures += 1
+          sleep (((2 ** failures) -1) * 0.1)
+          retry
+        else
+          # If the exceptions is not in the list of retry_exceptions re-raise.
+          raise e
+        end
+      end
+
     end
   end
 
