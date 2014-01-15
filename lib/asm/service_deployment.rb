@@ -3,6 +3,7 @@ require 'yaml'
 require 'logger'
 require 'fileutils'
 require 'open3'
+require 'rest_client'
 
 class ASM::ServiceDeployment
 
@@ -212,6 +213,28 @@ class ASM::ServiceDeployment
     id_log_file = File.join(deployment_dir, "deployment.log")
     File.open(id_log_file, 'w')
     Logger.new(id_log_file)
+  end
+
+  def get(type, name=nil)
+    begin
+      response = nil
+      if name
+        response = RestClient.get(
+          "http://localhost:8080/api/collections/#{type}/#{name}"
+        )
+      else
+        response = RestClient.get(
+          "http://localhost:8080/api/collections/#{type}"
+        )
+      end
+    rescue RestClient::ResourceNotFound => e
+      raise(CommandException, "rest call failed #{e}")
+    end
+    if response.code == 200
+      JSON.parse(response)
+    else
+      raise(CommandException, "bad http code: #{response.code}:#{response.to_str}")
+    end
   end
 
 end
