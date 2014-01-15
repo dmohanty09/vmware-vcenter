@@ -2,7 +2,7 @@ require 'asm/util'
 require 'spec_helper'
 require 'tempfile'
 
-describe AsmUtil do
+describe ASM::Util do
   
   before do
     @tmpfile = Tempfile.new('AsmUtil_spec')
@@ -25,7 +25,7 @@ END
       @tmpfile.write(text)
       @tmpfile.close
 
-      conf = AsmUtil.parse_device_config(@tmpfile)
+      conf = ASM::Util.parse_device_config(@tmpfile)
       conf.keys.size.should eq 1
       conf[certname].provider.should eq 'equallogic'
       conf[certname].url.should eq 'https://eqluser:eqlpw@172.17.15.10'
