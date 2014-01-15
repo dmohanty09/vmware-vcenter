@@ -109,7 +109,7 @@ module ASM
       result = {}
       Open3.popen3(cmd) do |stdin, stdout, stderr, wait_thr|
         result['pid']         = wait_thr[:pid]
-        result['exit_status'] = wait_thr.value
+        result['exit_status'] = wait_thr.value.exitstatus
         result['stdout']      = stdout.read
         result['stderr']      = stderr.read
       end
