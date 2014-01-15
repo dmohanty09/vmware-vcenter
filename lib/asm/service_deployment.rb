@@ -3,8 +3,11 @@ require 'yaml'
 require 'logger'
 require 'fileutils'
 require 'open3'
+require 'rest_client'
 
 class ASM::ServiceDeployment
+
+  class CommandException < Exception; end
 
   def initialize(id)
     unless id
@@ -74,6 +77,20 @@ class ASM::ServiceDeployment
     end
   end
 
+  def asm_to_puppet_params(resource, resource_type=nil, puppet_cert_name=nil)
+    param_hash = {}
+    resource['parameters'].each do |param|
+      if param['value']
+        param_hash[param['id']] = param['value']
+      else
+        if resource_type and puppet_cert_name
+          logger.warn("Parameter #{param['id']} of type #{resource_type} for #{puppet_cert_name} has no value, skipping")
+        end
+      end
+    end
+    param_hash
+  end
+
   def process_generic(component, puppet_run_type = 'device', override = nil)
     puppet_cert_name = component['id'] || raise(Exception, 'Component has no certname')
     log("Starting processing resources for endpoint #{puppet_cert_name}")
@@ -87,15 +104,8 @@ class ASM::ServiceDeployment
     resources.each do |resource|
       resource_type = resource['id'] || raise(Exception, 'resource found with no type')
       resource_hash[resource_type] ||= {}
-      param_hash = {}
       raise(Exception, "resource of type #{resource_type} has no parameters") unless resource['parameters']
-      resource['parameters'].each do |param|
-        if param['value']
-          param_hash[param['id']] = param['value']
-        else
-          logger.warn("Parameter #{param['id']} of type #{resource_type} for #{puppet_cert_name} has no value, skipping")
-        end
-      end
+      param_hash = asm_to_puppet_params(resource, resource_type, puppet_cert_name)
 
       unless title = param_hash.delete('title')
         raise(Exception, "Resource from component type #{component['type']}" +
@@ -138,7 +148,7 @@ class ASM::ServiceDeployment
 
   def process_server(component)
     log("Processing server component: #{component['id']}")
-    component['resources'].each_with_index do |r, index=0|
+    component['resources'].each_with_index do |r, index|
       if r['id'].downcase == 'asm::server'
         # add a rule_number
         r['parameters'].each do |param|
@@ -152,9 +162,10 @@ class ASM::ServiceDeployment
         })
         # configure razor
         process_generic(component, 'apply', 'true')
+        block_until_server_ready(r, timeout=3600)
       else
         logger.warn("Unexpected resource type for server: #{r['id']}")
-      end 
+      end
     end
   end
 
@@ -181,6 +192,55 @@ class ASM::ServiceDeployment
     process_generic(component)
   end
 
+
+  # converts from an ASM style server resource into
+  # a method call to check if the esx host is up
+  def block_until_server_ready(resource, timeout=3600)
+    params = asm_to_puppet_params(resource)
+    password   = params['AdminPassword']
+    type       = params['OSImageType']
+    hostname   = params['OSHostName']
+    serial_num = params['title']
+
+    unless password and type and hostname and serial_num
+      raise(Exception, "resource #{params['title']} is missing required server attributes")
+    end
+
+    if type == 'vmware_esxi'
+      ip_address = nil
+      log("Waiting until #{hostname} has checked in with Razor")
+      ASM.block_and_retry_until_ready(timeout, CommandException) do
+        results = get('nodes').each do |node|
+          results = get('nodes', node['name'])
+          serial  = results['facts']['serialnumber']
+          if serial == serial_num
+            ip_address = results['facts']['ipaddress']
+            log("Found ip address!! #{ip_address}")
+          else
+            log("Did not find a razor node matching serial number: #{serial_num}")
+          end
+        end
+        unless ip_address
+          raise(CommandException, "Did not find our node by its serial number. Will try again")
+        end
+        log("#{hostname} has checked in with Razor with ip address #{ip_address}")
+      end
+      log("Waiting until #{hostname} is ready")
+      ASM.block_and_retry_until_ready(timeout, CommandException) do
+        esx_command =  "system uuid get"
+        cmd = "esxcli --server=#{ip_address} --username=root --password=#{password} #{esx_command}"
+        results = ASM.run_command_simple(cmd)
+        logger.debug(results.inspect)
+        unless results['exit_status'] == 0 and results['stdout'] =~ /[1-9a-z-]+/
+          raise(CommandException, results['stderr'])
+        end
+      end
+    else
+      logger.warn("Do not know how to block for servers of type #{type}")
+    end
+    log("Server #{hostname} is available")
+  end
+
   private
 
   def deployment_dir
@@ -205,6 +265,28 @@ class ASM::ServiceDeployment
     id_log_file = File.join(deployment_dir, "deployment.log")
     File.open(id_log_file, 'w')
     Logger.new(id_log_file)
+  end
+
+  def get(type, name=nil)
+    begin
+      response = nil
+      if name
+        response = RestClient.get(
+          "http://localhost:8080/api/collections/#{type}/#{name}"
+        )
+      else
+        response = RestClient.get(
+          "http://localhost:8080/api/collections/#{type}"
+        )
+      end
+    rescue RestClient::ResourceNotFound => e
+      raise(CommandException, "rest call failed #{e}")
+    end
+    if response.code == 200
+      JSON.parse(response)
+    else
+      raise(CommandException, "bad http code: #{response.code}:#{response.to_str}")
+    end
   end
 
 end

@@ -1,4 +1,5 @@
 {
+  "Deployment": {
     "id": 8181,
     "deploymentName": "Server bare metal test",
     "serviceTemplate": {
@@ -131,4 +132,5 @@
         "templateName": "Default Template Name",
         "updatedBy": "Administrator"
     }
+  }
 }
