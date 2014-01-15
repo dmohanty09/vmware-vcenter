@@ -7,6 +7,8 @@ require 'rest_client'
 
 class ASM::ServiceDeployment
 
+  class CommandException < Exception; end
+
   def initialize(id)
     unless id
       raise(Exception, "Service deployment must have an id")
@@ -146,7 +148,7 @@ class ASM::ServiceDeployment
 
   def process_server(component)
     log("Processing server component: #{component['id']}")
-    component['resources'].each_with_index do |r, index=0|
+    component['resources'].each_with_index do |r, index|
       if r['id'].downcase == 'asm::server'
         # add a rule_number
         r['parameters'].each do |param|
@@ -160,9 +162,10 @@ class ASM::ServiceDeployment
         })
         # configure razor
         process_generic(component, 'apply', 'true')
+        block_until_server_ready(r, timeout=3600)
       else
         logger.warn("Unexpected resource type for server: #{r['id']}")
-      end 
+      end
     end
   end
 
@@ -187,6 +190,55 @@ class ASM::ServiceDeployment
   def process_service(component)
     log("Processing service component: #{component['id']}")
     process_generic(component)
+  end
+
+
+  # converts from an ASM style server resource into
+  # a method call to check if the esx host is up
+  def block_until_server_ready(resource, timeout=3600)
+    params = asm_to_puppet_params(resource)
+    password   = params['AdminPassword']
+    type       = params['OSImageType']
+    hostname   = params['OSHostName']
+    serial_num = params['title']
+
+    unless password and type and hostname and serial_num
+      raise(Exception, "resource #{params['title']} is missing required server attributes")
+    end
+
+    if type == 'vmware_esxi'
+      ip_address = nil
+      log("Waiting until #{hostname} has checked in with Razor")
+      ASM.block_and_retry_until_ready(timeout, CommandException) do
+        results = get('nodes').each do |node|
+          results = get('nodes', node['name'])
+          serial  = results['facts']['serialnumber']
+          if serial == serial_num
+            ip_address = results['facts']['ipaddress']
+            log("Found ip address!! #{ip_address}")
+          else
+            log("Did not find a razor node matching serial number: #{serial_num}")
+          end
+        end
+        unless ip_address
+          raise(CommandException, "Did not find our node by its serial number. Will try again")
+        end
+        log("#{hostname} has checked in with Razor with ip address #{ip_address}")
+      end
+      log("Waiting until #{hostname} is ready")
+      ASM.block_and_retry_until_ready(timeout, CommandException) do
+        esx_command =  "system uuid get"
+        cmd = "esxcli --server=#{ip_address} --username=root --password=#{password} #{esx_command}"
+        results = ASM.run_command_simple(cmd)
+        logger.debug(results.inspect)
+        unless results['exit_status'] == 0 and results['stdout'] =~ /[1-9a-z-]+/
+          raise(CommandException, results['stderr'])
+        end
+      end
+    else
+      logger.warn("Do not know how to block for servers of type #{type}")
+    end
+    log("Server #{hostname} is available")
   end
 
   private

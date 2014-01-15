@@ -26,7 +26,7 @@ describe ASM::ServiceDeployment do
         "sudo puppet asm process_node --filename #{@r_file} --run_type apply --always-override cert", "#{@o_file}") do |cmd|
         File.open(@o_file, 'w') do |fh|
           fh.write('Results: For 0 resources. 0 failed. 0 updated successfully.')
-        end  
+        end
       end
       @data['serviceTemplate']['components'][0]['type'] = 'TEST'
       @data['serviceTemplate']['components'][0]['resources'].push(
@@ -63,12 +63,15 @@ describe ASM::ServiceDeployment do
           "sudo puppet asm process_node --filename #{@r_file} --run_type apply --always-override cert", "#{@o_file}") do |cmd|
           File.open(@o_file, 'w') do |fh|
             fh.write('Results: For 0 resources. 0 failed. 0 updated successfully.')
-          end  
+          end
         end
         @data['serviceTemplate']['components'][0]['type'] = 'SERVER'
         @data['serviceTemplate']['components'][0]['resources'].push(
           {'id' => 'asm::server', 'parameters' => [
             {'id' => 'title', 'value' => 'foo'},
+            {'id' => 'AdminPassword', 'value' => 'foo'},
+            {'id' => 'OSHostName', 'value' => 'foo'},
+            {'id' => 'OSImageType', 'value' => 'foo'}
           ]}
         )
         @sd.process(@data)
