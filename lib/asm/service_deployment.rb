@@ -74,6 +74,20 @@ class ASM::ServiceDeployment
     end
   end
 
+  def asm_to_puppet_params(resource, resource_type=nil, puppet_cert_name=nil)
+    param_hash = {}
+    resource['parameters'].each do |param|
+      if param['value']
+        param_hash[param['id']] = param['value']
+      else
+        if resource_type and puppet_cert_name
+          logger.warn("Parameter #{param['id']} of type #{resource_type} for #{puppet_cert_name} has no value, skipping")
+        end
+      end
+    end
+    param_hash
+  end
+
   def process_generic(component, puppet_run_type = 'device', override = nil)
     puppet_cert_name = component['id'] || raise(Exception, 'Component has no certname')
     log("Starting processing resources for endpoint #{puppet_cert_name}")
@@ -87,15 +101,8 @@ class ASM::ServiceDeployment
     resources.each do |resource|
       resource_type = resource['id'] || raise(Exception, 'resource found with no type')
       resource_hash[resource_type] ||= {}
-      param_hash = {}
       raise(Exception, "resource of type #{resource_type} has no parameters") unless resource['parameters']
-      resource['parameters'].each do |param|
-        if param['value']
-          param_hash[param['id']] = param['value']
-        else
-          logger.warn("Parameter #{param['id']} of type #{resource_type} for #{puppet_cert_name} has no value, skipping")
-        end
-      end
+      param_hash = asm_to_puppet_params(resource, resource_type, puppet_cert_name)
 
       unless title = param_hash.delete('title')
         raise(Exception, "Resource from component type #{component['type']}" +
