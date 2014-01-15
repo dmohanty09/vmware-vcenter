@@ -58,7 +58,7 @@ describe ASM::ServiceDeployment do
           @sd.process(@data)
         end.to raise_error(Exception, 'Did not expect rule_number in asm::server')
       end
-      it 'should add rule_number' do
+      it 'should configure a server' do
         ASM.expects(:run_command).with(
           "sudo puppet asm process_node --filename #{@r_file} --run_type apply --always-override cert", "#{@o_file}") do |cmd|
           File.open(@o_file, 'w') do |fh|
