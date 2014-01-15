@@ -74,6 +74,18 @@ class ASM
     @running_deployments.delete(id)
   end
 
+  def self.run_command_simple(cmd)
+    logger.info("Executing command: #{cmd}")
+    result = {}
+    Open3.popen3(cmd) do |stdin, stdout, stderr, wait_thr|
+      result['pid']         = wait_thr[:pid]
+      result['exit_status'] = wait_thr.value
+      result['stdout']      = stdout.read
+      result['stderr']      = stderr.read
+    end
+    result
+  end
+
   def self.run_command(cmd, outfile)
     logger.info("Executing command: #{cmd}")
     if File.exists?(outfile)
