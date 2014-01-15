@@ -2,6 +2,7 @@ require 'asm/service_deployment'
 require 'json'
 require 'spec_helper'
 require 'yaml'
+require 'asm/util'
 
 describe ASM::ServiceDeployment do
 
@@ -22,7 +23,7 @@ describe ASM::ServiceDeployment do
     end
 
     it 'should be able to process data for a single resource' do
-      ASM.expects(:run_command).with(
+      ASM::Util.expects(:run_command).with(
         "sudo puppet asm process_node --filename #{@r_file} --run_type apply --always-override cert", "#{@o_file}") do |cmd|
         File.open(@o_file, 'w') do |fh|
           fh.write('Results: For 0 resources. 0 failed. 0 updated successfully.')
@@ -59,7 +60,7 @@ describe ASM::ServiceDeployment do
         end.to raise_error(Exception, 'Did not expect rule_number in asm::server')
       end
       it 'should configure a server' do
-        ASM.expects(:run_command).with(
+        ASM::Util.expects(:run_command).with(
           "sudo puppet asm process_node --filename #{@r_file} --run_type apply --always-override cert", "#{@o_file}") do |cmd|
           File.open(@o_file, 'w') do |fh|
             fh.write('Results: For 0 resources. 0 failed. 0 updated successfully.')
