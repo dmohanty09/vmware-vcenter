@@ -121,6 +121,7 @@ class ASM::ServiceDeployment
       override_opt = override ? "--always-override " : ""
       cmd = "sudo puppet asm process_node --filename #{resource_file} --run_type #{puppet_run_type} #{override_opt}#{puppet_cert_name}"
       puppet_out = File.join(deployment_dir, "#{puppet_cert_name}.out")
+      log("Running command: #{cmd}")
       ASM::Util.run_command(cmd, puppet_out)
       last_line = File.readlines(puppet_out).last
       if last_line =~ /Results: For (\d+) resources. (\d+) failed. (\d+) updated successfully./
@@ -128,7 +129,7 @@ class ASM::ServiceDeployment
         log("  #{last_line.chomp}")
         return {'total' => $1, 'failed' => $2 ,'updated' => $3}
       else
-        raise(Exception, 'Puppet output did not have expected result line')
+        raise(Exception, "Puppet output did not have expected result line, see #{puppet_out} for more info")
       end
     end
   end
@@ -230,6 +231,7 @@ class ASM::ServiceDeployment
       ASM::Util.block_and_retry_until_ready(timeout, CommandException, 150) do
         esx_command =  "system uuid get"
         cmd = "esxcli --server=#{ip_address} --username=root --password=#{password} #{esx_command}"
+        log("Running command: #{cmd}")
         results = ASM::Util.run_command_simple(cmd)
         logger.debug(results.inspect)
         unless results['exit_status'] == 0 and results['stdout'] =~ /[1-9a-z-]+/
