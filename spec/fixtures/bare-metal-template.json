@@ -24,7 +24,7 @@
                                 "value": "JH870W1"
                             },
                             {
-                                "id": "IdentityPool",
+                                "id": "identity_pool",
                                 "displayName": "Identity Pool",
                                 "possibleValues": -1,
                                 "possibleValuesDisplayName": "Global",
@@ -33,14 +33,14 @@
                                 "value": -1
                             },
                             {
-                                "id": "OSHostName",
+                                "id": "os_host_name",
                                 "displayName": "Host Name",
                                 "required": true,
                                 "type": "STRING",
                                 "value": "host1"
                             },
                             {
-                                "id": "HypervisorNetwork",
+                                "id": "hypervisor_network",
                                 "displayName": "Hypervisor Management Network",
                                 "possibleValues": -1,
                                 "possibleValuesDisplayName": "Select...",
@@ -49,7 +49,7 @@
                                 "value": -1
                             },
                             {
-                                "id": "VMotionNetwork",
+                                "id": "vmotion_network",
                                 "displayName": "Hypervisor vMotion Network",
                                 "possibleValues": -1,
                                 "possibleValuesDisplayName": "Select...",
@@ -58,7 +58,7 @@
                                 "value": -1
                             },
                             {
-                                "id": "StorageNetwork",
+                                "id": "storage_network",
                                 "displayName": "Storage Network",
                                 "possibleValues": -1,
                                 "possibleValuesDisplayName": "Select...",
@@ -73,14 +73,14 @@
                                 "type": "LIST"
                             },
                             {
-                                "id": "AdminPassword",
+                                "id": "admin_password",
                                 "displayName": "Administrator password",
                                 "required": true,
                                 "type": "PASSWORD",
                                 "value": "foo"
                             },
                             {
-                                "id": "RazorImage",
+                                "id": "razor_image",
                                 "displayName": "OS Image",
                                 "possibleValues": [
                                     -1,
@@ -95,7 +95,7 @@
                                 "value": "esxi-5.1"
                             },
                             {
-                                "id": "OSImageType",
+                                "id": "os_image_type",
                                 "displayName": "OS Image Type",
                                 "possibleValues": [
                                     -1,
