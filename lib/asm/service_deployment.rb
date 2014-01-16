@@ -198,9 +198,9 @@ class ASM::ServiceDeployment
   # a method call to check if the esx host is up
   def block_until_server_ready(resource, timeout=3600)
     params = asm_to_puppet_params(resource)
-    password   = params['AdminPassword']
-    type       = params['OSImageType']
-    hostname   = params['OSHostName']
+    password   = params['admin_password']
+    type       = params['os_image_type']
+    hostname   = params['os_host_name']
     serial_num = params['title']
 
     unless password and type and hostname and serial_num

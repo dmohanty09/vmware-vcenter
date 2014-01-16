@@ -70,9 +70,9 @@ describe ASM::ServiceDeployment do
         @data['serviceTemplate']['components'][0]['resources'].push(
           {'id' => 'asm::server', 'parameters' => [
             {'id' => 'title', 'value' => 'foo'},
-            {'id' => 'AdminPassword', 'value' => 'foo'},
-            {'id' => 'OSHostName', 'value' => 'foo'},
-            {'id' => 'OSImageType', 'value' => 'foo'}
+            {'id' => 'admin_password', 'value' => 'foo'},
+            {'id' => 'os_host_name', 'value' => 'foo'},
+            {'id' => 'os_image_type', 'value' => 'foo'}
           ]}
         )
         @sd.process(@data)

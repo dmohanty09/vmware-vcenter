@@ -80,7 +80,7 @@
                         "parameters": [
                             {
                                 "currentValue": "-1", 
-                                "id": "IdentityPool", 
+                                "id": "identity_pool", 
                                 "name": "Identity Pool", 
                                 "possibleValues": [
                                     "-1"
@@ -101,7 +101,7 @@
                                 "type": "STRING"
                             }, 
                             {
-                                "id": "HypervisorNetwork", 
+                                "id": "hypervisor_network", 
                                 "name": "Hypervisor Management Network", 
                                 "possibleValues": [
                                     "8a52f08b43457c6c0143457f08e10000"
@@ -113,7 +113,7 @@
                                 "type": "ENUMERATED"
                             }, 
                             {
-                                "id": "VMotionNetwork", 
+                                "id": "vmotion_network", 
                                 "name": "Hypervisor vMotion Network", 
                                 "possibleValues": [
                                     "8a52f08b43457c6c0143457f08e10000"
@@ -125,7 +125,7 @@
                                 "type": "ENUMERATED"
                             }, 
                             {
-                                "id": "StorageNetwork", 
+                                "id": "storage_network", 
                                 "name": "Storage Network", 
                                 "possibleValues": [], 
                                 "possibleValuesDisplayName": [], 
@@ -141,7 +141,7 @@
                                 "type": "LIST"
                             }, 
                             {
-                                "id": "AdminPassword", 
+                                "id": "admin_password", 
                                 "name": "Administrator password", 
                                 "possibleValues": [], 
                                 "possibleValuesDisplayName": [], 
@@ -149,7 +149,7 @@
                                 "type": "PASSWORD"
                             }, 
                             {
-                                "id": "RazorImage", 
+                                "id": "razor_image", 
                                 "name": "OS Image", 
                                 "possibleValues": [
                                     "esxi-5.1"
@@ -161,7 +161,7 @@
                                 "type": "ENUMERATED"
                             }, 
                             {
-                                "id": "OSImageType", 
+                                "id": "os_image_type", 
                                 "name": "OS Image Type", 
                                 "possibleValues": [
                                     "Linux", 
@@ -294,7 +294,7 @@
                                 "type": "STRING"
                             }, 
                             {
-                                "id": "VMAdminPassword", 
+                                "id": "VMadmin_password", 
                                 "name": "Administrator password", 
                                 "possibleValues": [], 
                                 "possibleValuesDisplayName": [], 
@@ -302,7 +302,7 @@
                                 "type": "PASSWORD"
                             }, 
                             {
-                                "id": "VMRazorImage", 
+                                "id": "VMrazor_image", 
                                 "name": "OS Image", 
                                 "possibleValues": [], 
                                 "possibleValuesDisplayName": [], 
@@ -310,7 +310,7 @@
                                 "type": "ENUMERATED"
                             }, 
                             {
-                                "id": "VMOSImageType", 
+                                "id": "VMos_image_type", 
                                 "name": "OS Image Type", 
                                 "possibleValues": [
                                     "Linux", 
