@@ -210,7 +210,7 @@ class ASM::ServiceDeployment
     if type == 'vmware_esxi'
       ip_address = nil
       log("Waiting until #{hostname} has checked in with Razor")
-      ASM::Util.block_and_retry_until_ready(timeout, CommandException) do
+      ASM::Util.block_and_retry_until_ready(timeout, CommandException, 30) do
         results = get('nodes').each do |node|
           results = get('nodes', node['name'])
           serial  = results['facts']['serialnumber']
@@ -227,7 +227,7 @@ class ASM::ServiceDeployment
         log("#{hostname} has checked in with Razor with ip address #{ip_address}")
       end
       log("Waiting until #{hostname} is ready")
-      ASM::Util.block_and_retry_until_ready(timeout, CommandException) do
+      ASM::Util.block_and_retry_until_ready(timeout, CommandException, 150) do
         esx_command =  "system uuid get"
         cmd = "esxcli --server=#{ip_address} --username=root --password=#{password} #{esx_command}"
         results = ASM::Util.run_command_simple(cmd)
