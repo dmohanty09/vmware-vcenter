@@ -25,7 +25,7 @@ END
       @tmpfile.write(text)
       @tmpfile.close
 
-      conf = ASM::Util.parse_device_config(@tmpfile)
+      conf = ASM::Util.parse_device_config_file(@tmpfile)
       conf.keys.size.should eq 1
       conf[certname].provider.should eq 'equallogic'
       conf[certname].url.should eq 'https://eqluser:eqlpw@172.17.15.10'
@@ -68,5 +68,37 @@ END
   # TODO: test invalid device config files
 
   # TODO: test idrac resource configuration
+
+  describe 'when data is valid' do
+    it 'should produce component configuration data' do
+      sample_file = File.join(File.dirname(__FILE__), '..', '..', 
+                              'fixtures', 'dellworld_template.json')
+      deployment = JSON.parse(File.open(sample_file, 'rb').read)['Deployment']['serviceTemplate']
+
+      # Check a server component
+      component = deployment['components'][1]
+      title = component['id']
+      config = ASM::Util.build_component_configuration(component, title)
+      
+      config.keys.size.should == 2
+      config['asm::idrac'].size.should == 1
+      title = config['asm::idrac'].keys[0]
+      config['asm::idrac'][title]['target_boot_device'].should == 'SD'
+      config['asm::server'].size.should == 1
+      title = config['asm::server'].keys[0]
+      config['asm::server'][title]['razor_image'].should == 'esxi-5.1'
+      
+      
+      # Check a cluster component
+      component = deployment['components'][3]
+      title = component['id']
+      config = ASM::Util.build_component_configuration(component, title)
+      
+      config.keys.size.should == 1
+      title = config['asm::cluster'].keys[0]
+      config['asm::cluster'][title]['cluster'].should == 'dwcluster'
+    end
+  end
+
   
 end

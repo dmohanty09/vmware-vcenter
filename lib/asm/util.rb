@@ -4,6 +4,7 @@ require 'uri'
 require 'open3'
 require 'io/wait'
 require 'timeout'
+require 'socket'
 
 module ASM
   module Util
@@ -11,40 +12,6 @@ module ASM
     SERVER_RA_URL='http://localhost:9080/ServerRA/Server'
     # TODO: give razor user access to this directory
     DEVICE_CONF_DIR='/etc/puppetlabs/puppet/devices'
-    IDRAC_CONF_DIR='/var/nfs/idrac_config_xml'
-
-    # Given a server ref_id, look up its creds from puppet device conf
-    # file and its ASM server inventory from ASM ServerRA REST service.
-    # Generate corresponding idrac resource
-    def self.generate_idrac_resource(ref_id)
-      conf_file = File.join(DEVICE_CONF_DIR, "#{ref_id}.conf")
-      conf = parse_device_config(conf_file)
-      raise(Exception, "Failed to get device config file for Server #{ref_id}") if conf[ref_id].nil?
-      uri = URI.parse(conf[ref_id].url)
-      host = uri.host
-      user = URI.decode(uri.user)
-      password = URI.decode(uri.password)
-    
-      inventory = fetch_server_inventory(ref_id)
-      # Model is like 'PowerEdge M620', convert to m620
-      model = inventory['model'].split(' ').last.downcase
-      servicetag = inventory['serviceTag']
-
-      idrac_xml = 'default.xml'
-      if File.exists?(File.join(IDRAC_CONF_DIR, "#{model}.xml"))
-        idrac_xml = "#{model}.xml"
-      end
-
-      params = {'dracipaddress' => host,
-        'dracusername' => user,
-        'dracpassword' => password,
-        'configxmlfilename' => idrac_xml,
-        'nfsipaddress' => 'localhost',
-        'nfssharepath' => IDRAC_CONF_DIR,
-      }
-
-      {'importsystemconfiguration' => { servicetag => params } }
-    end
 
     # See spec/fixtures/asm_server_m620.json for sample response
     def self.fetch_server_inventory(ref_id)
@@ -55,9 +22,29 @@ module ASM
       ret
     end
 
+    def self.first_host_ip
+      Socket.ip_address_list.detect do |intf| 
+        intf.ipv4? and !intf.ipv4_loopback? and !intf.ipv4_multicast?
+      end.ip_address
+    end
+
+    def self.parse_device_config(cert_name)
+      conf_file = File.join(DEVICE_CONF_DIR, "#{cert_name}.conf")
+      conf_file_data = parse_device_config_file(conf_file)
+      uri = URI.parse(conf_file_data[cert_name].url)
+      host = uri.host
+      user = URI.decode(uri.user)
+      password = URI.decode(uri.password)
+      { :host => host,
+        :user => user,
+        :password => password,
+        :conf_file_data => conf_file_data }
+    end
+
+
     # Parse puppet device config files, code cribbed from 
     # Puppet::Util::NetworkDevice::Config
-    def self.parse_device_config(file)
+    def self.parse_device_config_file(file)
       begin
         devices = {}
         device = nil
@@ -178,5 +165,48 @@ module ASM
         end
       end
     end
+
+    # ASM services send single-element arrays as just the single element (hash).
+    # This method ensures we get a single-element array in that case
+    def self.asm_json_array(elem)
+      if elem.is_a?(Hash)
+        [ elem ]
+      else
+        elem
+      end
+    end
+
+    # Build data appropriate for serializing to YAML and using for component
+    # configuration via the puppet asm command.
+    def self.build_component_configuration(component, generated_title = nil)
+      resource_hash = {}
+      resources = ASM::Util.asm_json_array(component['resources'])
+      resources.each do |resource|
+        resource_type = resource['id'] || raise(Exception, 'resource found with no type')
+        resource_hash[resource_type] ||= {}
+
+        param_hash = {}
+        if resource['parameters'].nil?
+          raise(Exception, "resource of type #{resource_type} has no parameters")
+        else
+          resource['parameters'].each do |param|
+            if param['value']
+              param_hash[param['id']] = param['value']
+            end
+          end
+        end
+
+        title = param_hash.delete('title')
+        unless title
+          title = generated_title
+        end
+
+        raise(Exception, "Resource from component type #{component['type']} has resource #{resource_type} with no title") unless title
+
+        resource_hash[resource_type][title] = param_hash
+      end
+      resource_hash
+    end
+
   end
 end

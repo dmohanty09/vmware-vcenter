@@ -13,12 +13,17 @@ class ASM::App < Sinatra::Base
     ASM.init
   end
 
-  # TODO make sure that only one of these can be done at a time
+  # Execute deployment
   post '/process_service_profile' do
-    data = JSON.parse(request.body.read)
-    ASM.process_deployment(data['Deployment'])
+    ASM.process_deployment_request(request)
   end
 
+  # Write deployment files and info, but skip running puppet
+  post '/debug_service_profile' do
+    ASM.debug_deployment_request(request)
+  end
+
+  # Retrieve logs for a deployment id
   get '/logs/:id' do | id |
     content_type :json
     logs = []

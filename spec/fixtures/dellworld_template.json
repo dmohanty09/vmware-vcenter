@@ -1,0 +1,561 @@
+{
+  "Deployment": {
+    "deploymentDescription": "Service deployment for dell world.",
+    "deploymentName": "Dell World Service 15",
+    "id": "ff808081439baf7101439cbe937f0965",
+    "serviceTemplate": {
+      "id": "ff808081439baf7101439ca14413095f",
+      "templateName": "DellWorld",
+      "templateDescription": "Dell world demo",
+      "draft": false,
+      "createdDate": "2014-01-16T19:57:31.027Z",
+      "createdBy": "admin",
+      "components": [
+        {
+          "id": "equallogic-172.17.15.10",
+          "componentID": "component2",
+          "name": "EqualLogic Chap 1",
+          "type": "STORAGE",
+          "asmGUID": "equallogic-172.17.15.10",
+          "relatedComponents": "",
+          "resources": {
+            "id": "equallogic::create_vol_chap_user_access",
+            "displayName": "Storage Settings",
+            "parameters": [
+              {
+                "id": "title",
+                "value": "gsvol3",
+                "type": "STRING",
+                "displayName": "Storage Volume",
+                "required": true,
+                "min": 0,
+                "max": 0
+              },
+              {
+                "id": "size",
+                "value": "100g",
+                "type": "STRING",
+                "displayName": "Storage Size (e.g. 100m, 1g)",
+                "required": true,
+                "min": 0,
+                "max": 0
+              },
+              {
+                "id": "thinprovision",
+                "value": "enable",
+                "type": "STRING",
+                "displayName": "Thin Provisioning",
+                "required": true,
+                "min": 0,
+                "max": 0
+              },
+              {
+                "id": "snapreserve",
+                "value": "100%",
+                "type": "STRING",
+                "displayName": "Snapshot Reserve %",
+                "required": true,
+                "min": 0,
+                "max": 0
+              },
+              {
+                "id": "thinminreserve",
+                "value": "10%",
+                "type": "STRING",
+                "displayName": "Thin Min Reserve %",
+                "required": true,
+                "min": 0,
+                "max": 0
+              },
+              {
+                "id": "thingrowthwarn",
+                "value": "60%",
+                "type": "STRING",
+                "displayName": "Thin growth Warning %",
+                "required": true,
+                "min": 0,
+                "max": 0
+              },
+              {
+                "id": "thingrowthmax",
+                "value": "100%",
+                "type": "STRING",
+                "displayName": "Thin growth Maximum %",
+                "required": true,
+                "min": 0,
+                "max": 0
+              },
+              {
+                "id": "thinwarnsoftthres",
+                "value": "60%",
+                "type": "STRING",
+                "displayName": "Thin warning on threshold %",
+                "required": true,
+                "min": 0,
+                "max": 0
+              },
+              {
+                "id": "thinwarnhardthres",
+                "value": "90%",
+                "type": "STRING",
+                "displayName": "Thin warning hard threshold %",
+                "required": true,
+                "min": 0,
+                "max": 0
+              },
+              {
+                "id": "multihostaccess",
+                "value": "enable",
+                "type": "STRING",
+                "displayName": "Multi-Host access of volume",
+                "required": true,
+                "min": 0,
+                "max": 0
+              },
+              {
+                "id": "chap_user_name",
+                "value": "chapuser",
+                "type": "STRING",
+                "displayName": "Chap Username",
+                "required": true,
+                "min": 0,
+                "max": 0
+              },
+              {
+                "id": "passwd",
+                "value": "chappass",
+                "type": "PASSWORD",
+                "displayName": "Chap Secret",
+                "required": true,
+                "min": 0,
+                "max": 0
+              }
+            ]
+          }
+        },
+        {
+          "id": "ff808081439baf7101439bb23bf502ad",
+          "componentID": "component3",
+          "name": "Server 1",
+          "type": "SERVER",
+          "relatedComponents": {
+            "entry": [
+              {
+                "key": "component-compellent-1",
+                "value": "Compellent"
+              },
+              {
+                "key": "component-equallogic-chap-1",
+                "value": "EqualLogic Chap 1"
+              }
+            ]
+          },
+          "resources": [
+            {
+              "id": "asm::idrac",
+              "displayName": "Hardware Settings",
+              "parameters": [
+                {
+                  "id": "target_boot_device",
+                  "value": "SD",
+                  "type": "ENUMERATED",
+                  "displayName": "Target Boot Device",
+                  "required": true,
+                  "min": 0,
+                  "max": 0,
+                  "possibleValues": [
+                    "SD",
+                    "HD"
+                  ],
+                  "possibleValuesDisplayName": [
+                    "SD Card",
+                    "Local Hard Drive"
+                  ]
+                },
+                {
+                  "id": "server_pool",
+                  "value": -1,
+                  "type": "ENUMERATED",
+                  "displayName": "Server Pool",
+                  "required": true,
+                  "min": 0,
+                  "max": 0,
+                  "possibleValues": -1,
+                  "possibleValuesDisplayName": "Global"
+                }
+              ]
+            },
+            {
+              "id": "asm::server",
+              "displayName": "OS Settings",
+              "parameters": [
+                {
+                  "id": "identity_pool",
+                  "value": -1,
+                  "type": "ENUMERATED",
+                  "displayName": "Identity Pool",
+                  "required": true,
+                  "min": 0,
+                  "max": 0,
+                  "possibleValues": -1,
+                  "possibleValuesDisplayName": "Global"
+                },
+                {
+                  "id": "os_host_name",
+                  "value": "testhost1",
+                  "type": "STRING",
+                  "displayName": "Host Name",
+                  "required": false,
+                  "min": 0,
+                  "max": 0
+                },
+                {
+                  "id": "hypervisor_network",
+                  "value": -1,
+                  "type": "ENUMERATED",
+                  "displayName": "Hypervisor Management Network",
+                  "required": true,
+                  "min": 0,
+                  "max": 0,
+                  "possibleValues": -1,
+                  "possibleValuesDisplayName": "Select..."
+                },
+                {
+                  "id": "vmotion_network",
+                  "value": -1,
+                  "type": "ENUMERATED",
+                  "displayName": "Hypervisor vMotion Network",
+                  "required": true,
+                  "min": 0,
+                  "max": 0,
+                  "possibleValues": -1,
+                  "possibleValuesDisplayName": "Select..."
+                },
+                {
+                  "id": "storage_network",
+                  "value": -1,
+                  "type": "ENUMERATED",
+                  "displayName": "Storage Network",
+                  "required": true,
+                  "min": 0,
+                  "max": 0,
+                  "possibleValues": -1,
+                  "possibleValuesDisplayName": "Select..."
+                },
+                {
+                  "id": "workload_network",
+                  "value": "",
+                  "type": "LIST",
+                  "displayName": "Workload Networks",
+                  "required": true,
+                  "min": 0,
+                  "max": 0
+                },
+                {
+                  "id": "admin_password",
+                  "value": "P@ssw0rd",
+                  "type": "PASSWORD",
+                  "displayName": "Administrator password",
+                  "required": true,
+                  "min": 0,
+                  "max": 0
+                },
+                {
+                  "id": "razor_image",
+                  "value": "esxi-5.1",
+                  "type": "ENUMERATED",
+                  "displayName": "OS Image",
+                  "required": true,
+                  "min": 0,
+                  "max": 0,
+                  "possibleValues": [
+                    -1,
+                    "esxi-5.1"
+                  ],
+                  "possibleValuesDisplayName": [
+                    "Select...",
+                    "esxi-5.1"
+                  ]
+                },
+                {
+                  "id": "os_image_type",
+                  "value": "ESXi",
+                  "type": "ENUMERATED",
+                  "displayName": "OS Image Type",
+                  "required": true,
+                  "min": 0,
+                  "max": 0,
+                  "possibleValues": [
+                    -1,
+                    "Linux",
+                    "Windows",
+                    "ESXi"
+                  ],
+                  "possibleValuesDisplayName": [
+                    "Select...",
+                    "Linux",
+                    "Windows",
+                    "ESXi"
+                  ]
+                },
+                {
+                  "id": "custom_script",
+                  "value": "",
+                  "type": "TEXT",
+                  "displayName": "Custom OS Installation script",
+                  "required": false,
+                  "min": 0,
+                  "max": 0
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "id": "ff808081439baf7101439bb23e7e03f3",
+          "componentID": "component3",
+          "name": "Server 2",
+          "type": "SERVER",
+          "relatedComponents": {
+            "entry": [
+              {
+                "key": "component-compellent-1",
+                "value": "Compellent"
+              },
+              {
+                "key": "component-equallogic-chap-1",
+                "value": "EqualLogic Chap 1"
+              }
+            ]
+          },
+          "resources": [
+            {
+              "id": "asm::idrac",
+              "displayName": "Hardware Settings",
+              "parameters": [
+                {
+                  "id": "target_boot_device",
+                  "value": "SD",
+                  "type": "ENUMERATED",
+                  "displayName": "Target Boot Device",
+                  "required": true,
+                  "min": 0,
+                  "max": 0,
+                  "possibleValues": [
+                    "SD",
+                    "HD"
+                  ],
+                  "possibleValuesDisplayName": [
+                    "SD Card",
+                    "Local Hard Drive"
+                  ]
+                },
+                {
+                  "id": "server_pool",
+                  "value": -1,
+                  "type": "ENUMERATED",
+                  "displayName": "Server Pool",
+                  "required": true,
+                  "min": 0,
+                  "max": 0,
+                  "possibleValues": -1,
+                  "possibleValuesDisplayName": "Global"
+                }
+              ]
+            },
+            {
+              "id": "asm::server",
+              "displayName": "OS Settings",
+              "parameters": [
+                {
+                  "id": "identity_pool",
+                  "value": -1,
+                  "type": "ENUMERATED",
+                  "displayName": "Identity Pool",
+                  "required": true,
+                  "min": 0,
+                  "max": 0,
+                  "possibleValues": -1,
+                  "possibleValuesDisplayName": "Global"
+                },
+                {
+                  "id": "os_host_name",
+                  "value": "testhost2",
+                  "type": "STRING",
+                  "displayName": "Host Name",
+                  "required": false,
+                  "min": 0,
+                  "max": 0
+                },
+                {
+                  "id": "hypervisor_network",
+                  "value": -1,
+                  "type": "ENUMERATED",
+                  "displayName": "Hypervisor Management Network",
+                  "required": true,
+                  "min": 0,
+                  "max": 0,
+                  "possibleValues": -1,
+                  "possibleValuesDisplayName": "Select..."
+                },
+                {
+                  "id": "vmotion_network",
+                  "value": -1,
+                  "type": "ENUMERATED",
+                  "displayName": "Hypervisor vMotion Network",
+                  "required": true,
+                  "min": 0,
+                  "max": 0,
+                  "possibleValues": -1,
+                  "possibleValuesDisplayName": "Select..."
+                },
+                {
+                  "id": "storage_network",
+                  "value": -1,
+                  "type": "ENUMERATED",
+                  "displayName": "Storage Network",
+                  "required": true,
+                  "min": 0,
+                  "max": 0,
+                  "possibleValues": -1,
+                  "possibleValuesDisplayName": "Select..."
+                },
+                {
+                  "id": "workload_network",
+                  "value": "",
+                  "type": "LIST",
+                  "displayName": "Workload Networks",
+                  "required": true,
+                  "min": 0,
+                  "max": 0
+                },
+                {
+                  "id": "admin_password",
+                  "value": "P@ssw0rd",
+                  "type": "PASSWORD",
+                  "displayName": "Administrator password",
+                  "required": true,
+                  "min": 0,
+                  "max": 0
+                },
+                {
+                  "id": "razor_image",
+                  "value": "esxi-5.1",
+                  "type": "ENUMERATED",
+                  "displayName": "OS Image",
+                  "required": true,
+                  "min": 0,
+                  "max": 0,
+                  "possibleValues": [
+                    -1,
+                    "esxi-5.1"
+                  ],
+                  "possibleValuesDisplayName": [
+                    "Select...",
+                    "esxi-5.1"
+                  ]
+                },
+                {
+                  "id": "os_image_type",
+                  "value": "ESXi",
+                  "type": "ENUMERATED",
+                  "displayName": "OS Image Type",
+                  "required": true,
+                  "min": 0,
+                  "max": 0,
+                  "possibleValues": [
+                    -1,
+                    "Linux",
+                    "Windows",
+                    "ESXi"
+                  ],
+                  "possibleValuesDisplayName": [
+                    "Select...",
+                    "Linux",
+                    "Windows",
+                    "ESXi"
+                  ]
+                },
+                {
+                  "id": "custom_script",
+                  "value": "",
+                  "type": "TEXT",
+                  "displayName": "Custom OS Installation script",
+                  "required": false,
+                  "min": 0,
+                  "max": 0
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "id": "ff808081439baf7101439c26ebd40843",
+          "componentID": "component4",
+          "name": "Cluster 1",
+          "type": "CLUSTER",
+          "relatedComponents": {
+            "entry": [
+              {
+                "key": "7368dbd6-4950-4d6a-99c4-4c915311b91b",
+                "value": "Server"
+              },
+              {
+                "key": "6e02299f-e909-4f73-96f8-a5948ef4269a",
+                "value": "Server 2"
+              },
+              {
+                "key": "8d28b0c7-7c96-4408-a5bc-6d9850cd3beb",
+                "value": "Server 1"
+              }
+            ]
+          },
+          "resources": {
+            "id": "asm::cluster",
+            "displayName": "Cluster Settings",
+            "parameters": [
+              {
+                "id": "target_vcenter",
+                "value": "ff808081439baf7101439c26ebd40843",
+                "type": "ENUMERATED",
+                "displayName": "Target vCenter",
+                "required": true,
+                "min": 0,
+                "max": 0,
+                "possibleValues": "ff808081439baf7101439c26ebd40843",
+                "possibleValuesDisplayName": "VCENTER-AS800R.aidev.com"
+              },
+              {
+                "id": "data_center",
+                "value": "dwdatacenter",
+                "type": "STRING",
+                "displayName": "Data Center Name",
+                "required": true,
+                "min": 0,
+                "max": 0
+              },
+              {
+                "id": "cluster",
+                "value": "dwcluster",
+                "type": "STRING",
+                "displayName": "Cluster Name",
+                "required": true,
+                "min": 0,
+                "max": 0
+              },
+              {
+                "id": "datastore",
+                "value": "dwdatastore",
+                "type": "STRING",
+                "displayName": "Cluster Data Store",
+                "required": true,
+                "min": 0,
+                "max": 0
+              }
+            ]
+          }
+        }
+      ]
+    }
+  }
+}

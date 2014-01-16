@@ -25,15 +25,27 @@ class ASM::ServiceDeployment
     logger.info(msg)
   end
 
+  def debug=(debug)
+    @debug = debug
+  end
+
   def process(service_deployment)
     ASM.logger.info("Deploying #{service_deployment['deploymentName']} with id #{service_deployment['id']}")
     log("Starting deployment #{service_deployment['deploymentName']}")
-    component_hash = component_hash(service_deployment)
-    process_components(component_hash)
+
+    # TODO: pass deployment into constructor instead of here
+    @deployment = service_deployment
+
+    # Will need to access other component types during deployment
+    # of a given component type in the future, e.g. VSwitch configuration
+    # information is contained in the server component type data
+    @components_by_type = components_by_type(service_deployment)
+
+    process_components()
   end
 
-  def component_hash(service_deployment)
-    component_hash = {}
+  def components_by_type(service_deployment)
+    components_by_type = {}
     if service_deployment['serviceTemplate']
       unless service_deployment['serviceTemplate']['components']
         logger.warn("service deployment data has no components")
@@ -41,26 +53,21 @@ class ASM::ServiceDeployment
     else
       logger.warn("Service deployment data has no serviceTemplate defined")
     end
-    components = ((service_deployment['serviceTemplate'] || {})['components'] || [])
 
-    # API is sending hash for single element and array for list
-    if components.is_a?(Hash)
-      logger.debug("Received single hash for components")
-      components = [ components ]
-    end
+    components = ASM::Util.asm_json_array((service_deployment['serviceTemplate'] || {})['components'] || [])
 
     logger.debug("Found #{components.length} components")
     components.each do |component|
       logger.debug("Found component id #{component['id']}")
-      component_hash[component['type']] ||= []
-      component_hash[component['type']].push(component)
+      components_by_type[component['type']] ||= []
+      components_by_type[component['type']].push(component)
     end
-    component_hash
+    components_by_type
   end
 
-  def process_components(component_hash)
+  def process_components()
     ['STORAGE', 'TOR', 'SERVER', 'CLUSTER', 'VIRTUALMACHINE', 'SERVICE', 'TEST'].each do |type|
-      if components = component_hash[type]
+      if components = @components_by_type[type]
         log("Processing components of type #{type}")
         components.collect do |comp|
           #
@@ -92,40 +99,24 @@ class ASM::ServiceDeployment
     param_hash
   end
 
-  def process_generic(component, puppet_run_type = 'device', override = nil)
-    puppet_cert_name = component['id'] || raise(Exception, 'Component has no certname')
-    log("Starting processing resources for endpoint #{puppet_cert_name}")
-    resource_hash = {}
-    resources = (component['resources'] || [])
-    # API is sending hash for single element and array for list
-    if resources.is_a?(Hash)
-      logger.debug("Received single hash for resources")
-      resources = [ resources ]
+  def process_generic(cert_name, config, puppet_run_type = 'device', override = nil)
+    raise(Exception, 'Component has no certname') unless cert_name
+    log("Starting processing resources for endpoint #{cert_name}")
+    
+    resource_file = File.join(resources_dir, "#{cert_name}.yaml")
+    File.open(resource_file, 'w') do |fh|
+      fh.write(config.to_yaml)
     end
-    resources.each do |resource|
-      resource_type = resource['id'] || raise(Exception, 'resource found with no type')
-      resource_hash[resource_type] ||= {}
-      raise(Exception, "resource of type #{resource_type} has no parameters") unless resource['parameters']
-      param_hash = asm_to_puppet_params(resource, resource_type, puppet_cert_name)
-
-      unless title = param_hash.delete('title')
-        raise(Exception, "Resource from component type #{component['type']}" +
-              " has resource #{resource['id']} with no title")
-
-      end
-      resource_hash[resource_type][title] = param_hash
-      resource_file = File.join(resources_dir, "#{puppet_cert_name}.yaml")
-      File.open(resource_file, 'w') do |fh|
-        fh.write(resource_hash.to_yaml)
-      end
-      override_opt = override ? "--always-override " : ""
-      cmd = "sudo puppet asm process_node --filename #{resource_file} --run_type #{puppet_run_type} #{override_opt}#{puppet_cert_name}"
-      puppet_out = File.join(deployment_dir, "#{puppet_cert_name}.out")
-      log("Running command: #{cmd}")
+    override_opt = override ? "--always-override " : ""
+    cmd = "sudo puppet asm process_node --filename #{resource_file} --run_type #{puppet_run_type} #{override_opt}#{cert_name}"
+    if @debug
+      logger.info("[DEBUG MODE] execution skipped for '#{cmd}'")
+    else
+      puppet_out = File.join(deployment_dir, "#{cert_name}.out")
       ASM::Util.run_command(cmd, puppet_out)
       last_line = File.readlines(puppet_out).last
       if last_line =~ /Results: For (\d+) resources. (\d+) failed. (\d+) updated successfully./
-        log("Results for endpoint #{puppet_cert_name} configuration")
+        log("Results for endpoint #{cert_name} configuration")
         log("  #{last_line.chomp}")
         return {'total' => $1, 'failed' => $2 ,'updated' => $3}
       else
@@ -135,44 +126,66 @@ class ASM::ServiceDeployment
   end
 
   def process_test(component)
-    process_generic(component, 'apply', true)
+    raise(Exception, 'Component has no certname') unless component['id']
+    config = ASM::Util.build_component_configuration(component)
+    process_generic(component['id'], config, 'apply', true)
   end
 
   def process_storage(component)
+    raise(Exception, 'Component has no certname') unless component['id']
     log("Processing storage component: #{component['id']}")
-    process_generic(component)
+    config = ASM::Util.build_component_configuration(component)
+    process_generic(component['id'], config)
   end
 
   def process_tor(component)
+    raise(Exception, 'Component has no certname') unless component['id']
     log("Processing tor component: #{component['id']}")
-    process_generic(component)
+    config = ASM::Util.build_component_configuration(component)
+    process_generic(component['id'], config)
   end
 
   def process_server(component)
+    raise(Exception, 'Component has no certname') unless component['id']
     log("Processing server component: #{component['id']}")
-    component['resources'].each_with_index do |r, index|
-      if r['id'].downcase == 'asm::server'
-        # add a rule_number
-        r['parameters'].each do |param|
-          if param['id'] == 'rule_number'
-            raise(Exception, "Did not expect rule_number in asm::server")
-          end
-        end
-        component['resources'][index]['parameters'].push({
-          'id' => 'rule_number',
-          'value' => rule_number
-        })
-        # configure razor
-        process_generic(component, 'apply', 'true')
-        block_until_server_ready(r, timeout=3600)
+
+    cert_name = component['id']
+    deviceconf = ASM::Util.parse_device_config(cert_name)
+
+    # TODO: Should only get inventory and service tag for Dell
+    inventory = ASM::Util.fetch_server_inventory(cert_name)
+    title = inventory['serviceTag']
+
+    config = ASM::Util.build_component_configuration(component, title)
+    (config['asm::server'] || []).each do |title, params|
+      if params['rule_number'].nil?
+        params['rule_number'] = rule_number
       else
-        logger.warn("Unexpected resource type for server: #{r['id']}")
+        raise(Exception, "Did not expect rule_number in asm::server")
       end
+    end
+
+    (config['asm::idrac'] || []).each do |title, params|
+      # Attempt to determine this machine's IP address, which
+      # should also be the NFS server. This is error-prone
+      # and should be fixed later.
+      params['nfsipaddress'] = ASM::Util.first_host_ip
+      params['nfssharepath'] = '/var/nfs/idrac_config_xml'
+      params['nfslocaldir'] = '/var/nfs/idrac_config_xml'
+      params['dracipaddress'] = deviceconf[:host]
+      params['dracusername'] = deviceconf[:user]
+      params['dracpassword'] = deviceconf[:password]
+      params['servicetag'] = inventory['serviceTag']
+      params['model'] = inventory['model'].split(' ').last.downcase
+    end
+    process_generic(component['id'], config, 'apply', 'true')
+    config['asm::server'].each do |title, params|
+      block_until_server_ready(title, params, timeout=3600)
     end
   end
 
   #
-  # Razor requires unique rule numbers per deployment that set priotity.
+  # Razor requires unique rule numbers per deployment that set priority.
   # This routine is able to safely generate 100 per second.
   #
   def rule_number
@@ -180,33 +193,44 @@ class ASM::ServiceDeployment
   end
 
   def process_cluster(component)
-    log("Processing cluster component: #{component['id']}")
-    process_generic(component)
+    cert_name = component['id']
+    raise(Exception, 'Component has no certname') unless cert_name
+    log("Processing cluster component: #{cert_name}")
+
+    config = ASM::Util.build_component_configuration(component, cert_name)
+    deviceconf = ASM::Util.parse_device_config(cert_name)
+
+    config['asm::cluster'].each do |title, params|
+      config['asm::cluster'][title]['vcenter_server'] = deviceconf[:host]
+      config['asm::cluster'][title]['vcenter_username'] = deviceconf[:user]
+      config['asm::cluster'][title]['vcenter_password'] = deviceconf[:password]
+      config['asm::cluster'][title]['ensure'] = true
+    end
+    
+    process_generic(cert_name, config)
   end
 
   def process_virtualmachine(component)
+    raise(Exception, 'Component has no certname') unless component['id']
     log("Processing virtualmachine component: #{component['id']}")
-    process_generic(component)
+    config = ASM::Util.build_component_configuration(component)
+    process_generic(component['id'], config)
   end
 
   def process_service(component)
+    raise(Exception, 'Component has no certname') unless component['id']
     log("Processing service component: #{component['id']}")
-    process_generic(component)
+    config = ASM::Util.build_component_configuration(component)
+    process_generic(component['id'], config)
   end
 
 
   # converts from an ASM style server resource into
   # a method call to check if the esx host is up
-  def block_until_server_ready(resource, timeout=3600)
-    params = asm_to_puppet_params(resource)
-    password   = params['admin_password']
-    type       = params['os_image_type']
-    hostname   = params['os_host_name']
-    serial_num = params['title']
-
-    unless password and type and hostname and serial_num
-      raise(Exception, "resource #{params['title']} is missing required server attributes")
-    end
+  def block_until_server_ready(serial_num, params, timeout=3600)
+    password = params['admin_password'] || raise(Exception, "resource #{serial_num} is missing required server attribute admin_password")
+    type = params['os_image_type'] || raise(Exception, "resource #{serial_num} is missing required server attribute os_image_type")
+    hostname = params['os_host_name'] || raise(Exception, "resource #{serial_num} is missing required server attribute os_host_name")
 
     if type == 'vmware_esxi'
       ip_address = nil
