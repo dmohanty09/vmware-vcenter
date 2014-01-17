@@ -175,7 +175,7 @@ class ASM::ServiceDeployment
       params['model'] = inventory['model'].split(' ').last.downcase
     end
     process_generic(component['id'], resource_hash, 'apply', 'true')
-    resource_hash['asm::server'].each do |title, params|
+    (resource_hash['asm::server'] || []).each do |title, params|
       block_until_server_ready(title, params, timeout=3600)
     end
   end
