@@ -9,9 +9,10 @@ module ASM
 
   # provides a single call that can be used to initialize our mutex
   def self.init
-    if @deployment_mutex
+    if @deployment_mutex || @certname_mutex
       raise("Can not initialize ASM class twice")
     else
+      @certname_mutex   = Mutex.new
       @deployment_mutex = Mutex.new
     end
   end
@@ -85,6 +86,20 @@ module ASM
 
   def self.complete_deployment(id)
     @running_deployments.delete(id)
+  end
+
+  def self.block_certname(certname)
+    @certname_mutex.synchronize do
+      @running_certs ||= {}
+      return false if @running_certs[certname]
+      @running_certs[certname] = true
+    end
+  end
+
+  def self.unblock_certname(certname)
+    @certname_mutex.synchronize do
+      @running_certs.delete(certname)
+    end
   end
 
   # thread safe counter
