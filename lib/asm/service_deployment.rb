@@ -30,18 +30,24 @@ class ASM::ServiceDeployment
   end
 
   def process(service_deployment)
-    ASM.logger.info("Deploying #{service_deployment['deploymentName']} with id #{service_deployment['id']}")
-    log("Starting deployment #{service_deployment['deploymentName']}")
+    begin
+      ASM.logger.info("Deploying #{service_deployment['deploymentName']} with id #{service_deployment['id']}")
+      log("Status: Started")
+      log("Starting deployment #{service_deployment['deploymentName']}")
 
-    # TODO: pass deployment into constructor instead of here
-    @deployment = service_deployment
+      # TODO: pass deployment into constructor instead of here
+      @deployment = service_deployment
 
-    # Will need to access other component types during deployment
-    # of a given component type in the future, e.g. VSwitch configuration
-    # information is contained in the server component type data
-    @components_by_type = components_by_type(service_deployment)
-
-    process_components()
+      # Will need to access other component types during deployment
+      # of a given component type in the future, e.g. VSwitch configuration
+      # information is contained in the server component type data
+      @components_by_type = components_by_type(service_deployment)
+      process_components()
+    rescue Exception => e
+      log("Status: Error")
+      raise(e)
+    end
+    log("Status: Completed")
   end
 
   def components_by_type(service_deployment)
@@ -69,6 +75,7 @@ class ASM::ServiceDeployment
     ['STORAGE', 'TOR', 'SERVER', 'CLUSTER', 'VIRTUALMACHINE', 'SERVICE', 'TEST'].each do |type|
       if components = @components_by_type[type]
         log("Processing components of type #{type}")
+        log("Status: Processing_#{type.downcase}")
         components.collect do |comp|
           #
           # TODO: this is some pretty primitive thread management, we need to use
