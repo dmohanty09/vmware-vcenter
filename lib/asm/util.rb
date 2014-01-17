@@ -176,34 +176,47 @@ module ASM
       end
     end
 
+    def self.append_resource_configuration!(resource, resources={}, generate_title=nil)
+      resource_type = resource['id'] || raise(Exception, 'resource found with no type')
+      resource_type.downcase!
+      resources[resource_type] ||= {}
+
+      param_hash = {}
+      if resource['parameters'].nil?
+        raise(Exception, "resource of type #{resource_type} has no parameters")
+      else
+        resource['parameters'].each do |param|
+          if param['value']
+            param_hash[param['id'].downcase] = param['value']
+          end
+        end
+      end
+
+      title = param_hash.delete('title')
+      if title
+        if generate_title
+          raise(Exception, "Generated title passed for resource with title #{resource_type}")
+        end
+      else
+        title = generate_title
+      end
+
+      raise(Exception, "Component has resource #{resource_type} with no title") unless title
+
+      if resources[resource_type][title]
+        raise(Exception, "Resource #{resource_type}/#{title} already existed in resources hash")
+      end
+      resources[resource_type][title] = param_hash
+      resources
+    end
+
     # Build data appropriate for serializing to YAML and using for component
     # configuration via the puppet asm command.
     def self.build_component_configuration(component, generated_title = nil)
       resource_hash = {}
       resources = ASM::Util.asm_json_array(component['resources'])
       resources.each do |resource|
-        resource_type = resource['id'] || raise(Exception, 'resource found with no type')
-        resource_hash[resource_type] ||= {}
-
-        param_hash = {}
-        if resource['parameters'].nil?
-          raise(Exception, "resource of type #{resource_type} has no parameters")
-        else
-          resource['parameters'].each do |param|
-            if param['value']
-              param_hash[param['id']] = param['value']
-            end
-          end
-        end
-
-        title = param_hash.delete('title')
-        unless title
-          title = generated_title
-        end
-
-        raise(Exception, "Resource from component type #{component['type']} has resource #{resource_type} with no title") unless title
-
-        resource_hash[resource_type][title] = param_hash
+        resource_hash = append_resource_configuration!(resource, resource_hash)
       end
       resource_hash
     end

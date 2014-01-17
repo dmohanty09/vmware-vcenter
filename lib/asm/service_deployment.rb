@@ -75,6 +75,7 @@ class ASM::ServiceDeployment
           # something smarter that actually uses a thread pool
           #
           Thread.new do
+            raise(Exception, 'Component has no certname') unless comp['id']
             send("process_#{type.downcase}", comp)
           end
         end.each do |thrd|
@@ -83,20 +84,6 @@ class ASM::ServiceDeployment
         log("Finsished components of type #{type}")
       end
     end
-  end
-
-  def asm_to_puppet_params(resource, resource_type=nil, puppet_cert_name=nil)
-    param_hash = {}
-    resource['parameters'].each do |param|
-      if param['value']
-        param_hash[param['id']] = param['value']
-      else
-        if resource_type and puppet_cert_name
-          logger.warn("Parameter #{param['id']} of type #{resource_type} for #{puppet_cert_name} has no value, skipping")
-        end
-      end
-    end
-    param_hash
   end
 
   def process_generic(cert_name, config, puppet_run_type = 'device', override = nil)
@@ -132,46 +119,49 @@ class ASM::ServiceDeployment
   end
 
   def process_test(component)
-    raise(Exception, 'Component has no certname') unless component['id']
     config = ASM::Util.build_component_configuration(component)
     process_generic(component['id'], config, 'apply', true)
   end
 
   def process_storage(component)
-    raise(Exception, 'Component has no certname') unless component['id']
     log("Processing storage component: #{component['id']}")
     config = ASM::Util.build_component_configuration(component)
     process_generic(component['id'], config)
   end
 
   def process_tor(component)
-    raise(Exception, 'Component has no certname') unless component['id']
     log("Processing tor component: #{component['id']}")
     config = ASM::Util.build_component_configuration(component)
     process_generic(component['id'], config)
   end
 
   def process_server(component)
-    raise(Exception, 'Component has no certname') unless component['id']
     log("Processing server component: #{component['id']}")
-
     cert_name = component['id']
-    deviceconf = ASM::Util.parse_device_config(cert_name)
 
-    # TODO: Should only get inventory and service tag for Dell
-    inventory = ASM::Util.fetch_server_inventory(cert_name)
-    title = inventory['serviceTag']
-
-    config = ASM::Util.build_component_configuration(component, title)
-    (config['asm::server'] || []).each do |title, params|
-      if params['rule_number'].nil?
-        params['rule_number'] = rule_number
-      else
+    resource_hash = {}
+    device_conf   = nil
+    inventory     = nil
+    resources = ASM::Util.asm_json_array(component['resources'])
+    resources.each do |resource|
+      if resource['id'] =~ /asm::server/i
+        resource_hash = ASM::Util.append_resource_configuration!(resource, resource_hash)
+      elsif resource['id'] =~ /asm::idrac/i
+        deviceconf ||= ASM::Util.parse_device_config(cert_name)
+        inventory  ||= ASM::Util.fetch_server_inventory(cert_name)
+        title = inventory['serviceTag']
+        resource_hash = append_resource_configuration!(resource, resource_hash, title)
+      end
+    end
+    (resource_hash['asm::server'] || []).each do |title, params|
+      if params['rule_number']
         raise(Exception, "Did not expect rule_number in asm::server")
+      else
+        params['rule_number'] = rule_number
       end
     end
 
-    (config['asm::idrac'] || []).each do |title, params|
+    (resource_hash['asm::idrac'] || []).each do |title, params|
       # Attempt to determine this machine's IP address, which
       # should also be the NFS server. This is error-prone
       # and should be fixed later.
@@ -184,8 +174,8 @@ class ASM::ServiceDeployment
       params['servicetag'] = inventory['serviceTag']
       params['model'] = inventory['model'].split(' ').last.downcase
     end
-    process_generic(component['id'], config, 'apply', 'true')
-    config['asm::server'].each do |title, params|
+    process_generic(component['id'], resource_hash, 'apply', 'true')
+    (resource_hash['asm::server'] || []).each do |title, params|
       block_until_server_ready(title, params, timeout=3600)
     end
   end
@@ -217,14 +207,12 @@ class ASM::ServiceDeployment
   end
 
   def process_virtualmachine(component)
-    raise(Exception, 'Component has no certname') unless component['id']
     log("Processing virtualmachine component: #{component['id']}")
     config = ASM::Util.build_component_configuration(component)
     process_generic(component['id'], config)
   end
 
   def process_service(component)
-    raise(Exception, 'Component has no certname') unless component['id']
     log("Processing service component: #{component['id']}")
     config = ASM::Util.build_component_configuration(component)
     process_generic(component['id'], config)

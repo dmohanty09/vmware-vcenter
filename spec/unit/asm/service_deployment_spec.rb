@@ -26,7 +26,7 @@ describe ASM::ServiceDeployment do
       ASM::Util.expects(:run_command).with(
         "sudo puppet asm process_node --filename #{@r_file} --run_type apply --always-override cert", "#{@o_file}") do |cmd|
         File.open(@o_file, 'w') do |fh|
-          fh.write('Results: For 0 resources. 0 failed. 0 updated successfully.')
+          fh.write('Results: For 0 resources. 0 from our run failed. 0 not from our run failed. 0 updated successfully.')
         end
       end
       @data['serviceTemplate']['components'][0]['type'] = 'TEST'
@@ -63,7 +63,7 @@ describe ASM::ServiceDeployment do
         ASM::Util.expects(:run_command).with(
           "sudo puppet asm process_node --filename #{@r_file} --run_type apply --always-override cert", "#{@o_file}") do |cmd|
           File.open(@o_file, 'w') do |fh|
-            fh.write('Results: For 0 resources. 0 failed. 0 updated successfully.')
+            fh.write('Results: For 0 resources. 0 from our run failed. 0 not from our run failed. 0 updated successfully.')
           end
         end
         @data['serviceTemplate']['components'][0]['type'] = 'SERVER'
@@ -139,7 +139,7 @@ describe ASM::ServiceDeployment do
             {'id' => 'user', 'parameters' => []}
           ]}
         ]}})
-      end.to raise_error(Exception, 'Resource from component type TEST has resource user with no title')
+      end.to raise_error(Exception, 'Component has resource user with no title')
     end
 
   end

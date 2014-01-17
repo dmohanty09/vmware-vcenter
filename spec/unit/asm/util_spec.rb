@@ -1,6 +1,8 @@
 require 'asm/util'
 require 'spec_helper'
 require 'tempfile'
+require 'json'
+require 'asm'
 
 describe ASM::Util do
   
@@ -78,7 +80,12 @@ END
       # Check a server component
       component = deployment['components'][1]
       title = component['id']
-      config = ASM::Util.build_component_configuration(component, title)
+
+      config = {}
+      resources = ASM::Util.asm_json_array(component['resources'])
+      resources.each do |resource|
+        config = ASM::Util.append_resource_configuration!(resource, config, title)
+      end
       
       config.keys.size.should == 2
       config['asm::idrac'].size.should == 1
@@ -91,8 +98,11 @@ END
       
       # Check a cluster component
       component = deployment['components'][3]
+      resources = ASM::Util.asm_json_array(component['resources'])
       title = component['id']
-      config = ASM::Util.build_component_configuration(component, title)
+      resources.each do |resource|
+        config = ASM::Util.append_resource_configuration!(resource, {}, title)
+      end
       
       config.keys.size.should == 1
       title = config['asm::cluster'].keys[0]
