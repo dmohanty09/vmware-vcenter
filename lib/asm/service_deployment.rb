@@ -114,14 +114,20 @@ class ASM::ServiceDeployment
     else
       puppet_out = File.join(deployment_dir, "#{cert_name}.out")
       ASM::Util.run_command(cmd, puppet_out)
-      last_line = File.readlines(puppet_out).last
-      if last_line =~ /Results: For (\d+) resources. (\d+) failed. (\d+) updated successfully./
-        log("Results for endpoint #{cert_name} configuration")
-        log("  #{last_line.chomp}")
-        return {'total' => $1, 'failed' => $2 ,'updated' => $3}
-      else
-        raise(Exception, "Puppet output did not have expected result line, see #{puppet_out} for more info")
+      results = {}
+      found_result_line = false
+      File.readlines(puppet_out).each do |line|
+       if line =~ /Results: For (\d+) resources\. (\d+) from our run failed\. (\d+) not from our run failed\. (\d+) updated successfully\./
+         results = {'num_resources' => $1, 'num_failures' => $2, 'other_failures' => $3, 'num_updates' => $4}
+         found_result_line = true
+         break
+         if line =~ /Puppet catalog compile failed/
+           raise("Could not compile catalog")
+         end
+       end
       end
+      raise(Exception, "Did not find result line in file #{puppet_out}") unless found_result_line
+      results
     end
   end
 
