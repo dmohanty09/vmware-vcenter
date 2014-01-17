@@ -137,24 +137,31 @@ class ASM::ServiceDeployment
 
   def process_server(component)
     log("Processing server component: #{component['id']}")
-
     cert_name = component['id']
-    deviceconf = ASM::Util.parse_device_config(cert_name)
 
-    # TODO: Should only get inventory and service tag for Dell
-    inventory = ASM::Util.fetch_server_inventory(cert_name)
-    title = inventory['serviceTag']
-
-    config = ASM::Util.build_component_configuration(component, title)
-    (config['asm::server'] || []).each do |title, params|
-      if params['rule_number'].nil?
-        params['rule_number'] = rule_number
-      else
+    resource_hash = {}
+    device_conf   = nil
+    inventory     = nil
+    resources = ASM::Util.asm_json_array(component['resources'])
+    resources.each do |resource|
+      if resource['id'] == 'asm::server'
+        resource_hash = ASM::Util.append_resource_configuration!(resource, resource_hash)
+      elsif resource['id'] == 'asm::idrac'
+        deviceconf ||= ASM::Util.parse_device_config(cert_name)
+        inventory  ||= ASM::Util.fetch_server_inventory(cert_name)
+        title = inventory['serviceTag']
+        resource_hash = append_resource_configuration!(resource, resource_hash, title)
+      end
+    end
+    (resource_hash['asm::server'] || []).each do |title, params|
+      if params['rule_number']
         raise(Exception, "Did not expect rule_number in asm::server")
+      else
+        params['rule_number'] = rule_number
       end
     end
 
-    (config['asm::idrac'] || []).each do |title, params|
+    (resource_hash['asm::idrac'] || []).each do |title, params|
       # Attempt to determine this machine's IP address, which
       # should also be the NFS server. This is error-prone
       # and should be fixed later.
@@ -167,8 +174,8 @@ class ASM::ServiceDeployment
       params['servicetag'] = inventory['serviceTag']
       params['model'] = inventory['model'].split(' ').last.downcase
     end
-    process_generic(component['id'], config, 'apply', 'true')
-    config['asm::server'].each do |title, params|
+    process_generic(component['id'], resource_hash, 'apply', 'true')
+    resource_hash['asm::server'].each do |title, params|
       block_until_server_ready(title, params, timeout=3600)
     end
   end
