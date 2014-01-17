@@ -1,10 +1,11 @@
 require 'asm'
 require 'asm/util'
-require 'yaml'
-require 'logger'
 require 'fileutils'
+require 'json'
+require 'logger'
 require 'open3'
 require 'rest_client'
+require 'yaml'
 
 class ASM::ServiceDeployment
 
@@ -34,6 +35,11 @@ class ASM::ServiceDeployment
       ASM.logger.info("Deploying #{service_deployment['deploymentName']} with id #{service_deployment['id']}")
       log("Status: Started")
       log("Starting deployment #{service_deployment['deploymentName']}")
+
+      # Write the deployment to filesystem for ease of debugging / reuse
+      File.open(File.join(deployment_dir, 'deployment.json'), 'w') do |file|
+        file.write(JSON.pretty_generate(service_deployment))
+      end
 
       # TODO: pass deployment into constructor instead of here
       @deployment = service_deployment
@@ -102,7 +108,7 @@ class ASM::ServiceDeployment
       fh.write(config.to_yaml)
     end
     override_opt = override ? "--always-override " : ""
-    cmd = "sudo puppet asm process_node --filename #{resource_file} --run_type #{puppet_run_type} #{override_opt}#{cert_name}"
+    cmd = "sudo -i puppet asm process_node --filename #{resource_file} --run_type #{puppet_run_type} #{override_opt}#{cert_name}"
     if @debug
       logger.info("[DEBUG MODE] execution skipped for '#{cmd}'")
     else
@@ -147,8 +153,8 @@ class ASM::ServiceDeployment
     cert_name = component['id']
 
     resource_hash = {}
-    device_conf   = nil
-    inventory     = nil
+    deviceconf = nil
+    inventory = nil
     resources = ASM::Util.asm_json_array(component['resources'])
     resources.each do |resource|
       if resource['id'] =~ /asm::server/i
@@ -156,16 +162,22 @@ class ASM::ServiceDeployment
       elsif resource['id'] =~ /asm::idrac/i
         deviceconf ||= ASM::Util.parse_device_config(cert_name)
         inventory  ||= ASM::Util.fetch_server_inventory(cert_name)
-        title = inventory['serviceTag']
-        resource_hash = append_resource_configuration!(resource, resource_hash, title)
+        resource_hash = ASM::Util.append_resource_configuration!(resource, resource_hash)
       end
     end
+
     (resource_hash['asm::server'] || []).each do |title, params|
       if params['rule_number']
         raise(Exception, "Did not expect rule_number in asm::server")
       else
         params['rule_number'] = rule_number
       end
+
+      # Remove unused params
+      params['workload_network'].delete
+      
+      # TODO: if present this should go in kickstart
+      params['custom_script'].delete
     end
 
     (resource_hash['asm::idrac'] || []).each do |title, params|
@@ -180,6 +192,11 @@ class ASM::ServiceDeployment
       params['dracpassword'] = deviceconf[:password]
       params['servicetag'] = inventory['serviceTag']
       params['model'] = inventory['model'].split(' ').last.downcase
+      
+      if resource_hash['asm::server']
+        params['before'] = "Asm::Server[#{title}]"
+      end
+      
     end
     process_generic(component['id'], resource_hash, 'apply', 'true')
     (resource_hash['asm::server'] || []).each do |title, params|
@@ -200,17 +217,36 @@ class ASM::ServiceDeployment
     raise(Exception, 'Component has no certname') unless cert_name
     log("Processing cluster component: #{cert_name}")
 
-    config = ASM::Util.build_component_configuration(component, cert_name)
-    deviceconf = ASM::Util.parse_device_config(cert_name)
+    resource_hash = ASM::Util.build_component_configuration(component)
 
-    config['asm::cluster'].each do |title, params|
-      config['asm::cluster'][title]['vcenter_server'] = deviceconf[:host]
-      config['asm::cluster'][title]['vcenter_username'] = deviceconf[:user]
-      config['asm::cluster'][title]['vcenter_password'] = deviceconf[:password]
-      config['asm::cluster'][title]['ensure'] = true
+    # Add vcenter creds to asm::cluster resources
+    deviceconf = ASM::Util.parse_device_config(cert_name)
+    resource_hash['asm::cluster'].each do |title, params|
+      resource_hash['asm::cluster'][title]['vcenter_server'] = deviceconf[:host]
+      resource_hash['asm::cluster'][title]['vcenter_username'] = deviceconf[:user]
+      resource_hash['asm::cluster'][title]['vcenter_password'] = deviceconf[:password]
+      resource_hash['asm::cluster'][title]['ensure'] = true
+    end
+
+    
+    # Add ESXi hosts and creds as separte resources
+    (@components_by_type['SERVER'] || []).each do |server_component|
+      server_conf = ASM::Util.build_component_configuration(server_component)
+      (server_conf['asm::server'] || []).each do |title, params|
+        if params['os_image_type'] == 'vmware_esxi'
+          server_cert = params['title']
+          serverdeviceconf = ASM::Util.parse_device_config(server_cert)
+          resource_hash['asm::host'] ||= {}
+          resource_hash['asm::host'][server_cert] = {
+            'esx_host' => serverdeviceconf[:host],
+            'esx_user' => serverdeviceconf[:user],
+            'esx_password' => serverdeviceconf[:password],
+          }
+        end
+      end
     end
     
-    process_generic(cert_name, config)
+    process_generic(cert_name, resource_hash)
   end
 
   def process_virtualmachine(component)

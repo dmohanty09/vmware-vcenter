@@ -24,7 +24,7 @@ describe ASM::ServiceDeployment do
 
     it 'should be able to process data for a single resource' do
       ASM::Util.expects(:run_command).with(
-        "sudo puppet asm process_node --filename #{@r_file} --run_type apply --always-override cert", "#{@o_file}") do |cmd|
+        "sudo -i puppet asm process_node --filename #{@r_file} --run_type apply --always-override cert", "#{@o_file}") do |cmd|
         File.open(@o_file, 'w') do |fh|
           fh.write('Results: For 0 resources. 0 from our run failed. 0 not from our run failed. 0 updated successfully.')
         end
@@ -61,7 +61,7 @@ describe ASM::ServiceDeployment do
       end
       it 'should configure a server' do
         ASM::Util.expects(:run_command).with(
-          "sudo puppet asm process_node --filename #{@r_file} --run_type apply --always-override cert", "#{@o_file}") do |cmd|
+          "sudo -i puppet asm process_node --filename #{@r_file} --run_type apply --always-override cert", "#{@o_file}") do |cmd|
           File.open(@o_file, 'w') do |fh|
             fh.write('Results: For 0 resources. 0 from our run failed. 0 not from our run failed. 0 updated successfully.')
           end
@@ -88,8 +88,10 @@ describe ASM::ServiceDeployment do
       @mock_log = mock('foo')
       @sd.expects(:logger).at_least_once.returns(@mock_log)
       @mock_log.expects(:debug).with('Found 0 components')
+      @mock_log.expects(:info).with('Status: Started')
       @mock_log.expects(:info).with('Starting deployment ')
       @mock_log.expects(:warn).with('Service deployment data has no serviceTemplate defined')
+      @mock_log.expects(:info).with('Status: Completed')
       @sd.process({})
     end
 
@@ -97,8 +99,10 @@ describe ASM::ServiceDeployment do
       @mock_log = mock('foo')
       @sd.expects(:logger).at_least_once.returns(@mock_log)
       @mock_log.expects(:debug).with('Found 0 components')
+      @mock_log.expects(:info).with('Status: Started')
       @mock_log.expects(:info).with('Starting deployment ')
       @mock_log.expects(:warn).with('service deployment data has no components')
+      @mock_log.expects(:info).with('Status: Completed')
       @sd.process({'serviceTemplate' => {}})
     end
 
