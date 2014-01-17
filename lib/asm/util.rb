@@ -221,5 +221,38 @@ module ASM
       resource_hash
     end
 
+    def self.get_logs(id)
+      logs = []
+      log_file = File.join(ASM.base_dir, id.to_s, 'deployment.log')
+      return nil unless File.exists?(log_file)
+      File.open(log_file, 'r').each_line do |line|
+        if line =~ /^\w, \[(.*?)\]  \w+ -- : (.*)/
+          logs.push({'msg' => $2, 'datetime' => $1})
+        else
+          ASM.logger.warn("Unexpected log line: #{line}")
+        end
+      end
+      logs
+    end
+
+    def self.get_status(id)
+      logs = get_logs(id)
+      if logs
+        status = nil
+        logs.reverse.each do |log|
+          if log['msg'] =~ /^Status: (.*)$/
+            return $1
+          end
+        end
+        if logs.size == 0
+          'Unknown'
+        else
+          raise(Exception, 'We have logs, but no status. This is not supposed to happen')
+        end
+      else
+        'Unknown'
+      end
+    end
+
   end
 end

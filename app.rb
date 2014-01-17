@@ -26,16 +26,13 @@ class ASM::App < Sinatra::Base
   # Retrieve logs for a deployment id
   get '/logs/:id' do | id |
     content_type :json
-    logs = []
-    log_file = File.join(ASM.base_dir, id.to_s, 'deployment.log')
-    File.open(log_file, 'r').each_line do |line|
-      if line =~ /^\w, \[(.*?)\]  \w+ -- : (.*)/
-        logs.push({'msg' => $2, 'datetime' => $1})
-      else
-        ASM.logger.warn("Unexpected log line: #{line}")
-      end
-    end
+    logs = ASM::Util.get_logs(id)
     logs.to_json
+  end
+
+  get '/status/:id' do |id|
+    content_type :json
+    ASM::Util.get_status(id).to_json
   end
 
 end
