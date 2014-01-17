@@ -178,6 +178,7 @@ module ASM
 
     def self.append_resource_configuration!(resource, resources={}, generate_title=nil)
       resource_type = resource['id'] || raise(Exception, 'resource found with no type')
+      resource_type.downcase!
       resources[resource_type] ||= {}
 
       param_hash = {}
@@ -186,7 +187,7 @@ module ASM
       else
         resource['parameters'].each do |param|
           if param['value']
-            param_hash[param['id']] = param['value']
+            param_hash[param['id'].downcase] = param['value']
           end
         end
       end

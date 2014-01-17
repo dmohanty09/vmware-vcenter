@@ -144,9 +144,9 @@ class ASM::ServiceDeployment
     inventory     = nil
     resources = ASM::Util.asm_json_array(component['resources'])
     resources.each do |resource|
-      if resource['id'] == 'asm::server'
+      if resource['id'] =~ /asm::server/i
         resource_hash = ASM::Util.append_resource_configuration!(resource, resource_hash)
-      elsif resource['id'] == 'asm::idrac'
+      elsif resource['id'] =~ /asm::idrac/i
         deviceconf ||= ASM::Util.parse_device_config(cert_name)
         inventory  ||= ASM::Util.fetch_server_inventory(cert_name)
         title = inventory['serviceTag']
