@@ -99,7 +99,7 @@ class ASM::ServiceDeployment
     end
   end
 
-  def process_generic(cert_name, config, puppet_run_type = 'device', override = true)
+  def process_generic(cert_name, config, puppet_run_type, override = true)
     raise(Exception, 'Component has no certname') unless cert_name
     log("Starting processing resources for endpoint #{cert_name}")
     
@@ -139,13 +139,13 @@ class ASM::ServiceDeployment
   def process_storage(component)
     log("Processing storage component: #{component['id']}")
     config = ASM::Util.build_component_configuration(component)
-    process_generic(component['id'], config)
+    process_generic(component['id'], config, 'device')
   end
 
   def process_tor(component)
     log("Processing tor component: #{component['id']}")
     config = ASM::Util.build_component_configuration(component)
-    process_generic(component['id'], config)
+    process_generic(component['id'], config, 'device')
   end
 
   def process_server(component)
@@ -247,19 +247,19 @@ class ASM::ServiceDeployment
       end
     end
     
-    process_generic(cert_name, resource_hash)
+    process_generic(cert_name, resource_hash, 'apply')
   end
 
   def process_virtualmachine(component)
     log("Processing virtualmachine component: #{component['id']}")
     config = ASM::Util.build_component_configuration(component)
-    process_generic(component['id'], config)
+    process_generic(component['id'], config, 'apply')
   end
 
   def process_service(component)
     log("Processing service component: #{component['id']}")
     config = ASM::Util.build_component_configuration(component)
-    process_generic(component['id'], config)
+    process_generic(component['id'], config, 'apply')
   end
 
 
