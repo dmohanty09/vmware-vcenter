@@ -174,10 +174,11 @@ class ASM::ServiceDeployment
       end
 
       # Remove unused params
-      params['workload_network'].delete
+      params.delete('workload_network')
       
       # TODO: if present this should go in kickstart
-      params['custom_script'].delete
+      params.delete('custom_script')
+
     end
 
     (resource_hash['asm::idrac'] || []).each do |title, params|
