@@ -14,12 +14,16 @@ module ASM
     DEVICE_CONF_DIR='/etc/puppetlabs/puppet/devices'
 
     # See spec/fixtures/asm_server_m620.json for sample response
-    def self.fetch_server_inventory(ref_id)
-      url = "#{SERVER_RA_URL}/#{ref_id}"
+    def self.fetch_server_inventory(cert_name)
+      service_tag = cert_name.upcase
+      url = "#{SERVER_RA_URL}/?filter=eq,serviceTag,#{service_tag}"
       data = RestClient.get(url, {:accept => :json})
       ret = JSON.parse(data)
-      raise(Exception, "Failed to get inventory for server #{ref_id}") if ret['refId'] != ref_id
-      ret
+      # should return a list of one element with matching serviceTag
+      if !ret || ret.size != 1 || ret[0]['serviceTag'] != service_tag
+        raise(Exception, "Failed to get inventory for server #{cert_name}")
+      end
+      ret[0]
     end
 
     def self.first_host_ip
@@ -212,7 +216,7 @@ module ASM
 
     # Build data appropriate for serializing to YAML and using for component
     # configuration via the puppet asm command.
-    def self.build_component_configuration(component, generated_title = nil)
+    def self.build_component_configuration(component)
       resource_hash = {}
       resources = ASM::Util.asm_json_array(component['resources'])
       resources.each do |resource|

@@ -61,14 +61,14 @@ module ASM
 
   def self.process_deployment_request(request)
     payload = request.body.read
-    # WARNING: payload contains sensitive data
-    # logger.info("Received deployment request: #{payload}")
+    logger.debug("Received deployment request: #{payload}")
     data = JSON.parse(payload)
     ASM.process_deployment(data['Deployment'])
   end
 
   def self.debug_deployment_request(request)
     payload = request.body.read
+    logger.debug("Received deployment request: #{payload}")
     data = JSON.parse(payload)['Deployment']
     deployment = ASM::ServiceDeployment.new(data['id'])
     deployment.debug = true
