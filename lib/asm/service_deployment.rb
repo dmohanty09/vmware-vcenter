@@ -108,7 +108,7 @@ class ASM::ServiceDeployment
       fh.write(config.to_yaml)
     end
     override_opt = override ? "--always-override " : ""
-    cmd = "sudo -i puppet asm process_node --filename #{resource_file} --run_type #{puppet_run_type} #{override_opt}#{cert_name}"
+    cmd = "sudo puppet asm process_node --debug --trace --filename #{resource_file} --run_type #{puppet_run_type} #{override_opt}#{cert_name}"
     if @debug
       logger.info("[DEBUG MODE] execution skipped for '#{cmd}'")
     else
