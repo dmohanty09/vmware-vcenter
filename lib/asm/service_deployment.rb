@@ -99,7 +99,7 @@ class ASM::ServiceDeployment
     end
   end
 
-  def process_generic(cert_name, config, puppet_run_type = 'device', override = nil)
+  def process_generic(cert_name, config, puppet_run_type, override = true)
     raise(Exception, 'Component has no certname') unless cert_name
     log("Starting processing resources for endpoint #{cert_name}")
     
@@ -108,7 +108,7 @@ class ASM::ServiceDeployment
       fh.write(config.to_yaml)
     end
     override_opt = override ? "--always-override " : ""
-    cmd = "sudo -i puppet asm process_node --filename #{resource_file} --run_type #{puppet_run_type} #{override_opt}#{cert_name}"
+    cmd = "sudo puppet asm process_node --debug --trace --filename #{resource_file} --run_type #{puppet_run_type} #{override_opt}#{cert_name}"
     if @debug
       logger.info("[DEBUG MODE] execution skipped for '#{cmd}'")
     else
@@ -139,13 +139,13 @@ class ASM::ServiceDeployment
   def process_storage(component)
     log("Processing storage component: #{component['id']}")
     config = ASM::Util.build_component_configuration(component)
-    process_generic(component['id'], config)
+    process_generic(component['id'], config, 'device')
   end
 
   def process_tor(component)
     log("Processing tor component: #{component['id']}")
     config = ASM::Util.build_component_configuration(component)
-    process_generic(component['id'], config)
+    process_generic(component['id'], config, 'device')
   end
 
   def process_server(component)
@@ -174,10 +174,11 @@ class ASM::ServiceDeployment
       end
 
       # Remove unused params
-      params['workload_network'].delete
+      params.delete('workload_network')
       
       # TODO: if present this should go in kickstart
-      params['custom_script'].delete
+      params.delete('custom_script')
+
     end
 
     (resource_hash['asm::idrac'] || []).each do |title, params|
@@ -246,19 +247,19 @@ class ASM::ServiceDeployment
       end
     end
     
-    process_generic(cert_name, resource_hash)
+    process_generic(cert_name, resource_hash, 'apply')
   end
 
   def process_virtualmachine(component)
     log("Processing virtualmachine component: #{component['id']}")
     config = ASM::Util.build_component_configuration(component)
-    process_generic(component['id'], config)
+    process_generic(component['id'], config, 'apply')
   end
 
   def process_service(component)
     log("Processing service component: #{component['id']}")
     config = ASM::Util.build_component_configuration(component)
-    process_generic(component['id'], config)
+    process_generic(component['id'], config, 'apply')
   end
 
 
