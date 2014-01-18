@@ -99,7 +99,7 @@ class ASM::ServiceDeployment
     end
   end
 
-  def process_generic(cert_name, config, puppet_run_type = 'device', override = nil)
+  def process_generic(cert_name, config, puppet_run_type = 'device', override = true)
     raise(Exception, 'Component has no certname') unless cert_name
     log("Starting processing resources for endpoint #{cert_name}")
     
