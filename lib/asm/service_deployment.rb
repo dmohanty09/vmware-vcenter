@@ -200,8 +200,10 @@ class ASM::ServiceDeployment
       
     end
     process_generic(component['id'], resource_hash, 'apply', 'true')
-    (resource_hash['asm::server'] || []).each do |title, params|
-      block_until_server_ready(title, params, timeout=3600)
+    unless @debug
+      (resource_hash['asm::server'] || []).each do |title, params|
+        block_until_server_ready(title, params, timeout=3600)
+      end
     end
   end
 
@@ -235,7 +237,7 @@ class ASM::ServiceDeployment
       server_conf = ASM::Util.build_component_configuration(server_component)
       (server_conf['asm::server'] || []).each do |title, params|
         if params['os_image_type'] == 'vmware_esxi'
-          server_cert = params['title']
+          server_cert = title
           serverdeviceconf = ASM::Util.parse_device_config(server_cert)
           resource_hash['asm::host'] ||= {}
           resource_hash['asm::host'][server_cert] = {
