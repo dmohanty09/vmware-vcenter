@@ -32,7 +32,12 @@ module ASM
       end.ip_address
     end
 
+    # Certificate names are stored in /etc/puppetlabs/puppet/devices
+    # in form devicetype-certname.conf
     def self.parse_device_config(cert_name)
+      pattern = "#{DEVICE_CONF_DIR}/*-#{cert_name}.conf"
+      matches = Dir.glob(pattern)
+      raise(Exception, "Failed to find deviceconf file at #{pattern}") unless !matches.nil? && matches.size == 1
       conf_file = File.join(DEVICE_CONF_DIR, "#{cert_name}.conf")
       conf_file_data = parse_device_config_file(conf_file)
       uri = URI.parse(conf_file_data[cert_name].url)
