@@ -228,7 +228,8 @@ class ASM::ServiceDeployment
       resource_hash['asm::cluster'][title]['vcenter_server'] = deviceconf[:host]
       resource_hash['asm::cluster'][title]['vcenter_username'] = deviceconf[:user]
       resource_hash['asm::cluster'][title]['vcenter_password'] = deviceconf[:password]
-      resource_hash['asm::cluster'][title]['ensure'] = true
+      resource_hash['asm::cluster'][title]['vcenter_options'] = { 'insecure' => true }
+      resource_hash['asm::cluster'][title]['ensure'] = 'present'
     end
 
     
