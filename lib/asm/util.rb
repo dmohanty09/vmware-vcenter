@@ -14,8 +14,11 @@ module ASM
     DEVICE_CONF_DIR='/etc/puppetlabs/puppet/devices'
 
     # See spec/fixtures/asm_server_m620.json for sample response
+    # 
+    # cert_name is in format devicetype-servicetag
     def self.fetch_server_inventory(cert_name)
-      service_tag = cert_name.upcase
+      service_tag_lower = /^[^-]+-(.*)$/.match(cert_name)[1]
+      service_tag = service_tag_lower.upcase
       url = "#{SERVER_RA_URL}/?filter=eq,serviceTag,#{service_tag}"
       data = RestClient.get(url, {:accept => :json})
       ret = JSON.parse(data)
@@ -32,12 +35,7 @@ module ASM
       end.ip_address
     end
 
-    # Certificate names are stored in /etc/puppetlabs/puppet/devices
-    # in form devicetype-certname.conf
     def self.parse_device_config(cert_name)
-      pattern = "#{DEVICE_CONF_DIR}/*-#{cert_name}.conf"
-      matches = Dir.glob(pattern)
-      raise(Exception, "Failed to find deviceconf file at #{pattern}") unless !matches.nil? && matches.size == 1
       conf_file = File.join(DEVICE_CONF_DIR, "#{cert_name}.conf")
       conf_file_data = parse_device_config_file(conf_file)
       uri = URI.parse(conf_file_data[cert_name].url)
