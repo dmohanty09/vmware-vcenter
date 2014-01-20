@@ -212,7 +212,12 @@ class ASM::ServiceDeployment
   # This routine is able to safely generate 100 per second.
   #
   def rule_number
-    (Integer(Time.now.strftime("%s")) * 100) + (ASM.counter % 100)
+    currtime = Integer(Time.now.strftime("%s"))
+    # Using the unix epoch time times 100 is too big for razor's 
+    # rule_number, it must fit in signed int. So we subtract off
+    # the time at Jan 1, 2014
+    offset = 1388534400 # time at Jan 1, 2014
+    ((currtime - offset) * 100) + (ASM.counter % 100)
   end
 
   def process_cluster(component)
