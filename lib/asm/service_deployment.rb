@@ -148,6 +148,17 @@ class ASM::ServiceDeployment
     process_generic(component['id'], config, 'device')
   end
 
+  # If certificate name is of the form bladeserver-SERVICETAG
+  # or rackserver-SERVICETAG, return the service tag;
+  # otherwise return the certificate name
+  def cert_name_to_service_tag(title)
+    match = /^(bladeserver|rackserver)-(.*)$/.match(title)
+    if match
+      title = match[2].upcase
+    end
+    title
+  end
+
   def process_server(component)
     log("Processing server component: #{component['id']}")
     cert_name = component['id']
@@ -166,22 +177,29 @@ class ASM::ServiceDeployment
       end
     end
 
-    (resource_hash['asm::server'] || []).each do |title, params|
+    server_params = {}
+    (resource_hash['asm::server'] || {}).each do |title, params|
       if params['rule_number']
         raise(Exception, "Did not expect rule_number in asm::server")
       else
         params['rule_number'] = rule_number
       end
 
-      # Remove unused params
-      params.delete('workload_network')
+      # In the case of Dell servers the title should contain 
+      # the service tag and we retrieve it here
+      title = cert_name_to_service_tag(title)
       
       # TODO: if present this should go in kickstart
       params.delete('custom_script')
 
+      server_params[title] = params
     end
 
-    (resource_hash['asm::idrac'] || []).each do |title, params|
+    if server_params.size > 0
+      resource_hash['asm::server'] = server_params
+    end
+
+    (resource_hash['asm::idrac'] || {}).each do |title, params|
       # Attempt to determine this machine's IP address, which
       # should also be the NFS server. This is error-prone
       # and should be fixed later.
@@ -195,7 +213,8 @@ class ASM::ServiceDeployment
       params['model'] = inventory['model'].split(' ').last.downcase
       
       if resource_hash['asm::server']
-        params['before'] = "Asm::Server[#{title}]"
+        service_tag = cert_name_to_service_tag(title)
+        params['before'] = "Asm::Server[#{service_tag}]"
       end
       
     end
