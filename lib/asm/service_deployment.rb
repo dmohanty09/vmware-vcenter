@@ -50,6 +50,11 @@ class ASM::ServiceDeployment
       @components_by_type = components_by_type(service_deployment)
       process_components()
     rescue Exception => e
+      File.open(File.join(deployment_dir, "exception.log"), 'w') do |fh|
+        fh.puts(e.inspect)
+        fh.puts
+        (e.backtrace || []).each { |line| fh.puts(line) }
+      end
       log("Status: Error")
       raise(e)
     end
