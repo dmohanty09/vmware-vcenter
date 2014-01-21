@@ -339,7 +339,8 @@ class ASM::ServiceDeployment
       ASM::Util.block_and_retry_until_ready(timeout, CommandException, 30) do
         results = get('nodes').each do |node|
           results = get('nodes', node['name'])
-          serial  = results['facts']['serialnumber']
+          # Facts will be empty for a period until server checks in
+          serial  = (results['facts'] || {})['serialnumber']
           if serial == serial_num
             ip_address = results['facts']['ipaddress']
             log("Found ip address!! #{ip_address}")
