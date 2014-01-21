@@ -10,6 +10,7 @@ require 'yaml'
 class ASM::ServiceDeployment
 
   class CommandException < Exception; end
+  class SyncException < Exception; end
 
   def initialize(id)
     unless id
@@ -107,7 +108,6 @@ class ASM::ServiceDeployment
   def process_generic(cert_name, config, puppet_run_type, override = true)
     raise(Exception, 'Component has no certname') unless cert_name
     log("Starting processing resources for endpoint #{cert_name}")
-    
     resource_file = File.join(resources_dir, "#{cert_name}.yaml")
     File.open(resource_file, 'w') do |fh|
       fh.write(config.to_yaml)
@@ -118,7 +118,32 @@ class ASM::ServiceDeployment
       logger.info("[DEBUG MODE] execution skipped for '#{cmd}'")
     else
       puppet_out = File.join(deployment_dir, "#{cert_name}.out")
-      ASM::Util.run_command(cmd, puppet_out)
+      if puppet_run_type == 'device'
+        begin
+          timeout = 300
+          start = Time.now
+          yet_to_run_command = true
+          while(yet_to_run_command)
+            if ASM.block_certname(certname)
+              yet_to_run_command = false
+              ASM::Util.run_command(cmd, puppet_out)
+            else
+              sleep 2
+              if Time.now - start > 300
+                raise(SyncException, "Timed out waiting for a lock for device cert #{certname}")
+              end
+            end
+          end
+        rescue Exception => e
+          unless e.class == SyncException
+            ASM.unblock_certname(certname)
+          end
+          raise(e)
+        end
+        ASM.unblock_certname(certname)
+      else
+        ASM::Util.run_command(cmd, puppet_out)
+      end
       results = {}
       found_result_line = false
       File.readlines(puppet_out).each do |line|
@@ -221,12 +246,12 @@ class ASM::ServiceDeployment
       params['dracpassword'] = deviceconf[:password]
       params['servicetag'] = inventory['serviceTag']
       params['model'] = inventory['model'].split(' ').last.downcase
-      
+
       if resource_hash['asm::server']
         service_tag = cert_name_to_service_tag(title)
         params['before'] = "Asm::Server[#{title}]"
       end
-      
+
     end
     process_generic(component['id'], resource_hash, 'apply', 'true')
     unless @debug
@@ -284,7 +309,6 @@ class ASM::ServiceDeployment
         end
       end
     end
-    
     process_generic(cert_name, resource_hash, 'apply')
   end
 
