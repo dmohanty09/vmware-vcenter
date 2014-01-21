@@ -124,23 +124,23 @@ class ASM::ServiceDeployment
           start = Time.now
           yet_to_run_command = true
           while(yet_to_run_command)
-            if ASM.block_certname(certname)
+            if ASM.block_certname(cert_name)
               yet_to_run_command = false
               ASM::Util.run_command(cmd, puppet_out)
             else
               sleep 2
               if Time.now - start > 300
-                raise(SyncException, "Timed out waiting for a lock for device cert #{certname}")
+                raise(SyncException, "Timed out waiting for a lock for device cert #{cert_name}")
               end
             end
           end
         rescue Exception => e
           unless e.class == SyncException
-            ASM.unblock_certname(certname)
+            ASM.unblock_certname(cert_name)
           end
           raise(e)
         end
-        ASM.unblock_certname(certname)
+        ASM.unblock_certname(cert_name)
       else
         ASM::Util.run_command(cmd, puppet_out)
       end
