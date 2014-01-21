@@ -254,22 +254,23 @@ class ASM::ServiceDeployment
       resource_hash['asm::cluster'][title]['vcenter_password'] = deviceconf[:password]
       resource_hash['asm::cluster'][title]['vcenter_options'] = { 'insecure' => true }
       resource_hash['asm::cluster'][title]['ensure'] = 'present'
-    end
 
-    
-    # Add ESXi hosts and creds as separte resources
-    (@components_by_type['SERVER'] || []).each do |server_component|
-      server_conf = ASM::Util.build_component_configuration(server_component)
-      (server_conf['asm::server'] || []).each do |title, params|
-        if params['os_image_type'] == 'vmware_esxi'
-          server_cert = title
-          serverdeviceconf = ASM::Util.parse_device_config(server_cert)
-          resource_hash['asm::host'] ||= {}
-          resource_hash['asm::host'][server_cert] = {
-            'esx_host' => serverdeviceconf[:host],
-            'esx_user' => serverdeviceconf[:user],
-            'esx_password' => serverdeviceconf[:password],
-          }
+      # Add ESXi hosts and creds as separte resources
+      (@components_by_type['SERVER'] || []).each do |server_component|
+        server_conf = ASM::Util.build_component_configuration(server_component)
+        (server_conf['asm::server'] || []).each do |server_cert, server_params|
+          if server_params['os_image_type'] == 'vmware_esxi'
+            serverdeviceconf = ASM::Util.parse_device_config(server_cert)
+            resource_hash['asm::host'] ||= {}
+            resource_hash['asm::host'][server_cert] = {
+              'datacenter' => params['datacenter'],
+              'cluster' => params['cluster'],
+              'hostname' => serverdeviceconf[:host],
+              'username' => 'root',
+              'password' => server_params['admin_password'],
+              'require' => "Asm::Cluster[#{title}]"
+            }
+          end
         end
       end
     end
