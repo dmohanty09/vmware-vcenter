@@ -154,9 +154,10 @@ class ASM::ServiceDeployment
   def cert_name_to_service_tag(title)
     match = /^(bladeserver|rackserver)-(.*)$/.match(title)
     if match
-      title = match[2].upcase
+       match[2].upcase
+    else
+      nil
     end
-    title
   end
 
   def process_server(component)
@@ -177,7 +178,6 @@ class ASM::ServiceDeployment
       end
     end
 
-    server_params = {}
     (resource_hash['asm::server'] || {}).each do |title, params|
       if params['rule_number']
         raise(Exception, "Did not expect rule_number in asm::server")
@@ -187,17 +187,22 @@ class ASM::ServiceDeployment
 
       # In the case of Dell servers the title should contain 
       # the service tag and we retrieve it here
-      title = cert_name_to_service_tag(title)
+      service_tag = cert_name_to_service_tag(title)
+      if service_tag
+        params['serial_number'] = service_tag
+      else
+        params['serial_number'] = title
+      end
+
+      # Razor policies currently can't be deleted, only disabled. So we
+      # need to make sure we use a unique policy name so that we can 
+      # disable old policies and assign new ones
+      params['policy_name'] = "policy-#{params['serial_number']}-#{@id}"
       
       # TODO: if present this should go in kickstart
       params.delete('custom_script')
-
-      server_params[title] = params
     end
 
-    if server_params.size > 0
-      resource_hash['asm::server'] = server_params
-    end
 
     (resource_hash['asm::idrac'] || {}).each do |title, params|
       # Attempt to determine this machine's IP address, which
@@ -214,7 +219,7 @@ class ASM::ServiceDeployment
       
       if resource_hash['asm::server']
         service_tag = cert_name_to_service_tag(title)
-        params['before'] = "Asm::Server[#{service_tag}]"
+        params['before'] = "Asm::Server[#{title}]"
       end
       
     end
@@ -293,10 +298,11 @@ class ASM::ServiceDeployment
 
   # converts from an ASM style server resource into
   # a method call to check if the esx host is up
-  def block_until_server_ready(serial_num, params, timeout=3600)
-    password = params['admin_password'] || raise(Exception, "resource #{serial_num} is missing required server attribute admin_password")
-    type = params['os_image_type'] || raise(Exception, "resource #{serial_num} is missing required server attribute os_image_type")
-    hostname = params['os_host_name'] || raise(Exception, "resource #{serial_num} is missing required server attribute os_host_name")
+  def block_until_server_ready(title, params, timeout=3600)
+    serial_num = params['serial_number'] || raise(Exception, "resource #{title} is missing required server attribute admin_password")
+    password = params['admin_password'] || raise(Exception, "resource #{title} is missing required server attribute admin_password")
+    type = params['os_image_type'] || raise(Exception, "resource #{title} is missing required server attribute os_image_type")
+    hostname = params['os_host_name'] || raise(Exception, "resource #{title} is missing required server attribute os_host_name")
 
     if type == 'vmware_esxi'
       ip_address = nil
