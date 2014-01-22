@@ -25,10 +25,6 @@ module ASM
     end
   end
 
-  def self.clear_mutex
-    @deployment_mutex = nil
-  end
-
   def self.logger
     @logger ||= Logger.new(File.join("#{base_dir}", 'asm_puppet.log'))
   end
@@ -50,20 +46,19 @@ module ASM
     unless @deployment_mutex
       raise(Exception, "Must call ASM.init to initialize mutex")
     end
-    @deployment_mutex.synchronize do
-      unless track_service_deployments(id)
-        raise(Exception, "Already processing id #{id}. Cannot handle simultaneous requests " +
-                         "of the same service deployment at the same"
-        )
-      end
+    unless track_service_deployments(id)
+      raise(Exception, "Already processing id #{id}. Cannot handle simultaneous requests " +
+            "of the same service deployment at the same"
+            )
     end
     begin
       service_deployment = ASM::ServiceDeployment.new(id)
+      if data['debug'] && data['debug'].downcase == 'true'
+        service_deployment.debug = true
+      end
       service_deployment.process(data)
     ensure
-      @deployment_mutex.synchronize do
-        complete_deployment(id)
-      end
+      complete_deployment(id)
     end
     service_deployment.log("Deployment has completed")
   end
@@ -72,28 +67,25 @@ module ASM
     payload = request.body.read
     logger.debug("Received deployment request: #{payload}")
     data = JSON.parse(payload)
-    ASM.process_deployment(data['Deployment'])
-  end
-
-  def self.debug_deployment_request(request)
-    payload = request.body.read
-    logger.debug("Received deployment request: #{payload}")
-    data = JSON.parse(payload)['Deployment']
-    deployment = ASM::ServiceDeployment.new(data['id'])
-    deployment.debug = true
-    deployment.process(data)
+    deployment = data['Deployment']
+    ASM.process_deployment(deployment)
   end
 
   def self.track_service_deployments(id)
-    @running_deployments ||= {}
-    if @running_deployments[id]
-      return false
+    @deployment_mutex.synchronize do
+      track_service_deployments_locked(id)
     end
-    @running_deployments[id] = true
   end
 
   def self.complete_deployment(id)
-    @running_deployments.delete(id)
+    @deployment_mutex.synchronize do
+      @running_deployments.delete(id)
+    end
+  end
+  def self.active_deployments
+    @deployment_mutex.synchronize do
+      @running_deployments.keys
+    end
   end
 
   def self.block_certname(certname)
@@ -116,6 +108,21 @@ module ASM
       @counter ||= 0
       @counter = @counter +1
     end
+  end
+
+  private
+  
+  def self.clear_mutex
+    @certname_mutex = nil
+    @deployment_mutex = nil
+  end
+
+  def self.track_service_deployments_locked(id)
+    @running_deployments ||= {}
+    if @running_deployments[id]
+      return false
+    end
+    @running_deployments[id] = true
   end
 
 end

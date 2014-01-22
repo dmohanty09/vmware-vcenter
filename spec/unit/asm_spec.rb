@@ -20,14 +20,13 @@ describe ASM do
       @tmp_dir = Dir.mktmpdir
       @basic_data_1 = {'id' => 'foo'}
       @basic_data_2 = {'id' => 'bar'}
-      ASM.init
     end
 
     it 'should only manage deployment processing state one at a time' do
       # verifies that only one thread can enter the deployment
       # tracking methods at a time
       now = Time.now
-      ASM.expects(:track_service_deployments).with() do |id|
+      ASM.expects(:track_service_deployments_locked).with() do |id|
         sleep 1;
         true
       end.twice.returns(true)
@@ -42,6 +41,11 @@ describe ASM do
       end_time = Time.now
       ((end_time - now) > 2).should be_true
     end
+
+  end
+
+  before do
+    ASM.init
   end
 
   it 'should track service deployments' do
@@ -52,16 +56,16 @@ describe ASM do
     ASM.complete_deployment('two')
     ASM.track_service_deployments('one').should be_true
   end
-
+  
   it 'should fail if we call ASM.init twice' do
     expect do
       ASM.init
-      ASM.init
     end.to raise_error(Exception, 'Can not initialize ASM class twice')
   end
-
+  
   after do
-    ASM.clear_mutex
+    # Use send to bypass private scope
+    ASM.send(:clear_mutex)
   end
-
+  
 end
