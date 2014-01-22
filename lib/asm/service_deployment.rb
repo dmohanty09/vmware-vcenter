@@ -39,7 +39,7 @@ class ASM::ServiceDeployment
 
       # Write the deployment to filesystem for ease of debugging / reuse
       File.open(File.join(deployment_dir, 'deployment.json'), 'w') do |file|
-        file.write(JSON.pretty_generate(service_deployment))
+        file.write(JSON.pretty_generate({ "Deployment" => service_deployment }))
       end
 
       # TODO: pass deployment into constructor instead of here
@@ -197,15 +197,10 @@ class ASM::ServiceDeployment
     resource_hash = {}
     deviceconf = nil
     inventory = nil
-    resources = ASM::Util.asm_json_array(component['resources'])
-    resources.each do |resource|
-      if resource['id'] =~ /asm::server/i
-        resource_hash = ASM::Util.append_resource_configuration!(resource, resource_hash)
-      elsif resource['id'] =~ /asm::idrac/i
-        deviceconf ||= ASM::Util.parse_device_config(cert_name)
-        inventory  ||= ASM::Util.fetch_server_inventory(cert_name)
-        resource_hash = ASM::Util.append_resource_configuration!(resource, resource_hash)
-      end
+    resource_hash = ASM::Util.build_component_configuration(component)
+    if resource_hash['asm::idrac']
+      deviceconf ||= ASM::Util.parse_device_config(cert_name)
+      inventory  ||= ASM::Util.fetch_server_inventory(cert_name)
     end
 
     (resource_hash['asm::server'] || {}).each do |title, params|
@@ -253,6 +248,10 @@ class ASM::ServiceDeployment
       end
 
     end
+    
+    # Network settings (vswitch config) is done in cluster swim lane
+    resource_hash.delete('asm::esxiscsiconfig')
+
     process_generic(component['id'], resource_hash, 'apply', 'true')
     unless @debug
       (resource_hash['asm::server'] || []).each do |title, params|
@@ -293,14 +292,24 @@ class ASM::ServiceDeployment
       # Add ESXi hosts and creds as separte resources
       (@components_by_type['SERVER'] || []).each do |server_component|
         server_conf = ASM::Util.build_component_configuration(server_component)
+
         (server_conf['asm::server'] || []).each do |server_cert, server_params|
           if server_params['os_image_type'] == 'vmware_esxi'
+            serial_number = cert_name_to_service_tag(server_cert)
+            unless serial_number
+              serial_number = server_cert
+            end
+
+            hostip = find_host_ip(serial_number, 1)
+            raise(Exception, "Could not find host ip for #{server_cert}") unless hostip
             serverdeviceconf = ASM::Util.parse_device_config(server_cert)
+
+            # Add esx hosts to cluster
             resource_hash['asm::host'] ||= {}
             resource_hash['asm::host'][server_cert] = {
               'datacenter' => params['datacenter'],
               'cluster' => params['cluster'],
-              'hostname' => serverdeviceconf[:host],
+              'hostname' => hostip,
               'username' => 'root',
               'password' => server_params['admin_password'],
               'require' => "Asm::Cluster[#{title}]"
@@ -324,6 +333,26 @@ class ASM::ServiceDeployment
     process_generic(component['id'], config, 'apply')
   end
 
+  def find_host_ip(serial_num, timeout)
+    ip_address = nil
+    ASM::Util.block_and_retry_until_ready(timeout, CommandException, 30) do
+      results = get('nodes').each do |node|
+        results = get('nodes', node['name'])
+        # Facts will be empty for a period until server checks in
+        serial  = (results['facts'] || {})['serialnumber']
+        if serial == serial_num
+          ip_address = results['facts']['ipaddress']
+          log("Found ip address!! #{ip_address}")
+        else
+          log("Did not find a razor node matching serial number: #{serial_num}")
+        end
+      end
+      unless ip_address
+        raise(CommandException, "Did not find our node by its serial number. Will try again")
+      end
+    end
+    ip_address
+  end
 
   # converts from an ASM style server resource into
   # a method call to check if the esx host is up
@@ -334,25 +363,10 @@ class ASM::ServiceDeployment
     hostname = params['os_host_name'] || raise(Exception, "resource #{title} is missing required server attribute os_host_name")
 
     if type == 'vmware_esxi'
-      ip_address = nil
       log("Waiting until #{hostname} has checked in with Razor")
-      ASM::Util.block_and_retry_until_ready(timeout, CommandException, 30) do
-        results = get('nodes').each do |node|
-          results = get('nodes', node['name'])
-          # Facts will be empty for a period until server checks in
-          serial  = (results['facts'] || {})['serialnumber']
-          if serial == serial_num
-            ip_address = results['facts']['ipaddress']
-            log("Found ip address!! #{ip_address}")
-          else
-            log("Did not find a razor node matching serial number: #{serial_num}")
-          end
-        end
-        unless ip_address
-          raise(CommandException, "Did not find our node by its serial number. Will try again")
-        end
-        log("#{hostname} has checked in with Razor with ip address #{ip_address}")
-      end
+      ip_address = find_host_ip(serial_num, timeout)
+      log("#{hostname} has checked in with Razor with ip address #{ip_address}")
+
       log("Waiting until #{hostname} is ready")
       ASM::Util.block_and_retry_until_ready(timeout, CommandException, 150) do
         esx_command =  "system uuid get"
