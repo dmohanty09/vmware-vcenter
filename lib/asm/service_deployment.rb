@@ -388,7 +388,7 @@ class ASM::ServiceDeployment
 
   def find_node(serial_num, timeout)
     node = nil
-    ASM::Util.block_and_retry_until_ready(timeout, CommandException, 30) do
+    ASM::Util.block_and_retry_until_ready(timeout, CommandException, timeout) do
       results = get('nodes').each do |node|
         results = get('nodes', node['name'])
         # Facts will be empty for a period until server checks in
@@ -425,7 +425,7 @@ class ASM::ServiceDeployment
       ASM::Util.block_and_retry_until_ready(timeout, CommandException, 150) do
         esx_command =  "system uuid get"
         cmd = "esxcli --server=#{ip_address} --username=root --password=#{password} #{esx_command}"
-        log("Running command: #{cmd}")
+        log("Checking for system uuid on #{ip_address}")
         results = ASM::Util.run_command_simple(cmd)
         logger.debug(results.inspect)
         unless results['exit_status'] == 0 and results['stdout'] =~ /[1-9a-z-]+/
