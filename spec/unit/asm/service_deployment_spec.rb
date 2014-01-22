@@ -9,6 +9,7 @@ describe ASM::ServiceDeployment do
   before do
     @tmp_dir = Dir.mktmpdir
     @sd = ASM::ServiceDeployment.new('8000')
+    @sd.stubs(:find_node).returns({})
     ASM.stubs(:base_dir).returns(@tmp_dir)
   end
 
@@ -78,6 +79,26 @@ describe ASM::ServiceDeployment do
         @sd.process(@data)
         (YAML.load_file(@r_file)['asm::server']['foo']['rule_number'].to_s =~ /\d+/).should == 0
       end
+      
+      it 'should skip processing if server already deployed' do
+        @sd.expects(:process_generic).never
+        node = {'policy' => { 'name' => 'policy_test' } }
+        @sd.stubs(:find_node).returns(node)
+        policy = { 
+          'repo' => {'name' => 'esxi-5.1'},
+          'installer' => {'name' => 'vmware_esxi'} 
+        }
+        @sd.stubs(:get).returns(policy)
+        @data['serviceTemplate']['components'][0]['id'] = 'bladeserver_serialno'
+        @data['serviceTemplate']['components'][0]['type'] = 'SERVER'
+        parameters = [ {'id' => 'title', 'value' => 'bladeserver_serialno'},
+                       {'id' => 'razor_image', 'value' => 'esxi-5.1'},
+                       {'id' => 'os_image_type', 'value' => 'vmware_esxi'}, ]
+        resource = { 'id' => 'asm::server', 'parameters' => parameters }
+        @data['serviceTemplate']['components'][0]['resources'].push(resource)
+        @sd.process(@data)
+      end
+      
     end
 
   end

@@ -73,6 +73,7 @@ module ASM
 
   def self.track_service_deployments(id)
     @deployment_mutex.synchronize do
+      @running_deployments ||= {}
       track_service_deployments_locked(id)
     end
   end
@@ -82,8 +83,10 @@ module ASM
       @running_deployments.delete(id)
     end
   end
+
   def self.active_deployments
     @deployment_mutex.synchronize do
+      @running_deployments ||= {}
       @running_deployments.keys
     end
   end
@@ -118,7 +121,6 @@ module ASM
   end
 
   def self.track_service_deployments_locked(id)
-    @running_deployments ||= {}
     if @running_deployments[id]
       return false
     end

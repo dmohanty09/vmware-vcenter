@@ -10,6 +10,7 @@ module ASM
   module Util
 
     SERVER_RA_URL='http://localhost:9080/ServerRA/Server'
+    NETWORKS_RA_URL='http://localhost:9080/VirtualServices/Network'
     # TODO: give razor user access to this directory
     DEVICE_CONF_DIR='/etc/puppetlabs/puppet/devices'
 
@@ -27,6 +28,17 @@ module ASM
         raise(Exception, "Failed to get inventory for server #{cert_name}")
       end
       ret[0]
+    end
+
+    def self.fetch_network_settings(guid)
+      url = "#{NETWORKS_RA_URL}/#{guid}"
+      data = RestClient.get(url, {:accept => :json})
+      ret = JSON.parse(data)
+      if ret['id'] != guid
+        raise(Exception, "Failed to retrieve network settings for guid #{guid}: #{ret.to_yaml}")
+      else
+        ret
+      end
     end
 
     def self.first_host_ip
