@@ -335,6 +335,38 @@ class ASM::ServiceDeployment
               'password' => server_params['admin_password'],
               'require' => "Asm::Cluster[#{title}]"
             }
+
+            network_params = (server_conf['asm::esxiscsiconfig'] || {})[server_cert]
+            @logger.debug("network_params = #{network_params.to_yaml}")
+            if network_params
+              # Add vswitch config to esx host
+              resource_hash['asm::vswitch'] ||= {}
+
+              hypervisor_net_guid = network_params['hypervisor_network']
+              if hypervisor_net_guid and hypervisor_net_guid.to_s != '-1'
+                log("Configuring hypervisor_network = #{hypervisor_net_guid}")
+                network = ASM::Util.fetch_network_settings(hypervisor_net_guid)
+                @logger.debug("Found network = #{network.to_yaml}")
+                resource_hash['asm::vswitch']["#{server_cert}-hypervisor-vswitch"] = {
+                  'data_center' => params['datacenter'],
+                  'cluster' => params['cluster'],
+                  'ensure' => 'present',
+                  'esxhost' => hostip,
+                  'esxusername' => 'root',
+                  'esxpassword' => server_params['admin_password'],
+                  'vswitchname' => network['name'],
+                  'portgroupname' => network['name'],
+                  'nics' => [ 'vmnic0', 'vmnic1' ],
+                  'nicorderpolicy' => { 'activenic' => 'vmnic0',
+                    'standbynic' => 'vmnic1' },
+                  'nicipsetting' => network['static'] == 'true' ? 'static' : 'dhcp',
+                  'nicipaddress' => '',
+                  'nicsubnetmask' => (network['StaticNetworkConfiguration'] || {})['Subnet'],
+                  'nicvlanid' => network['vlanId'],
+                  'require' => "Asm::Host[#{server_cert}]"
+                }
+              end
+            end
           end
         end
       end
