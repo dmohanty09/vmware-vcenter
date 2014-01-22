@@ -27,7 +27,7 @@ class ASM::App < Sinatra::Base
 
   get '/status' do
     content_type :json
-    ASM::Util.active_deployments.to_json
+    ASM.active_deployments.to_json
   end
 
   get '/status/:id' do |id|
