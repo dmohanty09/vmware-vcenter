@@ -250,19 +250,21 @@ class ASM::ServiceDeployment
     resource_hash.delete('asm::esxiscsiconfig')
 
     skip_deployment = nil
-    begin
-      node = find_node(serial_number, 1)
-      if node['policy'] && node['policy']['name']
-        policy = get('policies', node['policy']['name'])
-        razor_params = resource_hash['asm::server'][cert_name]
-        if policy &&
-            (policy['repo'] || {})['name'] == razor_params['razor_image'] &&
-            (policy['installer'] || {})['name'] == razor_params['os_image_type']
-          skip_deployment = true
+    unless @debug
+      begin
+        node = (find_node(serial_number) || {})
+        if node['policy'] && node['policy']['name']
+          policy = get('policies', node['policy']['name'])
+          razor_params = resource_hash['asm::server'][cert_name]
+          if policy &&
+              (policy['repo'] || {})['name'] == razor_params['razor_image'] &&
+              (policy['installer'] || {})['name'] == razor_params['os_image_type']
+            skip_deployment = true
+          end
         end
+      rescue Timeout::Error
+        skip_deployment = nil
       end
-    rescue Timeout::Error
-      skip_deployment = nil
     end
     
     if skip_deployment
@@ -321,7 +323,8 @@ class ASM::ServiceDeployment
               serial_number = server_cert
             end
 
-            hostip = find_host_ip(serial_number, 1)
+            log("Finding host ip for serial number #{serial_number}")
+            hostip = find_host_ip(serial_number)
             raise(Exception, "Could not find host ip for #{server_cert}") unless hostip
             serverdeviceconf = ASM::Util.parse_device_config(server_cert)
 
@@ -356,9 +359,9 @@ class ASM::ServiceDeployment
                   'esxpassword' => server_params['admin_password'],
                   'vswitchname' => network['name'],
                   'portgroupname' => network['name'],
-                  'nics' => [ 'vmnic0', 'vmnic1' ],
-                  'nicorderpolicy' => { 'activenic' => 'vmnic0',
-                    'standbynic' => 'vmnic1' },
+                  'nics' => [ 'vmnic1', 'vmnic2' ],
+                  'nicorderpolicy' => { 'activenic' => [ 'vmnic1' ],
+                    'standbynic' => [ 'vmnic2' ] },
                   'nicipsetting' => network['static'] == 'true' ? 'static' : 'dhcp',
                   'nicipaddress' => '',
                   'nicsubnetmask' => (network['StaticNetworkConfiguration'] || {})['Subnet'],
@@ -386,26 +389,37 @@ class ASM::ServiceDeployment
     process_generic(component['id'], config, 'apply')
   end
 
-  def find_node(serial_num, timeout)
-    node = nil
-    ASM::Util.block_and_retry_until_ready(timeout, CommandException, timeout) do
-      results = get('nodes').each do |node|
-        results = get('nodes', node['name'])
-        # Facts will be empty for a period until server checks in
-        serial  = (results['facts'] || {})['serialnumber']
-        if serial == serial_num
-          node = results
-        end
+  def find_node(serial_num)
+    ret = nil
+    results = get('nodes').each do |node|
+      results = get('nodes', node['name'])
+      # Facts will be empty for a period until server checks in
+      serial  = (results['facts'] || {})['serialnumber']
+      if serial == serial_num
+        ret = results
       end
-      unless node
+    end
+    ret
+  end
+  
+  def find_host_ip(serial_num)
+    node = find_node(serial_num)
+    if node && node['facts'] && node['facts']['ipaddress']
+      node['facts']['ipaddress']
+    else
+      nil
+    end
+  end
+
+  def find_host_ip_blocking(serial_num, timeout)
+    ipaddress = nil
+    max_sleep = 30
+    ASM::Util.block_and_retry_until_ready(timeout, CommandException, max_sleep) do
+      ipaddress = find_host_ip(serial_num)
+      unless ipaddress
         raise(CommandException, "Did not find our node by its serial number. Will try again")
       end
     end
-    node
-  end
-
-  def find_host_ip(serial_num, timeout)
-    find_node(serial_num, timeout)['facts']['ipaddress']
   end
 
   # converts from an ASM style server resource into
@@ -418,7 +432,7 @@ class ASM::ServiceDeployment
 
     if type == 'vmware_esxi'
       log("Waiting until #{hostname} has checked in with Razor")
-      ip_address = find_host_ip(serial_num, timeout)
+      ip_address = find_host_ip_blocking(serial_num, timeout)
       log("#{hostname} has checked in with Razor with ip address #{ip_address}")
 
       log("Waiting until #{hostname} is ready")
