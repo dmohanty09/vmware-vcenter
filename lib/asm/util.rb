@@ -273,5 +273,45 @@ module ASM
       end
     end
 
+    def self.escape_string(string)
+      # Simple escaping, replace \ and ' with \\ and \'
+      # UPDATE: back-slashes don't seem to need to be escaped
+      "'" + string.gsub(/(['])/, '\\\\\1') + "'"
+    end
+
+    def self.escape(val)
+      if val.is_a?(String)
+        self.escape_string(val)
+      elsif val.is_a?(Integer)
+        self.escape_string(val.to_s)
+      elsif !!val == val # boolean
+        self.escape_string(val.to_s)
+      elsif val.is_a?(Hash)
+        '{ ' + val.map { |k, v| "#{k} => #{self.escape(v)}" }.join(",\n        ") + ' }'
+        #      val.each do |k, v| "#{k} => #{self.escape(v)}"
+        #        "#{k} => #{self.escape(v)}"
+        #      end.join("\n")
+      elsif val.is_a?(Array)
+        "[ " + val.map { |x| self.escape(x) }.join(', ') + " ]"
+      elsif val.nil?
+        "''"
+      else
+        raise(Exception, "Unknown value for manifest: #{val}")
+      end
+    end
+
+    def self.write_manifest(resource_data, fh)
+      resource_data.each do |type, resources|
+        resources.each do |title, params|
+          fh.puts("#{type} { #{self.escape(title)}:")
+          params.each do |key, val|
+            fh.puts("  #{key} => #{self.escape(val)},")
+          end
+          fh.puts('}')
+          fh.puts('')
+        end
+      end
+    end
+    
   end
 end
