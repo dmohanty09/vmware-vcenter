@@ -18,16 +18,16 @@ class ASM::App < Sinatra::Base
     ASM.process_deployment_request(request)
   end
 
-  # Write deployment files and info, but skip running puppet
-  post '/debug_service_profile' do
-    ASM.debug_deployment_request(request)
-  end
-
   # Retrieve logs for a deployment id
   get '/logs/:id' do | id |
     content_type :json
     logs = ASM::Util.get_logs(id)
     logs.to_json
+  end
+
+  get '/status' do
+    content_type :json
+    ASM::Util.active_deployments.to_json
   end
 
   get '/status/:id' do |id|
