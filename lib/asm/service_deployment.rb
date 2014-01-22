@@ -5,6 +5,7 @@ require 'json'
 require 'logger'
 require 'open3'
 require 'rest_client'
+require 'timeout'
 require 'yaml'
 
 class ASM::ServiceDeployment
@@ -194,6 +195,10 @@ class ASM::ServiceDeployment
     log("Processing server component: #{component['id']}")
     cert_name = component['id']
 
+    # In the case of Dell servers the cert_name should contain 
+    # the service tag and we retrieve it here
+    serial_number = cert_name_to_service_tag(cert_name) || cert_name
+
     resource_hash = {}
     deviceconf = nil
     inventory = nil
@@ -210,14 +215,7 @@ class ASM::ServiceDeployment
         params['rule_number'] = rule_number
       end
 
-      # In the case of Dell servers the title should contain 
-      # the service tag and we retrieve it here
-      service_tag = cert_name_to_service_tag(title)
-      if service_tag
-        params['serial_number'] = service_tag
-      else
-        params['serial_number'] = title
-      end
+      params['serial_number'] = serial_number
 
       # Razor policies currently can't be deleted, only disabled. So we
       # need to make sure we use a unique policy name so that we can 
@@ -243,7 +241,6 @@ class ASM::ServiceDeployment
       params['model'] = inventory['model'].split(' ').last.downcase
 
       if resource_hash['asm::server']
-        service_tag = cert_name_to_service_tag(title)
         params['before'] = "Asm::Server[#{title}]"
       end
 
@@ -252,10 +249,34 @@ class ASM::ServiceDeployment
     # Network settings (vswitch config) is done in cluster swim lane
     resource_hash.delete('asm::esxiscsiconfig')
 
-    process_generic(component['id'], resource_hash, 'apply', 'true')
-    unless @debug
-      (resource_hash['asm::server'] || []).each do |title, params|
-        block_until_server_ready(title, params, timeout=3600)
+    skip_deployment = nil
+    begin
+      node = find_node(serial_number, 1)
+      if node['policy'] && node['policy']['name']
+        policy = get('policies', node['policy']['name'])
+        razor_params = resource_hash['asm::server'][cert_name]
+        if policy &&
+            (policy['repo'] || {})['name'] == razor_params['razor_image'] &&
+            (policy['installer'] || {})['name'] == razor_params['os_image_type']
+          skip_deployment = true
+        end
+      end
+    rescue Timeout::Error
+      skip_deployment = nil
+    end
+    
+    if skip_deployment
+      # In theory the puppet razor and idrac modules should be idempotent
+      # and we could call process_generic without affecting them if they
+      # are already in the desired state. However, the idrec module
+      # currently always reboots the server
+      log("Skipping deployment of #{cert_name}; already complete.")
+    else
+      process_generic(component['id'], resource_hash, 'apply', 'true')
+      unless @debug
+        (resource_hash['asm::server'] || []).each do |title, params|
+          block_until_server_ready(title, params, timeout=3600)
+        end
       end
     end
   end
@@ -333,25 +354,26 @@ class ASM::ServiceDeployment
     process_generic(component['id'], config, 'apply')
   end
 
-  def find_host_ip(serial_num, timeout)
-    ip_address = nil
+  def find_node(serial_num, timeout)
+    node = nil
     ASM::Util.block_and_retry_until_ready(timeout, CommandException, 30) do
       results = get('nodes').each do |node|
         results = get('nodes', node['name'])
         # Facts will be empty for a period until server checks in
         serial  = (results['facts'] || {})['serialnumber']
         if serial == serial_num
-          ip_address = results['facts']['ipaddress']
-          log("Found ip address!! #{ip_address}")
-        else
-          log("Did not find a razor node matching serial number: #{serial_num}")
+          node = results
         end
       end
-      unless ip_address
+      unless node
         raise(CommandException, "Did not find our node by its serial number. Will try again")
       end
     end
-    ip_address
+    node
+  end
+
+  def find_host_ip(serial_num, timeout)
+    find_node(serial_num, timeout)['facts']['ipaddress']
   end
 
   # converts from an ASM style server resource into
