@@ -324,6 +324,83 @@ class ASM::ServiceDeployment
     @components_by_type[type]
   end
 
+  def build_portgroup(vswitch, path, hostip, portgroup_name, network, 
+                      portgrouptype, active_nics)
+    {
+      'name' => "#{hostip}:#{portgroup_name}",
+      'ensure' => 'present',
+      'portgrouptype' => portgrouptype,
+      'overridefailoverorder' => 'disabled',
+      'failback' => true,
+      'mtu' => 9000,
+      'overridefailoverorder' => 'enabled',
+      'nicorderpolicy' => {
+        # TODO: for iSCSI they cannot both be active
+        'activenic' => active_nics,
+        'standbynic' => [],
+      },
+      'overridecheckbeacon' => 'enabled',
+      'checkbeacon' => true,
+      'ipsettings' => 'dhcp', # TODO: pull from network pool
+      'ipaddress' => '',      # ditto
+      'subnetmask' => '',     # ditto
+      'traffic_shaping_policy' => 'disabled',
+      'averagebandwidth' => 1000,
+      'peakbandwidth' => 1000,
+      'burstsize' => 1024,
+      'vswitch' => vswitch,
+      'path' => path,
+      'host' => hostip,
+      'vlanid' => '16',      # TODO: from network
+      'transport' => 'Transport[vcenter]',
+      'require' => "Esx_vswitch[#{hostip}:#{vswitch}]",
+    }
+  end
+
+  def add_vswitch(server_cert, resource_hash, index, network_guid, hostip, 
+                  params, server_params)
+    vswitch_name = "vSwitch#{index}"
+    vmnic1 = "vmnic#{index * 2}"
+    vmnic2 = "vmnic#{(index * 2) + 1}"
+    path = "/#{params['datacenter']}/#{params['cluster']}"
+
+    network = ASM::Util.fetch_network_settings(network_guid)
+    @logger.debug("Found network = #{network.to_yaml}")
+
+    nics = [ vmnic1, vmnic2 ]
+    resource_hash['esx_vswitch'] ||= {}
+    resource_hash['esx_vswitch']["#{hostip}:#{vswitch_name}"] = {
+      'ensure' => 'present',
+      'num_ports' => 1024,
+      'nics' => [ vmnic1, vmnic2 ],
+      'nicorderpolicy' => {
+        'activenic' => nics,
+        'standbynic' => [],
+      },
+      'path' => path,
+      'mtu' => 9000,
+      'checkbeacon' => true,
+      'transport' => 'Transport[vcenter]',
+      'require' => "Asm::Host[#{server_cert}]",
+    }
+
+    resource_hash['esx_portgroup'] ||= {}
+    if index == 3
+      # iSCSI network
+      portgrouptype = 'VirtualMachine'
+      ['ISCSI0', 'ISCSI1'].each_with_index do |portgroup_name, index|
+        portgroup = build_portgroup(vswitch_name, path, hostip, portgroup_name,
+                                    network, portgrouptype, [ nics[index] ])
+        resource_hash['esx_portgroup'][portgroup_name] = portgroup
+      end
+    else
+      portgrouptype = 'VMkernel'
+      portgroup = build_portgroup(vswitch_name, path, hostip, network['name'], 
+                                  network, portgrouptype, nics)
+      resource_hash['esx_portgroup'][network['name']] = portgroup
+    end
+  end
+
   def process_cluster(component)
     cert_name = component['id']
     raise(Exception, 'Component has no certname') unless cert_name
@@ -376,29 +453,14 @@ class ASM::ServiceDeployment
               # Add vswitch config to esx host
               resource_hash['asm::vswitch'] ||= {}
 
-              hypervisor_net_guid = network_params['hypervisor_network']
-              if hypervisor_net_guid and hypervisor_net_guid.to_s != '-1'
-                log("Configuring hypervisor_network = #{hypervisor_net_guid}")
-                network = ASM::Util.fetch_network_settings(hypervisor_net_guid)
-                @logger.debug("Found network = #{network.to_yaml}")
-                resource_hash['asm::vswitch']["#{server_cert}-hypervisor-vswitch"] = {
-                  'data_center' => params['datacenter'],
-                  'cluster' => params['cluster'],
-                  'ensure' => 'present',
-                  'esxhost' => hostip,
-                  'esxusername' => 'root',
-                  'esxpassword' => server_params['admin_password'],
-                  'vswitchname' => network['name'],
-                  'portgroupname' => network['name'],
-                  'nics' => [ 'vmnic1', 'vmnic2' ],
-                  'nicorderpolicy' => { 'activenic' => [ 'vmnic1' ],
-                    'standbynic' => [ 'vmnic2' ] },
-                  'nicipsetting' => network['static'] == 'true' ? 'static' : 'dhcp',
-                  'nicipaddress' => '',
-                  'nicsubnetmask' => (network['StaticNetworkConfiguration'] || {})['Subnet'],
-                  'nicvlanid' => network['vlanId'],
-                  'require' => "Asm::Host[#{server_cert}]"
-                }
+              [ 'hypervisor_network', 'vmotion_network', 'workload_network', 'storage_network' ].each_with_index do | type, index |
+                guid = network_params[type]
+                if guid and !guid.empty? and guid.to_s != '-1'
+                  log("Configuring #{type} = #{guid}")
+                  add_vswitch(server_cert, resource_hash, index,
+                              guid, hostip,
+                              params, server_params)
+                end
               end
             end
           end
