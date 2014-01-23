@@ -442,6 +442,7 @@ class ASM::ServiceDeployment
         raise(CommandException, "Did not find our node by its serial number. Will try again")
       end
     end
+    ipaddress
   end
 
   # converts from an ASM style server resource into
@@ -457,13 +458,12 @@ class ASM::ServiceDeployment
       ip_address = find_host_ip_blocking(serial_num, timeout)
       log("#{hostname} has checked in with Razor with ip address #{ip_address}")
 
-      log("Waiting until #{hostname} is ready")
+      log("Waiting until #{hostname} (#{serialnum}) is ready")
       ASM::Util.block_and_retry_until_ready(timeout, CommandException, 150) do
         esx_command =  "system uuid get"
         cmd = "esxcli --server=#{ip_address} --username=root --password=#{password} #{esx_command}"
         log("Checking for system uuid on #{ip_address}")
         results = ASM::Util.run_command_simple(cmd)
-        logger.debug(results.inspect)
         unless results['exit_status'] == 0 and results['stdout'] =~ /[1-9a-z-]+/
           raise(CommandException, results['stderr'])
         end
