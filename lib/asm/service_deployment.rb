@@ -347,6 +347,9 @@ class ASM::ServiceDeployment
 
             log("Finding host ip for serial number #{serial_number}")
             hostip = find_host_ip(serial_number)
+            if @debug && !hostip
+              hostip = "DEBUG-IP-ADDRESS"
+            end
             raise(Exception, "Could not find host ip for #{server_cert}") unless hostip
             serverdeviceconf = ASM::Util.parse_device_config(server_cert)
 
@@ -458,7 +461,7 @@ class ASM::ServiceDeployment
       ip_address = find_host_ip_blocking(serial_num, timeout)
       log("#{hostname} has checked in with Razor with ip address #{ip_address}")
 
-      log("Waiting until #{hostname} (#{serialnum}) is ready")
+      log("Waiting until #{hostname} (#{serial_num}) is ready")
       ASM::Util.block_and_retry_until_ready(timeout, CommandException, 150) do
         esx_command =  "system uuid get"
         cmd = "esxcli --server=#{ip_address} --username=root --password=#{password} #{esx_command}"
