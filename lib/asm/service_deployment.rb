@@ -318,6 +318,12 @@ class ASM::ServiceDeployment
     ((currtime - offset) * 100) + (ASM.counter % 100)
   end
 
+  # Find components of the given type which are related to component
+  def find_related_components(type, component)
+    # TODO: implement this! Should look through relatedComponents field
+    @components_by_type[type]
+  end
+
   def process_cluster(component)
     cert_name = component['id']
     raise(Exception, 'Component has no certname') unless cert_name
@@ -404,8 +410,51 @@ class ASM::ServiceDeployment
 
   def process_virtualmachine(component)
     log("Processing virtualmachine component: #{component['id']}")
-    config = ASM::Util.build_component_configuration(component)
-    process_generic(component['id'], config, 'apply')
+    resource_hash = ASM::Util.build_component_configuration(component)
+    
+    clusters = (find_related_components('CLUSTER', component) || [])
+    raise(Exception, "Expected one cluster for #{component['id']} but found #{clusters.size}") unless clusters.size == 1
+    cluster = clusters[0]
+    cluster_deviceconf = ASM::Util.parse_device_config(cluster['id'])
+    cluster_resource_hash = ASM::Util.build_component_configuration(cluster)
+    cluster_hash = cluster_resource_hash['asm::cluster'] || {}
+    raise(Exception, "Expected one asm::cluster resource but found #{cluster_hash.size}") unless cluster_hash.size == 1
+    cluster_params = nil
+    cluster_hash.each do |title, params|
+      cluster_params ||= params
+    end
+
+    # TODO: title is not set correctly, needs to come from asm::server
+    # section
+    resource_hash['asm::vm'].each do |title, params|
+      ['cluster', 'datacenter', 'datastore'].each do |key|
+        params[key] = cluster_params[key]
+      end
+
+      if resource_hash['asm::server']
+        server_params = (resource_hash['asm::server'][title] || {})
+      else
+        server_params = {}
+      end
+                         
+      if server_params['os_type'] == 'windows'
+        params['os_type'] = 'windows'
+      else
+        params['os_type'] = 'linux'
+      end
+      params['hostname'] = server_params['os_host_name']
+      params['vcenter_username'] = cluster_deviceconf[:user]
+      params['vcenter_password'] = cluster_deviceconf[:password]
+      params['vcenter_server'] = cluster_deviceconf[:host]
+      params['vcenter_options'] = { 'insecure' => true }
+      params['ensure'] = 'present'
+    end
+    
+    if resource_hash.delete('asm::server')
+      log("TODO: implement VM O/S deploy")
+    end
+    
+    process_generic(component['id'], resource_hash, 'apply')
   end
 
   def process_service(component)
