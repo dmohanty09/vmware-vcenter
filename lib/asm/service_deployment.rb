@@ -505,7 +505,7 @@ class ASM::ServiceDeployment
                       'esxhost' => hostip,
                       'esxusername' => 'root',
                       'esxpassword' => server_params['admin_password'],
-                      'iscsi_target_ip' => storage_creds[:host],
+                      'iscsi_target_ip' => ASM::Util.find_equallogic_iscsi_ip(storage_cert),
                       'chapname' => storage_params['chap_user_name'],
                       'chapsecret' => storage_params['passwd'],
                       'require' => storage_network_require,
