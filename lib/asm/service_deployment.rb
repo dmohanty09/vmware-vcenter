@@ -486,6 +486,32 @@ class ASM::ServiceDeployment
                   end
                 end
               end
+
+              # Connect datastore if we have both storage and a storage network
+              if storage_network_guid
+                (find_related_components('STORAGE', server_component) || []).each do |storage_component|
+                  storage_cert = storage_component['id']
+                  storage_creds = ASM::Util.parse_device_config(storage_cert)
+                  storage_hash = ASM::Util.build_component_configuration(storage_component)
+                  (storage_hash['equallogic::create_vol_chap_user_access'] || {}).each do |storage_title, storage_params|
+                    resource_hash['asm::datastore'] = (resource_hash['asm::datastore'] || {})
+                    resource_hash['asm::datastore']["#{storage_title}-#{hostip}"] = {
+                      'data_center' => params['datacenter'],
+                      'datastore' => params['datastore'],
+                      'cluster' => params['cluster'],
+                      'ensure' => 'present',
+                      'esxhost' => hostip,
+                      'esxusername' => 'root',
+                      'esxpassword' => server_params['admin_password'],
+                      'iscsi_target_ip' => storage_creds[:host],
+                      'chapname' => storage_params['chap_user_name'],
+                      'chapsecret' => storage_params['passwd'],
+                      'require' => "Asm::Host[#{server_cert}]"
+                    }
+                  end
+                end
+              end
+
             end
           end
         end
