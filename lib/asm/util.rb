@@ -1,10 +1,11 @@
+require 'io/wait'
+require 'json'
+require 'open3'
 require 'ostruct'
 require 'rest_client'
-require 'uri'
-require 'open3'
-require 'io/wait'
-require 'timeout'
 require 'socket'
+require 'timeout'
+require 'uri'
 
 module ASM
   module Util
@@ -39,6 +40,49 @@ module ASM
       else
         ret
       end
+    end
+
+    # Execute getVmInfo.pl script to find UUID for given VM name
+    #
+    # TODO: this will break if there is more than one VM with same name
+    #
+    # Sample output of perl script:
+    #
+    # VM uuid :423b35e8-61ef-3d16-5fae-75c189f4711b
+    # VM power State :poweredOn
+    # VM committed size :17244304694
+    # VM Total number of Ethernet Cards :1
+    # VM Provisioned size :83.3303845431656
+    # VMNicNetworkMapping=1:HypMan28|*
+    def self.find_vm_uuid(cluster_device, vmname)
+      env = { 'PERL_LWP_SSL_VERIFY_HOSTNAME' => '0' }
+      cmd = 'perl'
+      args = [ '-I/usr/lib/vmware-vcli/apps', 
+               '/opt/Dell/scripts/getVmInfo.pl',
+              '--url', "https://#{cluster_device[:host]}/sdk/vimService",
+              '--username', cluster_device[:user],
+              '--password', cluster_device[:password],
+              '--vmName', vmname ]
+      result = {}
+      Open3.popen3(env, cmd, *args) do |stdin, stdout, stderr, wait_thr|
+        result['pid']         = wait_thr[:pid]
+        result['exit_status'] = wait_thr.value.exitstatus
+        result['stdout']      = stdout.read
+        result['stderr']      = stderr.read
+      end
+
+      raise(Exception, "Failed to execute getVmInfo.pl") unless result['exit_status'] == 0
+
+      # Parse output into key-value pairs
+      result_hash = {}
+      result['stdout'].lines.each do |line|
+        kv = line.split(/:/, 2).map(&:strip)
+        if kv and kv.size == 2
+          result_hash[kv[0]] = kv[1]
+        end
+      end
+
+      result_hash['VM uuid']
     end
 
     def self.first_host_ip

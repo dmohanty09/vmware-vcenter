@@ -272,21 +272,19 @@ class ASM::ServiceDeployment
     resource_hash.delete('asm::esxiscsiconfig')
 
     skip_deployment = nil
-    unless @debug
-      begin
-        node = (find_node(serial_number) || {})
-        if node['policy'] && node['policy']['name']
-          policy = get('policies', node['policy']['name'])
-          razor_params = resource_hash['asm::server'][cert_name]
-          if policy &&
-              (policy['repo'] || {})['name'] == razor_params['razor_image'] &&
-              (policy['installer'] || {})['name'] == razor_params['os_image_type']
-            skip_deployment = true
-          end
+    begin
+      node = (find_node(serial_number) || {})
+      if node['policy'] && node['policy']['name']
+        policy = get('policies', node['policy']['name'])
+        razor_params = resource_hash['asm::server'][cert_name]
+        if policy &&
+            (policy['repo'] || {})['name'] == razor_params['razor_image'] &&
+            (policy['installer'] || {})['name'] == razor_params['os_image_type']
+          skip_deployment = true
         end
-      rescue Timeout::Error
-        skip_deployment = nil
       end
+    rescue Timeout::Error
+      skip_deployment = nil
     end
     
     if skip_deployment
@@ -351,13 +349,13 @@ class ASM::ServiceDeployment
       'vswitch' => vswitch,
       'path' => path,
       'host' => hostip,
-      'vlanid' => '16',      # TODO: from network
+      'vlanid' => network['vlanId'],
       'transport' => 'Transport[vcenter]',
       'require' => "Esx_vswitch[#{hostip}:#{vswitch}]",
     }
   end
 
-  def add_vswitch(server_cert, resource_hash, index, network_guid, hostip, 
+  def build_vswitch(server_cert, index, network_guid, hostip, 
                   params, server_params)
     vswitch_name = "vSwitch#{index}"
     vmnic1 = "vmnic#{index * 2}"
@@ -365,11 +363,10 @@ class ASM::ServiceDeployment
     path = "/#{params['datacenter']}/#{params['cluster']}"
 
     network = ASM::Util.fetch_network_settings(network_guid)
-    @logger.debug("Found network = #{network.to_yaml}")
 
     nics = [ vmnic1, vmnic2 ]
-    resource_hash['esx_vswitch'] ||= {}
-    resource_hash['esx_vswitch']["#{hostip}:#{vswitch_name}"] = {
+    ret = { 'esx_vswitch' => {}, 'esx_portgroup' => {}, }
+    ret['esx_vswitch']["#{hostip}:#{vswitch_name}"] = {
       'ensure' => 'present',
       'num_ports' => 1024,
       'nics' => [ vmnic1, vmnic2 ],
@@ -381,24 +378,26 @@ class ASM::ServiceDeployment
       'mtu' => 9000,
       'checkbeacon' => true,
       'transport' => 'Transport[vcenter]',
-      'require' => "Asm::Host[#{server_cert}]",
     }
 
-    resource_hash['esx_portgroup'] ||= {}
+    portgrouptype = 'VMkernel'
     if index == 3
       # iSCSI network
-      portgrouptype = 'VirtualMachine'
       ['ISCSI0', 'ISCSI1'].each_with_index do |portgroup_name, index|
         portgroup = build_portgroup(vswitch_name, path, hostip, portgroup_name,
                                     network, portgrouptype, [ nics[index] ])
-        resource_hash['esx_portgroup'][portgroup_name] = portgroup
+        ret['esx_portgroup'][portgroup_name] = portgroup
       end
     else
-      portgrouptype = 'VMkernel'
+      if index == 2
+        # Workload group has portgrouptype = 'VirtualMachine'
+        portgrouptype = 'VirtualMachine'
+      end
       portgroup = build_portgroup(vswitch_name, path, hostip, network['name'], 
                                   network, portgrouptype, nics)
-      resource_hash['esx_portgroup'][network['name']] = portgroup
+      ret['esx_portgroup'][network['name']] = portgroup
     end
+    ret
   end
 
   def process_cluster(component)
@@ -418,7 +417,7 @@ class ASM::ServiceDeployment
       resource_hash['asm::cluster'][title]['ensure'] = 'present'
 
       # Add ESXi hosts and creds as separte resources
-      (@components_by_type['SERVER'] || []).each do |server_component|
+      (find_related_components('SERVER', component) || []).each do |server_component|
         server_conf = ASM::Util.build_component_configuration(server_component)
 
         (server_conf['asm::server'] || []).each do |server_cert, server_params|
@@ -453,15 +452,66 @@ class ASM::ServiceDeployment
               # Add vswitch config to esx host
               resource_hash['asm::vswitch'] ||= {}
 
+              next_require = "Asm::Host[#{server_cert}]"
+              storage_network_guid = nil
               [ 'hypervisor_network', 'vmotion_network', 'workload_network', 'storage_network' ].each_with_index do | type, index |
                 guid = network_params[type]
-                if guid and !guid.empty? and guid.to_s != '-1'
-                  log("Configuring #{type} = #{guid}")
-                  add_vswitch(server_cert, resource_hash, index,
-                              guid, hostip,
-                              params, server_params)
+                if type == 'workload_network'
+                  log("TODO: add workload network(s) #{guid}")
+                else
+                  if guid and !guid.empty? and guid.to_s != '-1'
+                    log("Configuring #{type} = #{guid}")
+
+                    if type == 'storage_network'
+                      storage_network_guid = guid
+                    end
+
+                    vswitch_resources = build_vswitch(server_cert, index,
+                                                      guid, hostip,
+                                                      params, server_params)
+                    # Should be exactly one vswitch in response
+                    vswitch_title = vswitch_resources['esx_vswitch'].keys[0]
+                    vswitch = vswitch_resources['esx_vswitch'][vswitch_title]
+                    vswitch['require'] = next_require
+
+                    # Set next require to this vswitch so they are all
+                    # ordered properly
+                    next_require = "Esx_vswitch[#{vswitch_title}]"
+                    
+                    log("Built vswitch resources = #{vswitch_resources.to_yaml}")
+
+                    # merge these in
+                    resource_hash['esx_vswitch'] = (resource_hash['esx_vswitch'] || {}).merge(vswitch_resources['esx_vswitch'])
+                    resource_hash['esx_portgroup'] = (resource_hash['esx_portgroup'] || {}).merge(vswitch_resources['esx_portgroup'])
+                  end
                 end
               end
+
+              # Connect datastore if we have both storage and a storage network
+              if storage_network_guid
+                (find_related_components('STORAGE', server_component) || []).each do |storage_component|
+                  storage_cert = storage_component['id']
+                  storage_creds = ASM::Util.parse_device_config(storage_cert)
+                  storage_hash = ASM::Util.build_component_configuration(storage_component)
+                  (storage_hash['equallogic::create_vol_chap_user_access'] || {}).each do |storage_title, storage_params|
+                    resource_hash['asm::datastore'] = (resource_hash['asm::datastore'] || {})
+                    resource_hash['asm::datastore']["#{storage_title}-#{hostip}"] = {
+                      'data_center' => params['datacenter'],
+                      'datastore' => params['datastore'],
+                      'cluster' => params['cluster'],
+                      'ensure' => 'present',
+                      'esxhost' => hostip,
+                      'esxusername' => 'root',
+                      'esxpassword' => server_params['admin_password'],
+                      'iscsi_target_ip' => storage_creds[:host],
+                      'chapname' => storage_params['chap_user_name'],
+                      'chapsecret' => storage_params['passwd'],
+                      'require' => "Asm::Host[#{server_cert}]"
+                    }
+                  end
+                end
+              end
+
             end
           end
         end
@@ -488,6 +538,7 @@ class ASM::ServiceDeployment
 
     # TODO: title is not set correctly, needs to come from asm::server
     # section
+    hostname = nil
     resource_hash['asm::vm'].each do |title, params|
       ['cluster', 'datacenter', 'datastore'].each do |key|
         params[key] = cluster_params[key]
@@ -505,18 +556,29 @@ class ASM::ServiceDeployment
         params['os_type'] = 'linux'
       end
       params['hostname'] = server_params['os_host_name']
+      hostname ||= params['hostname']
       params['vcenter_username'] = cluster_deviceconf[:user]
       params['vcenter_password'] = cluster_deviceconf[:password]
       params['vcenter_server'] = cluster_deviceconf[:host]
       params['vcenter_options'] = { 'insecure' => true }
       params['ensure'] = 'present'
     end
-    
-    if resource_hash.delete('asm::server')
-      log("TODO: implement VM O/S deploy")
-    end
-    
+
+    asm_server_params = resource_hash.delete('asm::server')
+    log("Creating VM #{hostname}")
     process_generic(component['id'], resource_hash, 'apply')
+
+    # TODO: Puppet module does not power it on first time.
+    log("Powering on #{hostname}")
+    process_generic(component['id'], resource_hash, 'apply')
+
+    if asm_server_params
+      uuid = ASM::Util.find_vm_uuid(hostname)
+      log("Found UUID #{uuid} for #{hostname}")
+      server_resource_hash = { 'asm::server' => asm_server_params }
+      log("Initiating O/S install for VM #{hostname}")
+      process_generic(component['id'], server_resource_hash, 'apply')
+    end
   end
 
   def process_service(component)
