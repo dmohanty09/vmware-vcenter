@@ -351,7 +351,6 @@ class ASM::ServiceDeployment
       'host' => hostip,
       'vlanid' => network['vlanId'],
       'transport' => 'Transport[vcenter]',
-      'require' => "Esx_vswitch[#{hostip}:#{vswitch}]",
     }
   end
 
@@ -381,12 +380,20 @@ class ASM::ServiceDeployment
     }
 
     portgrouptype = 'VMkernel'
+    next_require = "Esx_vswitch[#{hostip}:#{vswitch_name}]"
     if index == 3
       # iSCSI network
+      # NOTE: We have to make sure the ISCSI1 requires ISCSI0 so that
+      # they are created in the "right" order -- the order that will 
+      # give ISCSI0 vmk2 and ISCSI1 vmk3 vmknics. The datastore
+      # confiugration relies on that.
       ['ISCSI0', 'ISCSI1'].each_with_index do |portgroup_name, index|
         portgroup = build_portgroup(vswitch_name, path, hostip, portgroup_name,
                                     network, portgrouptype, [ nics[index] ])
-        ret['esx_portgroup'][portgroup_name] = portgroup
+        portgroup['require'] = next_require
+        portgroup_title = "#{hostip}:#{portgroup_name}"
+        ret['esx_portgroup'][portgroup_title] = portgroup
+        next_require = "Esx_portgroup[#{portgroup_title}]"
       end
     else
       if index == 2
@@ -395,7 +402,8 @@ class ASM::ServiceDeployment
       end
       portgroup = build_portgroup(vswitch_name, path, hostip, network['name'], 
                                   network, portgrouptype, nics)
-      ret['esx_portgroup'][network['name']] = portgroup
+      portgroup['require'] = next_require
+      ret['esx_portgroup']["#{hostip}:#{network['name']}"] = portgroup
     end
     ret
   end
@@ -497,7 +505,7 @@ class ASM::ServiceDeployment
                   storage_hash = ASM::Util.build_component_configuration(storage_component)
                   (storage_hash['equallogic::create_vol_chap_user_access'] || {}).each do |storage_title, storage_params|
                     resource_hash['asm::datastore'] = (resource_hash['asm::datastore'] || {})
-                    resource_hash['asm::datastore']["#{storage_title}-#{hostip}"] = {
+                    resource_hash['asm::datastore']["#{hostip}:#{storage_title}"] = {
                       'data_center' => params['datacenter'],
                       'datastore' => params['datastore'],
                       'cluster' => params['cluster'],
