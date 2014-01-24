@@ -1,10 +1,11 @@
+require 'io/wait'
+require 'json'
+require 'open3'
 require 'ostruct'
 require 'rest_client'
-require 'uri'
-require 'open3'
-require 'io/wait'
-require 'timeout'
 require 'socket'
+require 'timeout'
+require 'uri'
 
 module ASM
   module Util
