@@ -55,36 +55,55 @@ module ASM
     # VM Provisioned size :83.3303845431656
     # VMNicNetworkMapping=1:HypMan28|*
     def self.find_vm_uuid(cluster_device, vmname)
+      # Have to use env command because jruby popen3 does not accept
+      # optional environment hash
       env = { 'PERL_LWP_SSL_VERIFY_HOSTNAME' => '0' }
       cmd = 'perl'
       args = [ '-I/usr/lib/vmware-vcli/apps', 
                '/opt/Dell/scripts/getVmInfo.pl',
-              '--url', "https://#{cluster_device[:host]}/sdk/vimService",
-              '--username', cluster_device[:user],
-              '--password', cluster_device[:password],
-              '--vmName', vmname ]
-      result = {}
-      Open3.popen3(env, cmd, *args) do |stdin, stdout, stderr, wait_thr|
-        result['pid']         = wait_thr[:pid]
-        result['exit_status'] = wait_thr.value.exitstatus
-        result['stdout']      = stdout.read
-        result['stderr']      = stderr.read
+               '--url', "https://#{cluster_device[:host]}/sdk/vimService",
+               '--username', cluster_device[:user],
+               '--password', cluster_device[:password],
+               '--vmName', vmname,
+             ]
+
+      stdout = nil
+      IO.popen([ env, cmd, *args]) do |io| 
+        stdout = io.read
       end
 
-      raise(Exception, "Failed to execute getVmInfo.pl") unless result['exit_status'] == 0
+      raise(Exception, "Failed to execute getVmInfo.pl") unless stdout
 
       # Parse output into key-value pairs
       result_hash = {}
-      result['stdout'].lines.each do |line|
+      stdout.lines.each do |line|
         kv = line.split(/:/, 2).map(&:strip)
         if kv and kv.size == 2
           result_hash[kv[0]] = kv[1]
         end
       end
 
+      raise(Exception, "Failed to find UUID from output: #{stdout}") unless result_hash['VM uuid']
+
       result_hash['VM uuid']
     end
 
+    def self.find_equallogic_iscsi_ip(cert_name)
+      cmd = 'sudo'
+      args = [ 'puppet', 'facts', 'find', cert_name,
+               '--terminus', 'yaml', 
+               '--clientyamldir=/var/opt/lib/pe-puppet/yaml', ]
+      result = self.run_command_with_args(cmd, *args)
+      raise(Exception, "Failed to fetch puppet facts for #{cert_name}") unless result['exit_status'] == 0
+      facts = (JSON.parse(result['stdout']) || {})['values']
+      general = JSON.parse(facts['General Settings'])
+      unless general['IP Address']
+        raise(Exception, "Could not find iSCSI IP address for #{cert_name}")
+      else
+        general['IP Address']
+      end
+    end
+    
     def self.first_host_ip
       Socket.ip_address_list.detect do |intf| 
         intf.ipv4? and !intf.ipv4_loopback? and !intf.ipv4_multicast?
@@ -158,6 +177,19 @@ module ASM
     def self.run_command_simple(cmd)
       result = {}
       Open3.popen3(cmd) do |stdin, stdout, stderr, wait_thr|
+        result['pid']         = wait_thr[:pid]
+        result['exit_status'] = wait_thr.value.exitstatus
+        result['stdout']      = stdout.read
+        result['stderr']      = stderr.read
+      end
+      result
+    end
+
+    def self.run_command_with_args(cmd, *args)
+      result = {}
+      # WARNING: jruby-1.7.8 popen3 does not accept optional env argument
+      # http://jira.codehaus.org/browse/JRUBY-6966
+      Open3.popen3(cmd, *args) do |stdin, stdout, stderr, wait_thr|
         result['pid']         = wait_thr[:pid]
         result['exit_status'] = wait_thr.value.exitstatus
         result['stdout']      = stdout.read
