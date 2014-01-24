@@ -453,7 +453,7 @@ class ASM::ServiceDeployment
               resource_hash['asm::vswitch'] ||= {}
 
               next_require = "Asm::Host[#{server_cert}]"
-              storage_network_guid = nil
+              storage_network_require = nil
               [ 'hypervisor_network', 'vmotion_network', 'workload_network', 'storage_network' ].each_with_index do | type, index |
                 guid = network_params[type]
                 if type == 'workload_network'
@@ -461,10 +461,6 @@ class ASM::ServiceDeployment
                 else
                   if guid and !guid.empty? and guid.to_s != '-1'
                     log("Configuring #{type} = #{guid}")
-
-                    if type == 'storage_network'
-                      storage_network_guid = guid
-                    end
 
                     vswitch_resources = build_vswitch(server_cert, index,
                                                       guid, hostip,
@@ -477,6 +473,12 @@ class ASM::ServiceDeployment
                     # Set next require to this vswitch so they are all
                     # ordered properly
                     next_require = "Esx_vswitch[#{vswitch_title}]"
+                    if type == 'storage_network'
+                      storage_network_require = []
+                      vswitch_resources['esx_portgroup'].each do |portgroupname, portgroupparams|
+                        storage_network_require.push("Esx_portgroup[#{portgroupname}]")
+                      end
+                    end
                     
                     log("Built vswitch resources = #{vswitch_resources.to_yaml}")
 
@@ -488,7 +490,7 @@ class ASM::ServiceDeployment
               end
 
               # Connect datastore if we have both storage and a storage network
-              if storage_network_guid
+              if storage_network_require
                 (find_related_components('STORAGE', server_component) || []).each do |storage_component|
                   storage_cert = storage_component['id']
                   storage_creds = ASM::Util.parse_device_config(storage_cert)
@@ -506,7 +508,7 @@ class ASM::ServiceDeployment
                       'iscsi_target_ip' => storage_creds[:host],
                       'chapname' => storage_params['chap_user_name'],
                       'chapsecret' => storage_params['passwd'],
-                      'require' => "Asm::Host[#{server_cert}]"
+                      'require' => storage_network_require,
                     }
                   end
                 end
