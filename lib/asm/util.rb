@@ -14,9 +14,8 @@ module ASM
     NETWORKS_RA_URL='http://localhost:9080/VirtualServices/Network'
     # TODO: give razor user access to this directory
     DEVICE_CONF_DIR='/etc/puppetlabs/puppet/devices'
-
     # See spec/fixtures/asm_server_m620.json for sample response
-    # 
+    #
     # cert_name is in format devicetype-servicetag
     def self.fetch_server_inventory(cert_name)
       service_tag_lower = /^[^-]+-(.*)$/.match(cert_name)[1]
@@ -59,16 +58,16 @@ module ASM
       # optional environment hash
       env = { 'PERL_LWP_SSL_VERIFY_HOSTNAME' => '0' }
       cmd = 'perl'
-      args = [ '-I/usr/lib/vmware-vcli/apps', 
-               '/opt/Dell/scripts/getVmInfo.pl',
-               '--url', "https://#{cluster_device[:host]}/sdk/vimService",
-               '--username', cluster_device[:user],
-               '--password', cluster_device[:password],
-               '--vmName', vmname,
-             ]
+      args = [ '-I/usr/lib/vmware-vcli/apps',
+        '/opt/Dell/scripts/getVmInfo.pl',
+        '--url', "https://#{cluster_device[:host]}/sdk/vimService",
+        '--username', cluster_device[:user],
+        '--password', cluster_device[:password],
+        '--vmName', vmname,
+      ]
 
       stdout = nil
-      IO.popen([ env, cmd, *args]) do |io| 
+      IO.popen([ env, cmd, *args]) do |io|
         stdout = io.read
       end
 
@@ -91,8 +90,8 @@ module ASM
     def self.find_equallogic_iscsi_ip(cert_name)
       cmd = 'sudo'
       args = [ 'puppet', 'facts', 'find', cert_name,
-               '--terminus', 'yaml', 
-               '--clientyamldir=/var/opt/lib/pe-puppet/yaml', ]
+        '--terminus', 'yaml',
+        '--clientyamldir=/var/opt/lib/pe-puppet/yaml', ]
       result = self.run_command_with_args(cmd, *args)
       raise(Exception, "Failed to fetch puppet facts for #{cert_name}") unless result['exit_status'] == 0
       facts = (JSON.parse(result['stdout']) || {})['values']
@@ -103,9 +102,9 @@ module ASM
         general['IP Address']
       end
     end
-    
+
     def self.first_host_ip
-      Socket.ip_address_list.detect do |intf| 
+      Socket.ip_address_list.detect do |intf|
         intf.ipv4? and !intf.ipv4_loopback? and !intf.ipv4_multicast?
       end.ip_address
     end
@@ -120,11 +119,11 @@ module ASM
       { :host => host,
         :user => user,
         :password => password,
+        :url => uri,
         :conf_file_data => conf_file_data }
     end
 
-
-    # Parse puppet device config files, code cribbed from 
+    # Parse puppet device config files, code cribbed from
     # Puppet::Util::NetworkDevice::Config
     def self.parse_device_config_file(file)
       begin
@@ -199,10 +198,12 @@ module ASM
     end
 
     def self.run_command(cmd, outfile)
-      if File.exists?(outfile)
-        raise(Exception, "Cowardly refusing to overwrite #{outfile}")
-      end
-      File.open(outfile, 'w') do |fh|
+      # Need to update the content of the file while creating
+      # multiple manifest files
+      #if File.exists?(outfile)
+      #  raise(Exception, "Cowardly refusing to overwrite #{outfile}")
+      #end
+      File.open(outfile, 'a') do |fh|
         Open3.popen3(cmd) do |stdin, stdout, stderr, wait_thr|
           stdin.close
 
@@ -239,16 +240,16 @@ module ASM
           exceptions = Array(exceptions)
 
           if ! exceptions.empty? and (
-             exceptions.include?(key = e.class) or
-             exceptions.include?(key = key.name.to_s) or
-             exceptions.include?(key = key.to_sym))
-          then
+          exceptions.include?(key = e.class) or
+          exceptions.include?(key = key.name.to_s) or
+          exceptions.include?(key = key.to_sym))
+            then
             logger.info("Caught exception #{e.class}: #{e}")
             failures += 1
             old_sleep_time = sleep_time
             sleep_time     = (((2 ** failures) -1) * 0.1)
             if max_sleep and (sleep_time > max_sleep)
-              sleep old_sleep_time 
+              sleep old_sleep_time
             else
               sleep sleep_time
             end
@@ -388,6 +389,6 @@ module ASM
         end
       end
     end
-    
+
   end
 end

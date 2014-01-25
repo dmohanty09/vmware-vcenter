@@ -10,10 +10,16 @@ require 'yaml'
 require 'set'
 require 'asm/GetWWPN'
 require 'fileutils'
+require 'asm/get_switch_information'
+
+$serverhash = Hash.new
+$switchhash = Hash.new
+$server_vlan_info = Hash.new
+$configured_switches = Array.new
 
 class ASM::ServiceDeployment
-
   class CommandException < Exception; end
+
   class SyncException < Exception; end
 
   def initialize(id)
@@ -53,6 +59,8 @@ class ASM::ServiceDeployment
       # of a given component type in the future, e.g. VSwitch configuration
       # information is contained in the server component type data
       @components_by_type = components_by_type(service_deployment)
+      $configured_switches = get_all_switches()
+      logger.debug("Switches configured in the environment #{$configured_switches}")
       process_components()
     rescue Exception => e
       File.open(File.join(deployment_dir, "exception.log"), 'w') do |fh|
@@ -121,55 +129,54 @@ class ASM::ServiceDeployment
       fh.write(config.to_yaml)
     end
     if ( cert_name =~ /(.*)[C|c]ompellent(.*)/ )
-	  wwpnSet = process_compellent
+      wwpnSet = process_compellent
 
-	  myfile = File.open(resource_file, "r+")
+      myfile = File.open(resource_file, "r+")
 
-          time = Time.now.to_i
-          tempfileloc = "/tmp/temp#{time}.txt"
-	  mytempfile = File.open(tempfileloc, "w")
-	  
-	  myfile.each do |line|
-		if ( line =~ /(.*)wwn\:(.*)/ )
-		  data = line.scan(/wwn\:(.*)/)
-		  #data = data.gsub!(/\"/, "")
-		  temp = data[0]
-		  temp1 = temp[0]
-	 	  temp2=temp1.strip
-		  wwpnstring = temp2.split (',')
-		  #for each_wwpnstring in wwpnstring
-		  wwpnstring.each do | each_wwpnstring |
-    			if each_wwpnstring.length > 0 
-          	  	  wwpnSet.add ("#{each_wwpnstring}")
-                        end
-		  end
-		else
-		  mytempfile.puts ("#{line}")
-		end
-	  end
+      time = Time.now.to_i
+      tempfileloc = "/tmp/temp#{time}.txt"
+      mytempfile = File.open(tempfileloc, "w")
 
-	  myfile.close
-	  mytempfile.close
+      myfile.each do |line|
+        if ( line =~ /(.*)wwn\:(.*)/ )
+          data = line.scan(/wwn\:(.*)/)
+          #data = data.gsub!(/\"/, "")
+          temp = data[0]
+          temp1 = temp[0]
+          temp2=temp1.strip
+          wwpnstring = temp2.split (',')
+          #for each_wwpnstring in wwpnstring
+          wwpnstring.each do | each_wwpnstring |
+            if each_wwpnstring.length > 0
+              wwpnSet.add ("#{each_wwpnstring}")
+            end
+          end
+        else
+          mytempfile.puts ("#{line}")
+        end
+      end
 
+      myfile.close
+      mytempfile.close
 
-	  wwpnSet.each do |wwpndata|
-		wwpndata = wwpndata.gsub(/:/, '')
-		if wwpn.to_s.strip.length == 0
-		  wwpn = "#{wwpndata}"
-		else
-                  if wwpndata.to_s.strip.length > 4
-		    wwpn.concat ( ",#{wwpndata}")
-                  end
-		end
-	  end
-     
-	  File.open(tempfileloc,"a") do |tempfile|
-	    tempfile.puts ("    wwn: '#{wwpn}'")
-	    tempfile.close
-	  end
-	  FileUtils.mv(tempfileloc, resource_file) 
+      wwpnSet.each do |wwpndata|
+        wwpndata = wwpndata.gsub(/:/, '')
+        if wwpn.to_s.strip.length == 0
+          wwpn = "#{wwpndata}"
+        else
+          if wwpndata.to_s.strip.length > 4
+            wwpn.concat ( ",#{wwpndata}")
+          end
+        end
+      end
+
+      File.open(tempfileloc,"a") do |tempfile|
+        tempfile.puts ("    wwn: '#{wwpn}'")
+        tempfile.close
+      end
+      FileUtils.mv(tempfileloc, resource_file)
     end
-        
+
     override_opt = override ? "--always-override " : ""
     cmd = "sudo puppet asm process_node --debug --trace --filename #{resource_file} --run_type #{puppet_run_type} #{override_opt}#{cert_name}"
     if @debug
@@ -184,6 +191,7 @@ class ASM::ServiceDeployment
           while(yet_to_run_command)
             if ASM.block_certname(cert_name)
               yet_to_run_command = false
+              logger.debug "Executing the command"
               ASM::Util.run_command(cmd, puppet_out)
             else
               sleep 2
@@ -205,81 +213,81 @@ class ASM::ServiceDeployment
       results = {}
       found_result_line = false
       File.readlines(puppet_out).each do |line|
-       if line =~ /Results: For (\d+) resources\. (\d+) from our run failed\. (\d+) not from our run failed\. (\d+) updated successfully\./
-         results = {'num_resources' => $1, 'num_failures' => $2, 'other_failures' => $3, 'num_updates' => $4}
-         found_result_line = true
-         break
-         if line =~ /Puppet catalog compile failed/
-           raise("Could not compile catalog")
-         end
-       end
+        if line =~ /Results: For (\d+) resources\. (\d+) from our run failed\. (\d+) not from our run failed\. (\d+) updated successfully\./
+          results = {'num_resources' => $1, 'num_failures' => $2, 'other_failures' => $3, 'num_updates' => $4}
+          found_result_line = true
+          break
+          if line =~ /Puppet catalog compile failed/
+            raise("Could not compile catalog")
+          end
+        end
       end
       raise(Exception, "Did not find result line in file #{puppet_out}") unless found_result_line
       results
     end
   end
 
-   def process_compellent()
+  def process_compellent()
     log("Processing server component for compellent")
 
-	wwpnSet = Set.new
+    wwpnSet = Set.new
     if components = @components_by_type['SERVER']
-    components.collect do |comp|  
-      cert_name = comp['id']
-      
-      resource_hash = {}
-      deviceconf = nil
-      inventory = nil
-      resource_hash = ASM::Util.build_component_configuration(comp)
-      if resource_hash['asm::idrac']
-         deviceconf ||= ASM::Util.parse_device_config(cert_name)
-         inventory  ||= ASM::Util.fetch_server_inventory(cert_name)
-      end
-      
-      (resource_hash['asm::server'] || {}).each do |title, params|
-         if params['rule_number']
+      components.collect do |comp|
+        cert_name = comp['id']
+
+        resource_hash = {}
+        deviceconf = nil
+        inventory = nil
+        resource_hash = ASM::Util.build_component_configuration(comp)
+        if resource_hash['asm::idrac']
+          deviceconf ||= ASM::Util.parse_device_config(cert_name)
+          inventory  ||= ASM::Util.fetch_server_inventory(cert_name)
+        end
+
+        (resource_hash['asm::server'] || {}).each do |title, params|
+          if params['rule_number']
             raise(Exception, "Did not expect rule_number in asm::server")
-         else
-           params['rule_number'] = rule_number
-         end
-      
-         # In the case of Dell servers the title should contain 
-         # the service tag and we retrieve it here
-         service_tag = cert_name_to_service_tag(title)
-         if service_tag
+          else
+            params['rule_number'] = rule_number
+          end
+
+          # In the case of Dell servers the title should contain
+          # the service tag and we retrieve it here
+          service_tag = cert_name_to_service_tag(title)
+          if service_tag
             params['serial_number'] = service_tag
-         else
+          else
             params['serial_number'] = title
-         end
-      
-        params['policy_name'] = "policy-#{params['serial_number']}-#{@id}"
-            
-        # TODO: if present this should go in kickstart
-        params.delete('custom_script')
-      end
-      
-	  ## get list off WWPN 
+          end
 
-      (resource_hash['asm::idrac'] || {}).each do |title, params|
-		 ipaddress = deviceconf[:host]
-		 username  = deviceconf[:user]
-		 password  = deviceconf[:password]
-		 getWWPNData = GetWWPN.new(ipaddress, username, password)
-		 getWWPNd = getWWPNData.getwwpn
-		 res = getWWPNd.split(",")
-                 res.each do |setdata|
-                   wwpnSet.add(setdata)
-                 end
+          params['policy_name'] = "policy-#{params['serial_number']}-#{@id}"
 
+          # TODO: if present this should go in kickstart
+          params.delete('custom_script')
+        end
+
+        ## get list off WWPN
+
+        (resource_hash['asm::idrac'] || {}).each do |title, params|
+          ipaddress = deviceconf[:host]
+          username  = deviceconf[:user]
+          password  = deviceconf[:password]
+          getWWPNData = GetWWPN.new(ipaddress, username, password)
+          getWWPNd = getWWPNData.getwwpn
+          res = getWWPNd.split(",")
+          res.each do |setdata|
+            wwpnSet.add(setdata)
+          end
+
+        end
       end
     end
-    end
-	#logger.info("[DEBUG MODE] #{wwpnSet}-------------sanjeev2222222") 
-	return wwpnSet
+    #logger.info("[DEBUG MODE] #{wwpnSet}-------------sanjeev2222222")
+    return wwpnSet
   end
 
   # Currently having problems with some resource data for host / vswith
-  # when running through "puppet asm". This method provides a 
+  # when running through "puppet asm". This method provides a
   # short-term workaround which is to generate a puppet manifest
   # and directly apply that
   def process_generic_direct_apply(cert_name, config)
@@ -317,23 +325,254 @@ class ASM::ServiceDeployment
     process_generic(component['id'], config, 'device')
   end
 
+  def configure_tor(server_cert_name)
+    device_conf = nil
+    inv = nil
+    $configured_switches.each do |certname|
+      switchpropertyhash = {}
+      switchpropertyhash = Hash.new
+      device_conf ||= ASM::Util.parse_device_config(certname)
+      puts "******* In process_tor device_conf is #{device_conf} ***********\n"
+      torip = device_conf[:host]
+      torusername = device_conf[:user]
+      torpassword = device_conf['password']
+      torurl = device_conf['url']
+      logger.debug "****** #{device_conf} ******"
+      logger.debug "torip :: #{torip} torusername :: #{torusername} torpassword :: #{torpassword}\n"
+      logger.debug "tor url :: #{torurl}\n"
+      switchpropertyhash['connection_url'] = torurl
+      if certname =~ /dell_ftos/
+        switchpropertyhash['device_type'] = "dell_ftos"
+      else
+        switchpropertyhash['device_type'] = "dell_powerconnect"
+      end
+      logger.debug "********* switch property hash is #{switchpropertyhash} *************\n"
+      $switchhash["#{certname}"] = switchpropertyhash
+      logger.debug "********* switch hash is #{$switchhash} *************\n"
+    end
+    get_server_inventory(server_cert_name)
+    logger.debug "******** In process_tor after getServerInventory serverhash is #{$serverhash} **********\n"
+    switchinfoobj = Get_switch_information.new($serverhash,$switchhash)
+    switchportdetail = switchinfoobj.get_info(logger)
+    logger.debug "******** In process_tor switchportdetail :: #{switchportdetail} *********\n"
+    tagged_vlaninfo = $server_vlan_info["#{server_cert_name}_taggedvlanlist"]
+    untagged_vlaninfo = $server_vlan_info["#{server_cert_name}_untaggedvlanlist"]
+    logger.debug "In configure_tor tagged vlan list found #{tagged_vlaninfo}"
+    logger.debug "In configure_tor untagged vlan list found #{untagged_vlaninfo}"
+    resource_hash = Hash.new
+    switchportdetail.each do |switchportdetailhash|
+      switchportdetailhash.each do |macaddress,intfhash|
+        logger.debug "macaddress :: #{macaddress}    intfhash :: #{intfhash}"
+        switchcertname = intfhash[0][0]
+        interface = intfhash[0][1][0]
+        interfaces = get_interfaces(interface)
+        portchannels = get_portchannel(interface)
+        logger.debug "switchcertname :: #{switchcertname} interface :: #{interface}"
+        tagged_vlaninfo.each do |vlanid|
+          logger.debug "vlanid :: #{vlanid}"
+          if switchcertname =~ /dell_ftos/
+            switch_resource_type = "asm::force10"
+            resource_hash[switch_resource_type] = {
+              "#{vlanid}" => {
+              'vlan_name' => '',
+              'desc' => '',
+              'tagged_tengigabitethernet' => interfaces.strip,
+              'tagged_portchannel' => portchannels.strip,
+              'mtu' => 1500,
+              }
+            }
+            logger.debug("*** resource_hash is #{resource_hash} ******")
+          elsif switchcertname =~ /dell_powerconnect/
+            switch_resource_type = "asm::powerconnect"
+            resource_hash[switch_resource_type] = {
+              "#{vlanid}" => {
+              'vlan_name' => '',
+              'portchannel' => portchannels.strip,
+              'interface' => interfaces.strip,
+              'mode' => 'general'
+              }
+            }
+          elsif switchcertname =~ /dell_iom/
+            switch_resource_type = "asm::iom"
+
+          else
+            logger.debug "Non-supported switch type"
+            return
+          end
+          process_generic(switchcertname, resource_hash, 'device')
+        end
+        untagged_vlaninfo.each do |vlanid|
+          logger.debug "vlanid :: #{vlanid}"
+          if switchcertname =~ /dell_ftos/
+            switch_resource_type = "asm::force10"
+            resource_hash[switch_resource_type] = {
+              "#{vlanid}" => {
+              'vlan_name' => '',
+              'desc' => '',
+              'untagged_tengigabitethernet' => interfaces.strip,
+              'mtu' => 1500,
+              }
+            }
+            logger.debug("*** resource_hash is #{resource_hash} ******")
+          elsif switchcertname =~ /dell_iom/
+            switch_resource_type = "asm::iom"
+
+          else
+            logger.debug "Non-supported switch type"
+            return
+          end
+          process_generic(switchcertname, resource_hash, 'device')
+        end
+      end
+    end
+
+  end
+
+  def get_interfaces(interfaceList)
+    logger.debug "Entering get_interfaces #{interfaceList}"
+    interfacelist = ""
+    interfaceList.split(",").each do |intf|
+      if intf =~ /^Te/
+        intf = intf.gsub(/Te/, "")
+        interfacelist.concat("#{intf} ")
+      end
+      if intf =~ /^Gi/
+        interfacelist.concat("#{intf} ")
+      end
+    end
+    logger.debug "In get_interfaces #{interfacelist}"
+    return interfacelist
+  end
+
+  def get_portchannel(interfaceList)
+    logger.debug "Entering get_portchannel#{interfaceList}"
+    portchannellist = ""
+    interfaceList.split(",").each do |intf|
+      if intf =~ /^\d+/
+        portchannellist.concat("#{intf} ")
+      end
+    end
+    return portchannellist
+  end
+
   # If certificate name is of the form bladeserver-SERVICETAG
   # or rackserver-SERVICETAG, return the service tag;
   # otherwise return the certificate name
   def cert_name_to_service_tag(title)
     match = /^(bladeserver|rackserver)-(.*)$/.match(title)
     if match
-       match[2].upcase
+      match[2].upcase
     else
       nil
     end
+  end
+
+  def get_server_inventory(certname)
+    serverpropertyhash = {}
+    serverpropertyhash = Hash.new
+    puts "******** In getServerInventory certname is #{certname} **********\n"
+    resourcehash = {}
+    device_conf = nil
+    inv = nil
+    device_conf ||= ASM::Util.parse_device_config(certname)
+    inv  ||= ASM::Util.fetch_server_inventory(certname)
+    logger.debug "******** In getServerInventory device_conf is #{device_conf}************\n"
+    logger.debug "******** In getServerInventory inv is #{inv} **************\n"
+    dracipaddress = device_conf[:host]
+    dracusername = device_conf[:user]
+    dracpassword = device_conf[:password]
+    servicetag = inv['serviceTag']
+    model = inv['model'].split(' ').last
+    logger.debug "dracipaddress :: #{dracipaddress} dracusername :: #{dracusername} dracpassword :: #{dracpassword}\n"
+    logger.debug "servicetag :: #{servicetag} model :: #{model}\n"
+    if (model =~ /R620/ || model =~ /R720/)
+      serverpropertyhash['bladetype'] = "rack"
+    else
+      serverpropertyhash['bladetype'] = "blade"
+    end
+    serverpropertyhash['servermodel'] = model
+    serverpropertyhash['idrac_ip'] = dracipaddress
+    serverpropertyhash['idrac_username'] =  dracusername
+    serverpropertyhash['idrac_password'] = dracpassword
+    serverpropertyhash['mac_addresses'] = get_server_macaddress(dracipaddress,dracusername,dracpassword,certname)
+    logger.debug "******* In getServerInventory server property hash is #{serverpropertyhash} ***********\n"
+    $serverhash["#{servicetag}"] = serverpropertyhash
+    logger.debug "********* In getServerInventory server Hash is #{$serverhash} **************\n"
+    return $serverhash
+  end
+
+  def get_all_switches()
+    switchList = Array.new
+    cmd = "sudo puppet cert list --all"
+    puppet_out = File.join(deployment_dir, "puppetcert.out")
+    ASM::Util.run_command(cmd, puppet_out)
+    resp = File.read(puppet_out)
+    resp.split("\n").each do |line|
+      if line =~ /dell_ftos/
+        logger.debug "Found dell ftos certificate"
+        res = line.to_s.strip.split(' ')
+        switchCert = res[1]
+        switchCert = switchCert.gsub(/\"/, "")
+        puts "FTOS switch certificate is #{switchCert}"
+        switchList.push(switchCert)
+      end
+      if line =~ /dell_powerconnect/
+        logger.debug "Found dell powerconnect certificate"
+        res = line.to_s.strip.split(' ')
+        switchCert = res[1]
+        switchCert = switchCert.gsub(/\"/, "")
+        puts "Powerconnect switch certificate is #{switchCert}"
+        switchList.push(switchCert)
+      end
+    end
+    logger.debug "Switch certificate name list is #{switchList}"
+    return switchList
+  end
+
+  def get_server_macaddress(dracipaddress,dracusername,dracpassword,certname)
+    macAddressList = Array.new
+    cmd = "wsman enumerate http://schemas.dmtf.org/wbem/wscim/1/cim-schema/2/root/dcim/DCIM_NICView -h  #{dracipaddress}  -V -v -c dummy.cert -P 443 -u #{dracusername} -p #{dracpassword} -j utf-8 -y basic"
+    puppet_out = File.join(deployment_dir, "servermac.out")
+    ASM::Util.run_command(cmd, puppet_out)
+    resp = File.read(puppet_out)
+    if certname =~ /rackserver/
+      macAddress = ""
+      resp.split("\n").each do |line|
+        line = line.to_s
+        if line =~ /\<n1:CurrentMACAddress\>(\S+)\<\/n1:CurrentMACAddress\>/
+          macAddress = $1
+        end
+        if line =~ /\<n1:FQDD\>(\S+)\<\/n1:FQDD\>/
+          nicName = $1
+          if (nicName == "NIC.Slot.2-1-1" || nicName == "NIC.Slot.2-2-1")
+            macAddressList.push(macAddress)
+          end
+        end
+      end
+    else
+      macAddress = ""
+      resp.split("\n").each do |line|
+        line = line.to_s
+        if line =~ /\<n1:CurrentMACAddress\>(\S+)\<\/n1:CurrentMACAddress\>/
+          macAddress = $1
+        end
+        if line =~ /\<n1:FQDD\>(\S+)\<\/n1:FQDD\>/
+          nicName = $1
+          if (nicName == "NIC.Integrated.1-1-1" || nicName == "NIC.Integrated.1-2-1")
+            macAddressList.push(macAddress)
+          end
+        end
+      end
+    end
+    logger.debug "********* MAC Address List is #{macAddressList} **************\n"
+    return macAddressList
   end
 
   def process_server(component)
     log("Processing server component: #{component['id']}")
     cert_name = component['id']
 
-    # In the case of Dell servers the cert_name should contain 
+    # In the case of Dell servers the cert_name should contain
     # the service tag and we retrieve it here
     serial_number = cert_name_to_service_tag(cert_name) || cert_name
 
@@ -346,6 +585,10 @@ class ASM::ServiceDeployment
       inventory  ||= ASM::Util.fetch_server_inventory(cert_name)
     end
 
+    logger.debug "Configuring ToR configuration for server #{cert_name}"
+    get_server_networks(component,cert_name)
+    configure_tor(cert_name)
+
     (resource_hash['asm::server'] || {}).each do |title, params|
       if params['rule_number']
         raise(Exception, "Did not expect rule_number in asm::server")
@@ -356,14 +599,13 @@ class ASM::ServiceDeployment
       params['serial_number'] = serial_number
 
       # Razor policies currently can't be deleted, only disabled. So we
-      # need to make sure we use a unique policy name so that we can 
+      # need to make sure we use a unique policy name so that we can
       # disable old policies and assign new ones
       params['policy_name'] = "policy-#{params['serial_number']}-#{@id}"
-      
+
       # TODO: if present this should go in kickstart
       params.delete('custom_script')
     end
-
 
     (resource_hash['asm::idrac'] || {}).each do |title, params|
       # Attempt to determine this machine's IP address, which
@@ -383,7 +625,7 @@ class ASM::ServiceDeployment
       end
 
     end
-    
+
     # Network settings (vswitch config) is done in cluster swim lane
     resource_hash.delete('asm::esxiscsiconfig')
 
@@ -394,15 +636,15 @@ class ASM::ServiceDeployment
         policy = get('policies', node['policy']['name'])
         razor_params = resource_hash['asm::server'][cert_name]
         if policy &&
-            (policy['repo'] || {})['name'] == razor_params['razor_image'] &&
-            (policy['installer'] || {})['name'] == razor_params['os_image_type']
+        (policy['repo'] || {})['name'] == razor_params['razor_image'] &&
+        (policy['installer'] || {})['name'] == razor_params['os_image_type']
           skip_deployment = true
         end
       end
     rescue Timeout::Error
       skip_deployment = nil
     end
-    
+
     if skip_deployment
       # In theory the puppet razor and idrac modules should be idempotent
       # and we could call process_generic without affecting them if they
@@ -425,7 +667,7 @@ class ASM::ServiceDeployment
   #
   def rule_number
     currtime = Integer(Time.now.strftime("%s"))
-    # Using the unix epoch time times 100 is too big for razor's 
+    # Using the unix epoch time times 100 is too big for razor's
     # rule_number, it must fit in signed int. So we subtract off
     # the time at Jan 1, 2014
     offset = 1388534400 # time at Jan 1, 2014
@@ -438,8 +680,8 @@ class ASM::ServiceDeployment
     @components_by_type[type]
   end
 
-  def build_portgroup(vswitch, path, hostip, portgroup_name, network, 
-                      portgrouptype, active_nics)
+  def build_portgroup(vswitch, path, hostip, portgroup_name, network,
+    portgrouptype, active_nics)
     {
       'name' => "#{hostip}:#{portgroup_name}",
       'ensure' => 'present',
@@ -449,9 +691,9 @@ class ASM::ServiceDeployment
       'mtu' => 9000,
       'overridefailoverorder' => 'enabled',
       'nicorderpolicy' => {
-        # TODO: for iSCSI they cannot both be active
-        'activenic' => active_nics,
-        'standbynic' => [],
+      # TODO: for iSCSI they cannot both be active
+      'activenic' => active_nics,
+      'standbynic' => [],
       },
       'overridecheckbeacon' => 'enabled',
       'checkbeacon' => true,
@@ -470,8 +712,8 @@ class ASM::ServiceDeployment
     }
   end
 
-  def build_vswitch(server_cert, index, network_guid, hostip, 
-                  params, server_params)
+  def build_vswitch(server_cert, index, network_guid, hostip,
+    params, server_params)
     vswitch_name = "vSwitch#{index}"
     vmnic1 = "vmnic#{index * 2}"
     vmnic2 = "vmnic#{(index * 2) + 1}"
@@ -486,8 +728,8 @@ class ASM::ServiceDeployment
       'num_ports' => 1024,
       'nics' => [ vmnic1, vmnic2 ],
       'nicorderpolicy' => {
-        'activenic' => nics,
-        'standbynic' => [],
+      'activenic' => nics,
+      'standbynic' => [],
       },
       'path' => path,
       'mtu' => 9000,
@@ -500,12 +742,12 @@ class ASM::ServiceDeployment
     if index == 3
       # iSCSI network
       # NOTE: We have to make sure the ISCSI1 requires ISCSI0 so that
-      # they are created in the "right" order -- the order that will 
+      # they are created in the "right" order -- the order that will
       # give ISCSI0 vmk2 and ISCSI1 vmk3 vmknics. The datastore
       # confiugration relies on that.
       ['ISCSI0', 'ISCSI1'].each_with_index do |portgroup_name, index|
         portgroup = build_portgroup(vswitch_name, path, hostip, portgroup_name,
-                                    network, portgrouptype, [ nics[index] ])
+        network, portgrouptype, [ nics[index] ])
         portgroup['require'] = next_require
         portgroup_title = "#{hostip}:#{portgroup_name}"
         ret['esx_portgroup'][portgroup_title] = portgroup
@@ -516,8 +758,8 @@ class ASM::ServiceDeployment
         # Workload group has portgrouptype = 'VirtualMachine'
         portgrouptype = 'VirtualMachine'
       end
-      portgroup = build_portgroup(vswitch_name, path, hostip, network['name'], 
-                                  network, portgrouptype, nics)
+      portgroup = build_portgroup(vswitch_name, path, hostip, network['name'],
+      network, portgrouptype, nics)
       portgroup['require'] = next_require
       ret['esx_portgroup']["#{hostip}:#{network['name']}"] = portgroup
     end
@@ -587,8 +829,8 @@ class ASM::ServiceDeployment
                     log("Configuring #{type} = #{guid}")
 
                     vswitch_resources = build_vswitch(server_cert, index,
-                                                      guid, hostip,
-                                                      params, server_params)
+                    guid, hostip,
+                    params, server_params)
                     # Should be exactly one vswitch in response
                     vswitch_title = vswitch_resources['esx_vswitch'].keys[0]
                     vswitch = vswitch_resources['esx_vswitch'][vswitch_title]
@@ -603,7 +845,7 @@ class ASM::ServiceDeployment
                         storage_network_require.push("Esx_portgroup[#{portgroupname}]")
                       end
                     end
-                    
+
                     log("Built vswitch resources = #{vswitch_resources.to_yaml}")
 
                     # merge these in
@@ -649,7 +891,7 @@ class ASM::ServiceDeployment
   def process_virtualmachine(component)
     log("Processing virtualmachine component: #{component['id']}")
     resource_hash = ASM::Util.build_component_configuration(component)
-    
+
     clusters = (find_related_components('CLUSTER', component) || [])
     raise(Exception, "Expected one cluster for #{component['id']} but found #{clusters.size}") unless clusters.size == 1
     cluster = clusters[0]
@@ -675,7 +917,7 @@ class ASM::ServiceDeployment
       else
         server_params = {}
       end
-                         
+
       if server_params['os_type'] == 'windows'
         params['os_type'] = 'windows'
       else
@@ -725,7 +967,7 @@ class ASM::ServiceDeployment
     end
     ret
   end
-  
+
   def find_host_ip(serial_num)
     node = find_node(serial_num)
     if node && node['facts'] && node['facts']['ipaddress']
@@ -807,11 +1049,11 @@ class ASM::ServiceDeployment
       response = nil
       if name
         response = RestClient.get(
-          "http://localhost:8080/api/collections/#{type}/#{name}"
+        "http://localhost:8080/api/collections/#{type}/#{name}"
         )
       else
         response = RestClient.get(
-          "http://localhost:8080/api/collections/#{type}"
+        "http://localhost:8080/api/collections/#{type}"
         )
       end
     rescue RestClient::ResourceNotFound => e
@@ -822,6 +1064,79 @@ class ASM::ServiceDeployment
     else
       raise(CommandException, "bad http code: #{response.code}:#{response.to_str}")
     end
+  end
+
+  def get_server_networks(server_component,server_cert)
+    hypervisormanagementvlanid = ""
+    vmotionvlanid = ""
+    iscsivlanid = ""
+    pxevlanid = ""
+    workloadvlanid = ""
+    tagged_vlaninfo = Array.new
+    untagged_vlaninfo = Array.new
+    server_conf = ASM::Util.build_component_configuration(server_component)
+    network_params = (server_conf['asm::esxiscsiconfig'] || {})[server_cert]
+    if network_params
+      hypervisormanagementguid = network_params["hypervisor_network"]
+      logger.debug "hypervisormanagementguid :: #{hypervisormanagementguid}"
+      if hypervisormanagementguid and !hypervisormanagementguid.empty?
+        network = ASM::Util.fetch_network_settings(hypervisormanagementguid)
+        logger.debug "network :: #{network}"
+        hypervisormanagementvlanid = network['vlanId']
+      end
+      vmotionguid = network_params["vmotion_network"]
+      if vmotionguid and !vmotionguid.empty?
+        network = ASM::Util.fetch_network_settings(vmotionguid)
+        vmotionvlanid = network['vlanId']
+      end
+      logger.debug "Vmotion GUID: #{vmotionguid}"
+      iscsiguid = network_params["storage_network"]
+      if iscsiguid and !iscsiguid.empty?
+        network = ASM::Util.fetch_network_settings(iscsiguid)
+        iscsivlanid = network['vlanId']
+      end
+      logger.debug "iSCSI GUID  #{iscsiguid}"
+      workloadguid = network_params["SCSI GUIDworkload_network"]
+      logger.debug "workloadguid #{workloadguid}"
+      if workloadguid and !workloadguid.empty?
+        network = ASM::Util.fetch_network_settings(workloadguid)
+        workloadvlanid = network['vlanId']
+      end
+      pxeguid = network_params["pxe_network"]
+      if pxeguid and !pxeguid.empty?
+        network = ASM::Util.fetch_network_settings(pxeguid)
+        pxevlanid = network['vlanId']
+      end
+      logger.debug "pxeguid: #{pxeguid}"
+      logger.debug "hypervisormanagementvlanid :: #{hypervisormanagementvlanid} vmotionvlanid :: #{vmotionvlanid} iscsivlanid :: #{iscsivlanid} workloadvlanid :: #{workloadvlanid} pxevlanid :: #{pxevlanid}"
+
+      if hypervisormanagementvlanid != ""
+        tagged_vlaninfo.push(hypervisormanagementvlanid.to_s)
+      end
+
+      if vmotionvlanid != ""
+        tagged_vlaninfo.push(vmotionvlanid.to_s)
+      end
+
+      if workloadvlanid != ""
+        tagged_vlaninfo.push(workloadvlanid.to_s)
+      end
+
+      if iscsivlanid != ""
+        tagged_vlaninfo.push(iscsivlanid.to_s)
+      end
+
+      if pxevlanid != ""
+        untagged_vlaninfo.push(pxevlanid.to_s)
+      end
+
+      logger.debug "Tagged vlan info #{tagged_vlaninfo}"
+      logger.debug "Untagged vlan info #{untagged_vlaninfo}"
+      $server_vlan_info["#{server_cert}_taggedvlanlist"] = tagged_vlaninfo
+      $server_vlan_info["#{server_cert}_untaggedvlanlist"] = untagged_vlaninfo
+      puts "Server vlan hash is #{$server_vlan_info}"
+    end
+    return $server_vlan_info
   end
 
 end
