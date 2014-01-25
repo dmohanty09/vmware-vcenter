@@ -110,5 +110,20 @@ END
     end
   end
 
+  describe 'when uuid is valid' do
+    it 'should create the corresponding serial number' do
+      uuid = '423b69b2-8bd7-0dde-746b-75c98eb74d2b'
+      ASM::Util.vm_uuid_to_serial_number(uuid).should == 'VMware-42 3b 69 b2 8b d7 0d de-74 6b 75 c9 8e b7 4d 2b'
+    end
+  end
+  
+  describe 'when uuid is not valid' do
+    it 'should raise an exception' do
+      uuid = 'lkasdjflkasdj'
+      expect do
+        ASM::Util.vm_uuid_to_serial_number(uuid)
+      end.to raise_error(Exception)
+    end
+  end
   
 end

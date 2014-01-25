@@ -86,7 +86,25 @@ module ASM
 
       result_hash['VM uuid']
     end
-
+    
+    # Hack to figure out cert name from uuid.
+    #
+    # For UUID 4223-c288-0e73-104e-e6c0-31f5f65ad063
+    # Shows up in puppet as VMware-42 23 c2 88 0 e 73 10 4 e-e6 c0 31 f5 f6 5 a d0 63
+    def self.vm_uuid_to_serial_number(uuid)
+      without_dashes = uuid.gsub(/-/, '')
+      raise(Exception, "Invalid uuid #{uuid}") unless without_dashes.length == 32
+      first_half = []
+      last_half = []
+      ( 0 .. 7 ).each do |i|
+        start = i * 2
+        first_half.push(without_dashes[start .. start + 1])
+        start = i * 2 + 16
+        last_half.push(without_dashes[start .. start + 1])
+      end
+      "VMware-#{first_half.join(' ')}-#{last_half.join(' ')}"
+    end
+    
     def self.find_equallogic_iscsi_ip(cert_name)
       cmd = 'sudo'
       args = [ 'puppet', 'facts', 'find', cert_name,

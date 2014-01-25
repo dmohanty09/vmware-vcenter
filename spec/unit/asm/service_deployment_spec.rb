@@ -10,6 +10,9 @@ describe ASM::ServiceDeployment do
     @tmp_dir = Dir.mktmpdir
     @sd = ASM::ServiceDeployment.new('8000')
     @sd.stubs(:find_node).returns({})
+    @sd.stubs(:create_broker_if_needed).returns("STUB-BROKER-NAME")
+    @sd.stubs(:get_all_switches).returns([])
+    @sd.stubs(:get_server_inventory).returns({})
     ASM.stubs(:base_dir).returns(@tmp_dir)
   end
 
@@ -113,6 +116,7 @@ describe ASM::ServiceDeployment do
       @mock_log.expects(:info).with('Starting deployment ')
       @mock_log.expects(:warn).with('Service deployment data has no serviceTemplate defined')
       @mock_log.expects(:info).with('Status: Completed')
+      @mock_log.expects(:debug).with('Switches configured in the environment []')
       @sd.process({})
     end
 
@@ -124,6 +128,7 @@ describe ASM::ServiceDeployment do
       @mock_log.expects(:info).with('Starting deployment ')
       @mock_log.expects(:warn).with('service deployment data has no components')
       @mock_log.expects(:info).with('Status: Completed')
+      @mock_log.expects(:debug).with('Switches configured in the environment []')
       @sd.process({'serviceTemplate' => {}})
     end
 
