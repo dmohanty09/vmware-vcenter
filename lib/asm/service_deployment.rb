@@ -7,6 +7,9 @@ require 'open3'
 require 'rest_client'
 require 'timeout'
 require 'yaml'
+require 'set'
+require 'asm/GetWWPN'
+require 'fileutils'
 
 class ASM::ServiceDeployment
 
@@ -109,10 +112,64 @@ class ASM::ServiceDeployment
   def process_generic(cert_name, config, puppet_run_type, override = true)
     raise(Exception, 'Component has no certname') unless cert_name
     log("Starting processing resources for endpoint #{cert_name}")
+
     resource_file = File.join(resources_dir, "#{cert_name}.yaml")
+
+    wwpn = ""
+    wwpnSet = Set.new()
     File.open(resource_file, 'w') do |fh|
       fh.write(config.to_yaml)
     end
+    if ( cert_name =~ /(.*)[C|c]ompellent(.*)/ )
+	  wwpnSet = process_compellent
+
+	  myfile = File.open(resource_file, "r+")
+
+          time = Time.now.to_i
+          tempfileloc = "/tmp/temp#{time}.txt"
+	  mytempfile = File.open(tempfileloc, "w")
+	  
+	  myfile.each do |line|
+		if ( line =~ /(.*)wwn\:(.*)/ )
+		  data = line.scan(/wwn\:(.*)/)
+		  #data = data.gsub!(/\"/, "")
+		  temp = data[0]
+		  temp1 = temp[0]
+	 	  temp2=temp1.strip
+		  wwpnstring = temp2.split (',')
+		  #for each_wwpnstring in wwpnstring
+		  wwpnstring.each do | each_wwpnstring |
+    			if each_wwpnstring.length > 0 
+          	  	  wwpnSet.add ("#{each_wwpnstring}")
+                        end
+		  end
+		else
+		  mytempfile.puts ("#{line}")
+		end
+	  end
+
+	  myfile.close
+	  mytempfile.close
+
+
+	  wwpnSet.each do |wwpndata|
+		wwpndata = wwpndata.gsub(/:/, '')
+		if wwpn.to_s.strip.length == 0
+		  wwpn = "#{wwpndata}"
+		else
+                  if wwpndata.to_s.strip.length > 4
+		    wwpn.concat ( ",#{wwpndata}")
+                  end
+		end
+	  end
+     
+	  File.open(tempfileloc,"a") do |tempfile|
+	    tempfile.puts ("    wwn: '#{wwpn}'")
+	    tempfile.close
+	  end
+	  FileUtils.mv(tempfileloc, resource_file) 
+    end
+        
     override_opt = override ? "--always-override " : ""
     cmd = "sudo puppet asm process_node --debug --trace --filename #{resource_file} --run_type #{puppet_run_type} #{override_opt}#{cert_name}"
     if @debug
@@ -160,6 +217,65 @@ class ASM::ServiceDeployment
       raise(Exception, "Did not find result line in file #{puppet_out}") unless found_result_line
       results
     end
+  end
+
+   def process_compellent()
+    log("Processing server component for compellent")
+
+	wwpnSet = Set.new
+    if components = @components_by_type['SERVER']
+    components.collect do |comp|  
+      cert_name = comp['id']
+      
+      resource_hash = {}
+      deviceconf = nil
+      inventory = nil
+      resource_hash = ASM::Util.build_component_configuration(comp)
+      if resource_hash['asm::idrac']
+         deviceconf ||= ASM::Util.parse_device_config(cert_name)
+         inventory  ||= ASM::Util.fetch_server_inventory(cert_name)
+      end
+      
+      (resource_hash['asm::server'] || {}).each do |title, params|
+         if params['rule_number']
+            raise(Exception, "Did not expect rule_number in asm::server")
+         else
+           params['rule_number'] = rule_number
+         end
+      
+         # In the case of Dell servers the title should contain 
+         # the service tag and we retrieve it here
+         service_tag = cert_name_to_service_tag(title)
+         if service_tag
+            params['serial_number'] = service_tag
+         else
+            params['serial_number'] = title
+         end
+      
+        params['policy_name'] = "policy-#{params['serial_number']}-#{@id}"
+            
+        # TODO: if present this should go in kickstart
+        params.delete('custom_script')
+      end
+      
+	  ## get list off WWPN 
+
+      (resource_hash['asm::idrac'] || {}).each do |title, params|
+		 ipaddress = deviceconf[:host]
+		 username  = deviceconf[:user]
+		 password  = deviceconf[:password]
+		 getWWPNData = GetWWPN.new(ipaddress, username, password)
+		 getWWPNd = getWWPNData.getwwpn
+		 res = getWWPNd.split(",")
+                 res.each do |setdata|
+                   wwpnSet.add(setdata)
+                 end
+
+      end
+    end
+    end
+	#logger.info("[DEBUG MODE] #{wwpnSet}-------------sanjeev2222222") 
+	return wwpnSet
   end
 
   # Currently having problems with some resource data for host / vswith
