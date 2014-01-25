@@ -43,6 +43,10 @@ class ASM::ServiceDeployment
 
   def process(service_deployment)
     begin
+      # Before we go multi-threaded, check whether puppet broker exists
+      # and create it if needed
+      @puppet_broker = create_broker_if_needed
+
       ASM.logger.info("Deploying #{service_deployment['deploymentName']} with id #{service_deployment['id']}")
       log("Status: Started")
       log("Starting deployment #{service_deployment['deploymentName']}")
@@ -227,7 +231,27 @@ class ASM::ServiceDeployment
     end
   end
 
-  def process_compellent()
+  def massage_asm_server_params(serial_number, broker, params)
+    if params['rule_number']
+      raise(Exception, "Did not expect rule_number in asm::server")
+    else
+      params['rule_number'] = rule_number
+    end
+
+    if params['os_image_type'] == 'vmware_esxi'
+      params['broker_type'] = 'noop'
+    else
+      params['broker_type'] = @puppet_broker
+    end
+    
+    params['serial_number'] = serial_number
+    params['policy_name'] = "policy-#{params['os_host_name']}-#{@id}"
+    
+    # TODO: if present this should go in kickstart
+    params.delete('custom_script')
+  end
+  
+   def process_compellent()
     log("Processing server component for compellent")
 
     wwpnSet = Set.new
@@ -285,7 +309,7 @@ class ASM::ServiceDeployment
     #logger.info("[DEBUG MODE] #{wwpnSet}-------------sanjeev2222222")
     return wwpnSet
   end
-
+  
   # Currently having problems with some resource data for host / vswith
   # when running through "puppet asm". This method provides a
   # short-term workaround which is to generate a puppet manifest
@@ -892,6 +916,23 @@ class ASM::ServiceDeployment
     log("Processing virtualmachine component: #{component['id']}")
     resource_hash = ASM::Util.build_component_configuration(component)
 
+    # For simplicity we require that there is exactly one asm::vm
+    # and optionally one asm::server resource
+    unless resource_hash['asm::vm'] && resource_hash['asm::vm'].size == 1
+      raise(Exception, "Exactly one set of VM configuration parameters is required")
+    end
+    vm_params = resource_hash['asm::vm'][resource_hash['asm::vm'].keys[0]]
+    
+    if resource_hash['asm::server'] && resource_hash['asm::server'].size > 1
+      raise(Exception, "One or no sets of VM O/S configuration parameters required but #{resource_hash['asm::server'].size} were passed")
+    end
+
+    unless resource_hash['asm::server']
+      server_params = nil
+    else
+      server_params = resource_hash['asm::server'][resource_hash['asm::server'].keys[0]]
+    end
+
     clusters = (find_related_components('CLUSTER', component) || [])
     raise(Exception, "Expected one cluster for #{component['id']} but found #{clusters.size}") unless clusters.size == 1
     cluster = clusters[0]
@@ -931,21 +972,56 @@ class ASM::ServiceDeployment
       params['vcenter_options'] = { 'insecure' => true }
       params['ensure'] = 'present'
     end
+    vm_params['hostname'] = (server_params || {})['os_host_name']
+    hostname = vm_params['hostname'] || raise(Exception, "VM host name not specified")
+    vm_params['vcenter_username'] = cluster_deviceconf[:user]
+    vm_params['vcenter_password'] = cluster_deviceconf[:password]
+    vm_params['vcenter_server'] = cluster_deviceconf[:host]
+    vm_params['vcenter_options'] = { 'insecure' => true }
+    vm_params['ensure'] = 'present'
 
-    asm_server_params = resource_hash.delete('asm::server')
+    # Set titles from the host name. Can't be easily done from the
+    # front-end because the host name is only entered in the
+    # asm::server section
+    resource_hash = { 'asm::vm' => { hostname => vm_params }}
+
     log("Creating VM #{hostname}")
-    process_generic(component['id'], resource_hash, 'apply')
+    vm_cert_name = "vm-#{hostname}"
+    process_generic(vm_cert_name, resource_hash, 'apply')
 
     # TODO: Puppet module does not power it on first time.
     log("Powering on #{hostname}")
-    process_generic(component['id'], resource_hash, 'apply')
+    process_generic(vm_cert_name, resource_hash, 'apply')
 
-    if asm_server_params
-      uuid = ASM::Util.find_vm_uuid(hostname)
+    if server_params
+      uuid = nil
+      begin
+        uuid = ASM::Util.find_vm_uuid(cluster_deviceconf, hostname)
+      rescue Exception => e
+        if @debug
+          puts e
+          uuid = "DEBUG-MODE-UUID"
+        else
+          raise e
+        end
+      end
       log("Found UUID #{uuid} for #{hostname}")
-      server_resource_hash = { 'asm::server' => asm_server_params }
       log("Initiating O/S install for VM #{hostname}")
-      process_generic(component['id'], server_resource_hash, 'apply')
+      server_cert_name = "server-#{hostname}"
+
+      # Work around incorrect name in GUI for now
+      # TODO: remove when no longer needed
+      old_image_param = server_params.delete('os_type')
+      if old_image_param
+        @logger.warn('Incorrect os image param name os_type')
+        server_params['os_image_type'] = old_image_param
+      end
+
+      massage_asm_server_params(ASM::Util.vm_uuid_to_serial_number(uuid),
+                                'puppet', server_params)
+
+      resource_hash = { 'asm::server' => { hostname => server_params } }
+      process_generic(server_cert_name, resource_hash, 'apply')
     end
   end
 
@@ -1137,6 +1213,40 @@ class ASM::ServiceDeployment
       puts "Server vlan hash is #{$server_vlan_info}"
     end
     return $server_vlan_info
+  end
+
+  def create_broker_if_needed()
+    hostip = ASM::Util.first_host_ip
+    broker_name = "puppet-#{hostip}"
+    found_broker = nil
+    results = get('brokers').each do |node|
+      if node['name'] == broker_name
+        found_broker = true
+      end
+    end
+
+    unless found_broker
+      response = nil
+      broker = { 
+        'name' => broker_name, 
+        'configuration' => { 'server' => hostip, },
+        'broker-type' => 'puppet',
+      }
+      url = 'http://localhost:8080/api/commands/create-broker'
+      begin
+        response = RestClient.post(url, broker.to_json,
+                                   :content_type => :json, 
+                                   :accept => :json)
+      rescue RestClient::ResourceNotFound => e
+        raise(CommandException, "rest call failed #{e}")
+      end
+      if response.code == 200 || response.code == 202
+        JSON.parse(response)
+      else
+        raise(CommandException, "bad http code: #{response.code}:#{response.to_str}")
+      end
+    end
+    broker_name
   end
 
 end
