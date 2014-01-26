@@ -849,7 +849,7 @@ class ASM::ServiceDeployment
                 if type == 'workload_network'
                   log("TODO: add workload network(s) #{guid}")
                 else
-                  if guid and !guid.empty? and guid.to_s != '-1'
+                  if !empty_guid?(guid)
                     log("Configuring #{type} = #{guid}")
 
                     vswitch_resources = build_vswitch(server_cert, index,
@@ -1141,6 +1141,10 @@ class ASM::ServiceDeployment
       raise(CommandException, "bad http code: #{response.code}:#{response.to_str}")
     end
   end
+  
+  def empty_guid?(guid)
+    !guid || guid.to_s.empty? || guid.to_s == '-1'
+  end
 
   def get_server_networks(server_component,server_cert)
     hypervisormanagementvlanid = ""
@@ -1155,31 +1159,31 @@ class ASM::ServiceDeployment
     if network_params
       hypervisormanagementguid = network_params["hypervisor_network"]
       logger.debug "hypervisormanagementguid :: #{hypervisormanagementguid}"
-      if hypervisormanagementguid and !hypervisormanagementguid.empty?
+      if !empty_guid?(hypervisormanagementguid)
         network = ASM::Util.fetch_network_settings(hypervisormanagementguid)
         logger.debug "network :: #{network}"
         hypervisormanagementvlanid = network['vlanId']
       end
       vmotionguid = network_params["vmotion_network"]
-      if vmotionguid and !vmotionguid.empty?
+      if !empty_guid?(vmotionguid)
         network = ASM::Util.fetch_network_settings(vmotionguid)
         vmotionvlanid = network['vlanId']
       end
       logger.debug "Vmotion GUID: #{vmotionguid}"
       iscsiguid = network_params["storage_network"]
-      if iscsiguid and !iscsiguid.empty?
+      if !empty_guid?(iscsiguid)
         network = ASM::Util.fetch_network_settings(iscsiguid)
         iscsivlanid = network['vlanId']
       end
       logger.debug "iSCSI GUID  #{iscsiguid}"
       workloadguid = network_params["SCSI GUIDworkload_network"]
       logger.debug "workloadguid #{workloadguid}"
-      if workloadguid and !workloadguid.empty?
+      if !empty_guid?(workloadguid)
         network = ASM::Util.fetch_network_settings(workloadguid)
         workloadvlanid = network['vlanId']
       end
       pxeguid = network_params["pxe_network"]
-      if pxeguid and !pxeguid.empty?
+      if !empty_guid?(pxeguid)
         network = ASM::Util.fetch_network_settings(pxeguid)
         pxevlanid = network['vlanId']
       end
