@@ -1187,7 +1187,7 @@ class ASM::ServiceDeployment
     resource_hash = { 'asm::vm' => { hostname => vm_params }}
 
     log("Creating VM #{hostname}")
-    vm_cert_name = "vm-#{hostname}"
+    vm_cert_name = "vm-#{hostname.downcase}" # cert names must be lower-case
     process_generic(vm_cert_name, resource_hash, 'apply')
 
     # TODO: Puppet module does not power it on first time.
