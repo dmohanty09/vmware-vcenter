@@ -1108,6 +1108,9 @@ class ASM::ServiceDeployment
       end
     end
     process_generic_direct_apply(cert_name, resource_hash)
+    # Running into issues with hosts not coming out of maint mode
+    # Try it again for good measure.
+    process_generic_direct_apply(cert_name, resource_hash)
   end
 
   def process_virtualmachine(component)
