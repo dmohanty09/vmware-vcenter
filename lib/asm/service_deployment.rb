@@ -883,8 +883,8 @@ class ASM::ServiceDeployment
   end
 
   def build_portgroup(vswitch, path, hostip, portgroup_name, network,
-    portgrouptype, active_nics)
-    {
+                      portgrouptype, active_nics)
+    ret = {
       'name' => "#{hostip}:#{portgroup_name}",
       'ensure' => 'present',
       'portgrouptype' => portgrouptype,
@@ -899,9 +899,6 @@ class ASM::ServiceDeployment
       },
       'overridecheckbeacon' => 'enabled',
       'checkbeacon' => true,
-      'ipsettings' => 'dhcp', # TODO: pull from network pool
-      'ipaddress' => '',      # ditto
-      'subnetmask' => '',     # ditto
       'traffic_shaping_policy' => 'disabled',
       'averagebandwidth' => 1000,
       'peakbandwidth' => 1000,
@@ -914,18 +911,17 @@ class ASM::ServiceDeployment
     }
   end
 
-  def build_vswitch(server_cert, index, network_guid, hostip,
-    params, server_params)
+  def build_vswitch(server_cert, index, network_guids, hostip,
+                    params, server_params)
     vswitch_name = "vSwitch#{index}"
     vmnic1 = "vmnic#{index * 2}"
     vmnic2 = "vmnic#{(index * 2) + 1}"
     path = "/#{params['datacenter']}/#{params['cluster']}"
 
-    network = ASM::Util.fetch_network_settings(network_guid)
-
     nics = [ vmnic1, vmnic2 ]
     ret = { 'esx_vswitch' => {}, 'esx_portgroup' => {}, }
-    ret['esx_vswitch']["#{hostip}:#{vswitch_name}"] = {
+    vswitch_title = "#{hostip}:#{vswitch_name}"
+    ret['esx_vswitch'][vswitch_title] = {
       'ensure' => 'present',
       'num_ports' => 1024,
       'nics' => [ vmnic1, vmnic2 ],
@@ -941,30 +937,57 @@ class ASM::ServiceDeployment
 
     portgrouptype = 'VMkernel'
     next_require = "Esx_vswitch[#{hostip}:#{vswitch_name}]"
+
+    networks = network_guids.map do |guid|
+      ASM::Util.fetch_network_settings(guid)
+    end
+    portgroup_names = nil
     if index == 3
       # iSCSI network
       # NOTE: We have to make sure the ISCSI1 requires ISCSI0 so that
       # they are created in the "right" order -- the order that will
       # give ISCSI0 vmk2 and ISCSI1 vmk3 vmknics. The datastore
-      # confiugration relies on that.
-      ['ISCSI0', 'ISCSI1'].each_with_index do |portgroup_name, index|
-        portgroup = build_portgroup(vswitch_name, path, hostip, portgroup_name,
-        network, portgrouptype, [ nics[index] ])
-        portgroup['require'] = next_require
-        portgroup_title = "#{hostip}:#{portgroup_name}"
-        ret['esx_portgroup'][portgroup_title] = portgroup
-        next_require = "Esx_portgroup[#{portgroup_title}]"
-      end
+      # configuration relies on that.
+      portgroup_names = [ 'ISCSI0', 'ISCSI1' ]
+      raise(Exception, "Only one network expected for storage network") unless networks.size ==1
+      networks = [ networks[0], networks[0] ]
     else
       if index == 2
-        # Workload group has portgrouptype = 'VirtualMachine'
-        portgrouptype = 'VirtualMachine'
+        portgrouptype = 'VMkernel'
       end
-      portgroup = build_portgroup(vswitch_name, path, hostip, network['name'],
-      network, portgrouptype, nics)
-      portgroup['require'] = next_require
-      ret['esx_portgroup']["#{hostip}:#{network['name']}"] = portgroup
+      portgroup_names = networks.map { |network| network['name'] }
     end
+    
+    portgroup_names.each_with_index do |portgroup_name, index|
+      network = networks[index]
+      portgroup_title = "#{hostip}:#{portgroup_name}"
+      portgroup = build_portgroup(vswitch_name, path, hostip, portgroup_name,
+                                  network, portgrouptype, [ nics[index] ])
+      
+      static = network['staticNetworkConfiguration']
+      
+      if static
+        # TODO: we should consolidate our reservation requests
+        reservation_guid = "#{@id}-#{portgroup_title}"
+        ip = ASM::Util.reserve_network_ips(network['id'], 
+                                           portgroup_names.size,
+                                           reservation_guid)[0]
+        raise(Exception, "Subnet not found in configuration #{static.inspect}") unless static['subnet']
+        
+        portgroup['ipsettings'] = 'static'
+        portgroup['ipaddress'] = ip
+        portgroup['subnetmask'] = static['subnet']
+      else
+        portgroup['ipsettings'] = 'dhcp'
+        portgroup['ipaddress'] = ''
+        portgroup['subnetmask'] = ''
+      end
+      
+      portgroup['require'] = next_require
+      ret['esx_portgroup'][portgroup_title] = portgroup
+      next_require = "Esx_portgroup[#{portgroup_title}]"
+    end
+
     ret
   end
 
@@ -1024,36 +1047,33 @@ class ASM::ServiceDeployment
               storage_network_require = nil
               [ 'hypervisor_network', 'vmotion_network', 'workload_network', 'storage_network' ].each_with_index do | type, index |
                 guid = network_params[type]
-                if type == 'workload_network'
-                  log("TODO: add workload network(s) #{guid}")
-                else
-                  if !empty_guid?(guid)
-                    log("Configuring #{type} = #{guid}")
-
-                    vswitch_resources = build_vswitch(server_cert, index,
-                    guid, hostip,
-                    params, server_params)
-                    # Should be exactly one vswitch in response
-                    vswitch_title = vswitch_resources['esx_vswitch'].keys[0]
-                    vswitch = vswitch_resources['esx_vswitch'][vswitch_title]
-                    vswitch['require'] = next_require
-
-                    # Set next require to this vswitch so they are all
-                    # ordered properly
-                    next_require = "Esx_vswitch[#{vswitch_title}]"
-                    if type == 'storage_network'
-                      storage_network_require = []
-                      vswitch_resources['esx_portgroup'].each do |portgroupname, portgroupparams|
-                        storage_network_require.push("Esx_portgroup[#{portgroupname}]")
-                      end
+                if !empty_guid?(guid)
+                  # For workload, guid may be a comma-separated list
+                  log("Configuring #{type} = #{guid}")
+                  guids = guid.split(',').select { |x| !x.empty? }
+                  vswitch_resources = build_vswitch(server_cert, index,
+                                                    guids, hostip,
+                                                    params, server_params)
+                  # Should be exactly one vswitch in response
+                  vswitch_title = vswitch_resources['esx_vswitch'].keys[0]
+                  vswitch = vswitch_resources['esx_vswitch'][vswitch_title]
+                  vswitch['require'] = next_require
+                  
+                  # Set next require to this vswitch so they are all
+                  # ordered properly
+                  next_require = "Esx_vswitch[#{vswitch_title}]"
+                  if type == 'storage_network'
+                    storage_network_require = []
+                    vswitch_resources['esx_portgroup'].each do |portgroupname, portgroupparams|
+                      storage_network_require.push("Esx_portgroup[#{portgroupname}]")
                     end
-
-                    log("Built vswitch resources = #{vswitch_resources.to_yaml}")
-
-                    # merge these in
-                    resource_hash['esx_vswitch'] = (resource_hash['esx_vswitch'] || {}).merge(vswitch_resources['esx_vswitch'])
-                    resource_hash['esx_portgroup'] = (resource_hash['esx_portgroup'] || {}).merge(vswitch_resources['esx_portgroup'])
                   end
+                  
+                  log("Built vswitch resources = #{vswitch_resources.to_yaml}")
+                  
+                  # merge these in
+                  resource_hash['esx_vswitch'] = (resource_hash['esx_vswitch'] || {}).merge(vswitch_resources['esx_vswitch'])
+                  resource_hash['esx_portgroup'] = (resource_hash['esx_portgroup'] || {}).merge(vswitch_resources['esx_portgroup'])
                 end
               end
 
