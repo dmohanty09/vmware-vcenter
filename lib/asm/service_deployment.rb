@@ -243,15 +243,22 @@ class ASM::ServiceDeployment
     else
       params['broker_type'] = @puppet_broker
     end
-    
+
     params['serial_number'] = serial_number
     params['policy_name'] = "policy-#{params['os_host_name']}-#{@id}"
-    
+
     # TODO: if present this should go in kickstart
-    params.delete('custom_script')
+    #params.delete('custom_script')
+    custom_kickstart_content = params['custom_script']
+    if custom_kickstart_content.strip.length == 0
+      params['custom_script'] = ""
+    else
+      custom_script_path = create_custom_script(serial_number,custom_kickstart_content)
+      params['custom_script'] = custom_script_path
+    end
   end
-  
-   def process_compellent()
+
+  def process_compellent()
     log("Processing server component for compellent")
 
     wwpnSet = Set.new
@@ -309,7 +316,7 @@ class ASM::ServiceDeployment
     #logger.info("[DEBUG MODE] #{wwpnSet}-------------sanjeev2222222")
     return wwpnSet
   end
-  
+
   # Currently having problems with some resource data for host / vswith
   # when running through "puppet asm". This method provides a
   # short-term workaround which is to generate a puppet manifest
@@ -380,8 +387,10 @@ class ASM::ServiceDeployment
     switchportdetail = switchinfoobj.get_info(logger)
     logger.debug "******** In process_tor switchportdetail :: #{switchportdetail} *********\n"
     tagged_vlaninfo = $server_vlan_info["#{server_cert_name}_taggedvlanlist"]
+    tagged_workloadvlaninfo = $server_vlan_info["#{server_cert_name}_taggedworkloadvlanlist"]
     untagged_vlaninfo = $server_vlan_info["#{server_cert_name}_untaggedvlanlist"]
     logger.debug "In configure_tor tagged vlan list found #{tagged_vlaninfo}"
+    logger.debug "In configure_tor tagged vlan workload list found #{tagged_workloadvlaninfo}"
     logger.debug "In configure_tor untagged vlan list found #{untagged_vlaninfo}"
     resource_hash = Hash.new
     switchportdetail.each do |switchportdetailhash|
@@ -425,6 +434,40 @@ class ASM::ServiceDeployment
           end
           process_generic(switchcertname, resource_hash, 'device')
         end
+        tagged_workloadvlaninfo.each do |vlanid|
+          logger.debug "workload vlanid :: #{vlanid}"
+          if switchcertname =~ /dell_ftos/
+            switch_resource_type = "asm::force10"
+            resource_hash[switch_resource_type] = {
+              "#{vlanid}" => {
+              'vlan_name' => '',
+              'desc' => '',
+              'tagged_tengigabitethernet' => interfaces.strip,
+              'tagged_portchannel' => portchannels.strip,
+              'mtu' => 1500,
+              }
+            }
+            logger.debug("*** resource_hash is #{resource_hash} ******")
+          elsif switchcertname =~ /dell_powerconnect/
+            switch_resource_type = "asm::powerconnect"
+            resource_hash[switch_resource_type] = {
+              "#{vlanid}" => {
+              'vlan_name' => '',
+              'portchannel' => portchannels.strip,
+              'interface' => interfaces.strip,
+              'mode' => 'general'
+              }
+            }
+          elsif switchcertname =~ /dell_iom/
+            switch_resource_type = "asm::iom"
+
+          else
+            logger.debug "Non-supported switch type"
+            return
+          end
+          process_generic(switchcertname, resource_hash, 'device')
+        end
+
         untagged_vlaninfo.each do |vlanid|
           logger.debug "vlanid :: #{vlanid}"
           if switchcertname =~ /dell_ftos/
@@ -447,6 +490,148 @@ class ASM::ServiceDeployment
           end
           process_generic(switchcertname, resource_hash, 'device')
         end
+      end
+    end
+
+  end
+
+  def configure_tor_blade(server_cert_name)
+    device_conf = nil
+    inv = nil
+    $configured_switches.each do |certname|
+      switchpropertyhash = {}
+      switchpropertyhash = Hash.new
+      device_conf ||= ASM::Util.parse_device_config(certname)
+      puts "******* In process_tor device_conf is #{device_conf} ***********\n"
+      torip = device_conf[:host]
+      torusername = device_conf[:user]
+      torpassword = device_conf['password']
+      torurl = device_conf['url']
+      logger.debug "****** #{device_conf} ******"
+      logger.debug "torip :: #{torip} torusername :: #{torusername} torpassword :: #{torpassword}\n"
+      logger.debug "tor url :: #{torurl}\n"
+      switchpropertyhash['connection_url'] = torurl
+      if certname =~ /dell_ftos/
+        switchpropertyhash['device_type'] = "dell_ftos"
+      else
+        switchpropertyhash['device_type'] = "dell_powerconnect"
+      end
+      logger.debug "********* switch property hash is #{switchpropertyhash} *************\n"
+      $switchhash["#{certname}"] = switchpropertyhash
+      logger.debug "********* switch hash is #{$switchhash} *************\n"
+    end
+    get_server_inventory(server_cert_name)
+    logger.debug "******** In process_tor after getServerInventory serverhash is #{$serverhash} **********\n"
+    switchinfoobj = Get_switch_information.new($serverhash,$switchhash)
+    switchportdetail = switchinfoobj.get_info(logger)
+    logger.debug "******** In process_tor switchportdetail :: #{switchportdetail} *********\n"
+    tagged_vlaninfo = $server_vlan_info["#{server_cert_name}_taggedvlanlist"]
+    tagged_workloadvlaninfo = $server_vlan_info["#{server_cert_name}_taggedworkloadvlanlist"]
+    untagged_vlaninfo = $server_vlan_info["#{server_cert_name}_untaggedvlanlist"]
+    logger.debug "In configure_tor tagged vlan list found #{tagged_vlaninfo}"
+    logger.debug "In configure_tor tagged vlan workload list found #{tagged_workloadvlaninfo}"
+    logger.debug "In configure_tor untagged vlan list found #{untagged_vlaninfo}"
+    resource_hash = Hash.new
+    switchportdetail.each do |switchportdetailhash|
+      switchportdetailhash.each do |macaddress,intfhashes|
+        logger.debug "macaddress :: #{macaddress}    intfhash :: #{intfhashes}"
+        intfhashes.each do |intfhash|
+          switchcertname = intfhash[0]
+          interface = intfhash[1][0]
+          interfaces = get_interfaces(interface)
+          portchannels = get_portchannel(interface)
+          logger.debug "switchcertname :: #{switchcertname} interface :: #{interface}"
+          tagged_vlaninfo.each do |vlanid|
+            logger.debug "vlanid :: #{vlanid}"
+            if switchcertname =~ /dell_ftos/
+              switch_resource_type = "asm::force10"
+              resource_hash[switch_resource_type] = {
+                "#{vlanid}" => {
+                'vlan_name' => '',
+                'desc' => '',
+                'tagged_tengigabitethernet' => interfaces.strip,
+                'tagged_portchannel' => portchannels.strip,
+                'mtu' => 1500,
+                }
+              }
+              logger.debug("*** resource_hash is #{resource_hash} ******")
+            elsif switchcertname =~ /dell_powerconnect/
+              switch_resource_type = "asm::powerconnect"
+              resource_hash[switch_resource_type] = {
+                "#{vlanid}" => {
+                'vlan_name' => '',
+                'portchannel' => portchannels.strip,
+                'interface' => interfaces.strip,
+                'mode' => 'general'
+                }
+              }
+            elsif switchcertname =~ /dell_iom/
+              switch_resource_type = "asm::iom"
+
+            else
+              logger.debug "Non-supported switch type"
+              return
+            end
+            process_generic(switchcertname, resource_hash, 'device')
+          end
+          tagged_workloadvlaninfo.each do |vlanid|
+            logger.debug "workload vlanid :: #{vlanid}"
+            if switchcertname =~ /dell_ftos/
+              switch_resource_type = "asm::force10"
+              resource_hash[switch_resource_type] = {
+                "#{vlanid}" => {
+                'vlan_name' => '',
+                'desc' => '',
+                'tagged_tengigabitethernet' => interfaces.strip,
+                'tagged_portchannel' => portchannels.strip,
+                'mtu' => 1500,
+                }
+              }
+              logger.debug("*** resource_hash is #{resource_hash} ******")
+            elsif switchcertname =~ /dell_powerconnect/
+              switch_resource_type = "asm::powerconnect"
+              resource_hash[switch_resource_type] = {
+                "#{vlanid}" => {
+                'vlan_name' => '',
+                'portchannel' => portchannels.strip,
+                'interface' => interfaces.strip,
+                'mode' => 'general'
+                }
+              }
+            elsif switchcertname =~ /dell_iom/
+              switch_resource_type = "asm::iom"
+
+            else
+              logger.debug "Non-supported switch type"
+              return
+            end
+            process_generic(switchcertname, resource_hash, 'device')
+          end
+          untagged_vlaninfo.each do |vlanid|
+            logger.debug "vlanid :: #{vlanid}"
+            if switchcertname =~ /dell_ftos/
+              switch_resource_type = "asm::force10"
+              resource_hash[switch_resource_type] = {
+                "#{vlanid}" => {
+                'vlan_name' => '',
+                'desc' => '',
+                'untagged_tengigabitethernet' => interfaces.strip,
+                'mtu' => 1500,
+                }
+              }
+              logger.debug("*** resource_hash is #{resource_hash} ******")
+            elsif switchcertname =~ /dell_iom/
+              switch_resource_type = "asm::iom"
+
+            else
+              logger.debug "Non-supported switch type"
+              return
+            end
+            process_generic(switchcertname, resource_hash, 'device')
+          end
+
+        end
+
       end
     end
 
@@ -513,11 +698,19 @@ class ASM::ServiceDeployment
       serverpropertyhash['bladetype'] = "rack"
     else
       serverpropertyhash['bladetype'] = "blade"
+      chassis_conf ||= ASM::Util.chassis_inventory(servicetag, logger)
+      logger.debug "*********chassis_conf :#{chassis_conf}"
+      serverpropertyhash['chassis_ip'] = chassis_conf['chassis_ip']
+      serverpropertyhash['chassis_username'] = chassis_conf['chassis_username']
+      serverpropertyhash['chassis_password'] = chassis_conf['chassis_password']
+      serverpropertyhash['slot_num'] = chassis_conf['slot_num']
+      serverpropertyhash['ioaips'] = chassis_conf['ioaips']
     end
     serverpropertyhash['servermodel'] = model
     serverpropertyhash['idrac_ip'] = dracipaddress
     serverpropertyhash['idrac_username'] =  dracusername
     serverpropertyhash['idrac_password'] = dracpassword
+
     serverpropertyhash['mac_addresses'] = get_server_macaddress(dracipaddress,dracusername,dracpassword,certname)
     logger.debug "******* In getServerInventory server property hash is #{serverpropertyhash} ***********\n"
     $serverhash["#{servicetag}"] = serverpropertyhash
@@ -609,9 +802,11 @@ class ASM::ServiceDeployment
       inventory  ||= ASM::Util.fetch_server_inventory(cert_name)
     end
 
-    logger.debug "Configuring ToR configuration for server #{cert_name}"
-    get_server_networks(component,cert_name)
-    configure_tor(cert_name)
+    if $configured_switches.length() > 0
+      logger.debug "Configuring ToR configuration for server #{cert_name}"
+      get_server_networks(component,cert_name)
+      configure_tor_blade(cert_name)
+    end
 
     (resource_hash['asm::server'] || {}).each do |title, params|
       if params['rule_number']
@@ -628,7 +823,15 @@ class ASM::ServiceDeployment
       params['policy_name'] = "policy-#{params['serial_number']}-#{@id}"
 
       # TODO: if present this should go in kickstart
-      params.delete('custom_script')
+      #params.delete('custom_script')
+      custom_kickstart_content = params['custom_script']
+      logger.debug("kickstart content: #{custom_kickstart_content}")
+      if custom_kickstart_content.strip.length == 0
+        params['custom_script'] = ""
+      else
+        custom_script_path = create_custom_script(serial_number,custom_kickstart_content)
+        params['custom_script'] = custom_script_path
+      end
     end
 
     (resource_hash['asm::idrac'] || {}).each do |title, params|
@@ -922,7 +1125,7 @@ class ASM::ServiceDeployment
       raise(Exception, "Exactly one set of VM configuration parameters is required")
     end
     vm_params = resource_hash['asm::vm'][resource_hash['asm::vm'].keys[0]]
-    
+
     if resource_hash['asm::server'] && resource_hash['asm::server'].size > 1
       raise(Exception, "One or no sets of VM O/S configuration parameters required but #{resource_hash['asm::server'].size} were passed")
     end
@@ -1018,7 +1221,7 @@ class ASM::ServiceDeployment
       end
 
       massage_asm_server_params(ASM::Util.vm_uuid_to_serial_number(uuid),
-                                'puppet', server_params)
+      'puppet', server_params)
 
       resource_hash = { 'asm::server' => { hostname => server_params } }
       process_generic(server_cert_name, resource_hash, 'apply')
@@ -1120,6 +1323,14 @@ class ASM::ServiceDeployment
     Logger.new(id_log_file)
   end
 
+  def create_custom_script(cert_name,file_content)
+    id_log_file = File.join(deployment_dir, "#{cert_name}.cfg")
+    File.open(id_log_file, 'w') do |filehandle|
+      filehandle.puts file_content
+    end
+    id_log_file.to_s
+  end
+
   def get(type, name=nil)
     begin
       response = nil
@@ -1141,7 +1352,7 @@ class ASM::ServiceDeployment
       raise(CommandException, "bad http code: #{response.code}:#{response.to_str}")
     end
   end
-  
+
   def empty_guid?(guid)
     !guid || guid.to_s.empty? || guid.to_s == '-1'
   end
@@ -1153,6 +1364,7 @@ class ASM::ServiceDeployment
     pxevlanid = ""
     workloadvlanid = ""
     tagged_vlaninfo = Array.new
+    tagged_workloadvlaninfo = Array.new
     untagged_vlaninfo = Array.new
     server_conf = ASM::Util.build_component_configuration(server_component)
     network_params = (server_conf['asm::esxiscsiconfig'] || {})[server_cert]
@@ -1176,11 +1388,14 @@ class ASM::ServiceDeployment
         iscsivlanid = network['vlanId']
       end
       logger.debug "iSCSI GUID  #{iscsiguid}"
-      workloadguid = network_params["SCSI GUIDworkload_network"]
-      logger.debug "workloadguid #{workloadguid}"
-      if !empty_guid?(workloadguid)
-        network = ASM::Util.fetch_network_settings(workloadguid)
-        workloadvlanid = network['vlanId']
+      workloadguids = network_params["workload_network"]
+      workloadguids = workloadguids.split(",")
+      workloadguids.each do |workloadguid|
+        workloadguid = workloadguid.strip
+        if !empty_guid?(workloadguid)
+          network = ASM::Util.fetch_network_settings(workloadguid)
+          tagged_workloadvlaninfo.push(network['vlanId'])
+        end
       end
       pxeguid = network_params["pxe_network"]
       if !empty_guid?(pxeguid)
@@ -1188,7 +1403,7 @@ class ASM::ServiceDeployment
         pxevlanid = network['vlanId']
       end
       logger.debug "pxeguid: #{pxeguid}"
-      logger.debug "hypervisormanagementvlanid :: #{hypervisormanagementvlanid} vmotionvlanid :: #{vmotionvlanid} iscsivlanid :: #{iscsivlanid} workloadvlanid :: #{workloadvlanid} pxevlanid :: #{pxevlanid}"
+      logger.debug "hypervisormanagementvlanid :: #{hypervisormanagementvlanid} vmotionvlanid :: #{vmotionvlanid} iscsivlanid :: #{iscsivlanid} workloadvlanids :: #{tagged_workloadvlaninfo} pxevlanid :: #{pxevlanid}"
 
       if hypervisormanagementvlanid != ""
         tagged_vlaninfo.push(hypervisormanagementvlanid.to_s)
@@ -1196,10 +1411,6 @@ class ASM::ServiceDeployment
 
       if vmotionvlanid != ""
         tagged_vlaninfo.push(vmotionvlanid.to_s)
-      end
-
-      if workloadvlanid != ""
-        tagged_vlaninfo.push(workloadvlanid.to_s)
       end
 
       if iscsivlanid != ""
@@ -1213,6 +1424,7 @@ class ASM::ServiceDeployment
       logger.debug "Tagged vlan info #{tagged_vlaninfo}"
       logger.debug "Untagged vlan info #{untagged_vlaninfo}"
       $server_vlan_info["#{server_cert}_taggedvlanlist"] = tagged_vlaninfo
+      $server_vlan_info["#{server_cert}_taggedworkloadvlanlist"] = tagged_workloadvlaninfo
       $server_vlan_info["#{server_cert}_untaggedvlanlist"] = untagged_vlaninfo
       puts "Server vlan hash is #{$server_vlan_info}"
     end
@@ -1231,16 +1443,16 @@ class ASM::ServiceDeployment
 
     unless found_broker
       response = nil
-      broker = { 
-        'name' => broker_name, 
+      broker = {
+        'name' => broker_name,
         'configuration' => { 'server' => hostip, },
         'broker-type' => 'puppet',
       }
       url = 'http://localhost:8080/api/commands/create-broker'
       begin
         response = RestClient.post(url, broker.to_json,
-                                   :content_type => :json, 
-                                   :accept => :json)
+        :content_type => :json,
+        :accept => :json)
       rescue RestClient::ResourceNotFound => e
         raise(CommandException, "rest call failed #{e}")
       end

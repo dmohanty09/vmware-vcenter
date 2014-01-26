@@ -12,6 +12,7 @@ module ASM
 
     SERVER_RA_URL='http://localhost:9080/ServerRA/Server'
     NETWORKS_RA_URL='http://localhost:9080/VirtualServices/Network'
+    CHASSIS_RA_URL='http://localhost:9080/ChassisRA/Chassis'
     # TODO: give razor user access to this directory
     DEVICE_CONF_DIR='/etc/puppetlabs/puppet/devices'
     # See spec/fixtures/asm_server_m620.json for sample response
@@ -39,6 +40,57 @@ module ASM
       else
         ret
       end
+    end
+
+    def self.chassis_inventory(server_cert_name, logger)
+      chassis_info = {}
+      ioaips = []
+      url = "#{CHASSIS_RA_URL}"
+      logger.debug "URL : #{url}"
+      data = RestClient.get(url, {:accept => :json})
+      ret = JSON.parse(data)
+      ret.each do |chassis|
+        logger.debug "chassis : #{chassis}"
+        serverinfo = chassis['servers']
+        logger.debug "***************serverinfo #{serverinfo}"
+        serverinfo.each do |server|
+          logger.debug "server : #{server} : server_cert_name : #{server_cert_name}"
+          if server['serviceTag'] == server_cert_name
+            # Got chassis. get chassis information
+            chassis_ip = chassis['managementIP']
+            credentialRefId = chassis['credentialRefId']
+            chassisvervicetag = chassis['serviceTag']
+            chassisvervicetag = chassisvervicetag.downcase
+            chassisvertname = "chassism1000e-"+"#{chassisvervicetag}"
+            logger.debug "************chassisvertname : #{chassisvertname}"
+            device_conf ||= ASM::Util.parse_device_config(chassisvertname)
+            logger.debug "******** In getServerInventory device_conf is #{device_conf}************\n"
+
+            #            device_conf ||= ASM::Util.parse_device_config(certname)
+            #            inv  ||= ASM::Util.fetch_server_inventory(certname)
+            #            logger.debug "******** In getServerInventory device_conf is #{device_conf}************\n"
+            #            logger.debug "******** In getServerInventory inv is #{inv} **************\n"
+            chassis_username = device_conf[:user]
+            chassis_password = device_conf[:password]
+            logger.debug "chassis_username : #{chassis_username} chassis_password #{chassis_password}"
+            if chassis_username == ""
+              chassis_username = "root"
+              chassis_password = "calvini"
+            end
+            slot_num = server['slot']
+            ioainfo = chassis['ioms']
+            ioainfo.each do |ioa|
+              ioaip = "dell_iom-"+"#{ioa['managementIP']}"
+              ioaips.push ioaip
+            end
+            logger.debug "ioaips.pushioaips :::: #{ioaips}"
+            chassis_info = {'chassis_ip' => chassis_ip, 'chassis_username' => chassis_username, 'chassis_password' => chassis_password, 'slot_num' => slot_num, 'ioaips' => ioaips }
+            logger.debug "*** chassis_info : #{chassis_info}"
+            break
+          end
+        end
+      end
+      return chassis_info
     end
 
     # Execute getVmInfo.pl script to find UUID for given VM name
@@ -86,7 +138,7 @@ module ASM
 
       result_hash['VM uuid']
     end
-    
+
     # Hack to figure out cert name from uuid.
     #
     # For UUID 4223-c288-0e73-104e-e6c0-31f5f65ad063
@@ -104,7 +156,7 @@ module ASM
       end
       "VMware-#{first_half.join(' ')}-#{last_half.join(' ')}"
     end
-    
+
     def self.find_equallogic_iscsi_ip(cert_name)
       cmd = 'sudo'
       args = [ 'puppet', 'facts', 'find', cert_name,
