@@ -878,8 +878,15 @@ class ASM::ServiceDeployment
 
   # Find components of the given type which are related to component
   def find_related_components(type, component)
-    # TODO: implement this! Should look through relatedComponents field
-    @components_by_type[type]
+    all = @components_by_type[type]
+    relatedComponents = component['relatedComponents']
+    if !relatedComponents || (relatedComponents.is_a?(String) && relatedComponents.empty?)
+      related = []
+    else
+      related = ASM::Util.asm_json_array(relatedComponents['entry'])
+    end
+    related_ids = related.map { |elem|  elem['key'] }
+    all.select { |component| related_ids.include?(component['id']) }
   end
 
   def build_portgroup(vswitch, path, hostip, portgroup_name, network,
