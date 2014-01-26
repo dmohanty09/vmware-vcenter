@@ -231,7 +231,7 @@ class ASM::ServiceDeployment
     end
   end
 
-  def massage_asm_server_params(serial_number, broker, params)
+  def massage_asm_server_params(serial_number, params)
     if params['rule_number']
       raise(Exception, "Did not expect rule_number in asm::server")
     else
@@ -247,12 +247,9 @@ class ASM::ServiceDeployment
     params['serial_number'] = serial_number
     params['policy_name'] = "policy-#{params['os_host_name']}-#{@id}"
 
-    # TODO: if present this should go in kickstart
-    #params.delete('custom_script')
-    custom_kickstart_content = params['custom_script']
-    if custom_kickstart_content.strip.length == 0
-      params['custom_script'] = ""
-    else
+    custom_kickstart_content = (params['custom_script'] || '').strip
+    params.delete('custom_script')
+    if custom_kickstart_content.length > 0
       custom_script_path = create_custom_script(serial_number,custom_kickstart_content)
       params['custom_script'] = custom_script_path
     end
@@ -809,29 +806,7 @@ class ASM::ServiceDeployment
     end
 
     (resource_hash['asm::server'] || {}).each do |title, params|
-      if params['rule_number']
-        raise(Exception, "Did not expect rule_number in asm::server")
-      else
-        params['rule_number'] = rule_number
-      end
-
-      params['serial_number'] = serial_number
-
-      # Razor policies currently can't be deleted, only disabled. So we
-      # need to make sure we use a unique policy name so that we can
-      # disable old policies and assign new ones
-      params['policy_name'] = "policy-#{params['serial_number']}-#{@id}"
-
-      # TODO: if present this should go in kickstart
-      #params.delete('custom_script')
-      custom_kickstart_content = params['custom_script']
-      logger.debug("kickstart content: #{custom_kickstart_content}")
-      if custom_kickstart_content.strip.length == 0
-        params['custom_script'] = ""
-      else
-        custom_script_path = create_custom_script(serial_number,custom_kickstart_content)
-        params['custom_script'] = custom_script_path
-      end
+      massage_asm_server_params(serial_number, params)
     end
 
     (resource_hash['asm::idrac'] || {}).each do |title, params|
@@ -1221,7 +1196,7 @@ class ASM::ServiceDeployment
       end
 
       massage_asm_server_params(ASM::Util.vm_uuid_to_serial_number(uuid),
-      'puppet', server_params)
+                                server_params)
 
       resource_hash = { 'asm::server' => { hostname => server_params } }
       process_generic(server_cert_name, resource_hash, 'apply')
