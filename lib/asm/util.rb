@@ -42,6 +42,23 @@ module ASM
       end
     end
 
+    def self.reserve_network_ips(guid, n_ips, usage_guid)
+      url = "#{NETWORKS_RA_URL}/ipAddress/assign?networkId=#{URI.encode(guid)}&numberToReserve=#{n_ips}&usageGUID=#{URI.encode(usage_guid)}"
+      data = RestClient.put(url, {:content_type => :json}, {:accept => :json})
+      ret = JSON.parse(data)
+      n_retrieved = !ret ? 0 : ret.size
+      if n_retrieved != n_ips
+        raise(Exception, "Retrieved invalid response to network reservation request: #{ret}")
+      end
+      ret
+    end
+
+    def self.release_network_ips(usage_guid)
+      url = "#{NETWORKS_RA_URL}/ipAddress/release?usageGUID=#{usage_guid}"
+      data = RestClient.put(url, '')
+      ret = JSON.parse(data)
+    end
+
     def self.chassis_inventory(server_cert_name, logger)
       chassis_info = {}
       ioaips = []
