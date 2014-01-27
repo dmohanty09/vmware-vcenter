@@ -226,7 +226,9 @@ class ASM::ServiceDeployment
           end
         end
       end
-      raise(Exception, "Did not find result line in file #{puppet_out}") unless found_result_line
+      unless puppet_run_type == 'agent'
+        raise(Exception, "Did not find result line in file #{puppet_out}") unless found_result_line
+      end
       results
     end
   end
