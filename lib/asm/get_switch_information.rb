@@ -30,7 +30,7 @@ class Get_switch_information
           if bladetype == "rack"
             switchinfohash = rack_server_switch_info(nodename,sinfo,@switchinformation,logger)
           else
-            switchinfohash = blade_server_switch_info(nodename,sinfo)
+            switchinfohash = blade_server_switch_info(nodename,sinfo,logger)
             if switchinfohash.length() > 0
               switchinfohash.keys().each do |macaddress|
               end
@@ -44,9 +44,9 @@ class Get_switch_information
   end
   
 
-  def blade_server_switch_info(nname,server)
+  def blade_server_switch_info(nname,server,logger)
     bladeObj=Blade_server_switch_information.new(nname,server,@switchinformation)
-    serverinformation=bladeObj.identify_switch_ports
+    serverinformation=bladeObj.identify_switch_ports logger
     pp serverinformation
     return serverinformation
   end
