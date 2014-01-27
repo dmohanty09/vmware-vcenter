@@ -1210,35 +1210,14 @@ class ASM::ServiceDeployment
       cluster_params ||= params
     end
 
-    # TODO: title is not set correctly, needs to come from asm::server
-    # section
-    hostname = nil
-    resource_hash['asm::vm'].each do |title, params|
-      ['cluster', 'datacenter', 'datastore'].each do |key|
-        params[key] = cluster_params[key]
-      end
-
-      if resource_hash['asm::server']
-        server_params = (resource_hash['asm::server'][title] || {})
-      else
-        server_params = {}
-      end
-
-      if server_params['os_type'] == 'windows'
-        params['os_type'] = 'windows'
-      else
-        params['os_type'] = 'linux'
-      end
-      params['hostname'] = server_params['os_host_name']
-      hostname ||= params['hostname']
-      params['vcenter_username'] = cluster_deviceconf[:user]
-      params['vcenter_password'] = cluster_deviceconf[:password]
-      params['vcenter_server'] = cluster_deviceconf[:host]
-      params['vcenter_options'] = { 'insecure' => true }
-      params['ensure'] = 'present'
-    end
     vm_params['hostname'] = (server_params || {})['os_host_name']
     hostname = vm_params['hostname'] || raise(Exception, "VM host name not specified")
+    if server_params['os_image_type'] == 'windows'
+      vm_params['os_type'] = 'windows'
+    else
+      vm_params['os_type'] = 'linux'
+    end
+    
     vm_params['vcenter_username'] = cluster_deviceconf[:user]
     vm_params['vcenter_password'] = cluster_deviceconf[:password]
     vm_params['vcenter_server'] = cluster_deviceconf[:host]
@@ -1282,8 +1261,8 @@ class ASM::ServiceDeployment
         server_params['os_image_type'] = old_image_param
       end
 
-      massage_asm_server_params(ASM::Util.vm_uuid_to_serial_number(uuid),
-      server_params)
+      serial_number = @debug ? "vmware_debug_serial_no" : ASM::Util.vm_uuid_to_serial_number(uuid)
+      massage_asm_server_params(serial_number, server_params)
 
       resource_hash = { 'asm::server' => { hostname => server_params } }
       process_generic(server_cert_name, resource_hash, 'apply')
