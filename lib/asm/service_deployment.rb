@@ -318,28 +318,6 @@ class ASM::ServiceDeployment
     return wwpnSet
   end
 
-  # Currently having problems with some resource data for host / vswith
-  # when running through "puppet asm". This method provides a
-  # short-term workaround which is to generate a puppet manifest
-  # and directly apply that
-  def process_generic_direct_apply(cert_name, config)
-    raise(Exception, 'Component has no certname') unless cert_name
-    log("Starting processing resources for endpoint #{cert_name}")
-    resource_file = File.join(resources_dir, "#{cert_name}.pp")
-    File.open(resource_file, 'w') do |fh|
-      ASM::Util.write_manifest(config, fh)
-    end
-    cmd = "sudo puppet apply --debug --trace #{resource_file}"
-    if @debug
-      logger.info("[DEBUG MODE] execution skipped for '#{cmd}'")
-    else
-      puppet_out = File.join(deployment_dir, "#{cert_name}.out")
-      ASM::Util.run_command(cmd, puppet_out)
-      # If we got here the command did not fail, so we call it success
-      results = {'num_resources' => '1', 'num_failures' => '0', 'other_failures' => '0', 'num_updates' => '1'}
-    end
-  end
-
   def process_test(component)
     config = ASM::Util.build_component_configuration(component)
     process_generic(component['id'], config, 'apply', true)
@@ -1169,10 +1147,10 @@ class ASM::ServiceDeployment
         end
       end
     end
-    process_generic_direct_apply(cert_name, resource_hash)
+    process_generic(cert_name, resource_hash, 'apply')
     # Running into issues with hosts not coming out of maint mode
     # Try it again for good measure.
-    process_generic_direct_apply(cert_name, resource_hash)
+    process_generic(cert_name, resource_hash, 'apply')
   end
 
   def process_virtualmachine(component)
