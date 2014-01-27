@@ -54,9 +54,9 @@ module ASM
     end
 
     def self.release_network_ips(usage_guid)
-      url = "#{NETWORKS_RA_URL}/ipAddress/release?usageGUID=#{usage_guid}"
+      url = "#{NETWORKS_RA_URL}/ipAddress/release?usageGUID=#{URI.encode(usage_guid)}"
       data = RestClient.put(url, '')
-      ret = JSON.parse(data)
+      true
     end
 
     def self.chassis_inventory(server_cert_name, logger)
