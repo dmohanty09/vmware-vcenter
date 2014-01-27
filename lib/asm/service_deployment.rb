@@ -1017,7 +1017,7 @@ class ASM::ServiceDeployment
       networks = [ networks[0], networks[0] ]
     else
       if index == 2
-        portgrouptype = 'VMkernel'
+        portgrouptype = 'VirtualMachine'
       end
       portgroup_names = networks.map { |network| network['name'] }
     end
@@ -1109,6 +1109,8 @@ class ASM::ServiceDeployment
 
               next_require = "Asm::Host[#{server_cert}]"
               storage_network_require = nil
+              storage_network_vmk_index = nil
+              vmk_index = 0
               [ 'hypervisor_network', 'vmotion_network', 'workload_network', 'storage_network' ].each_with_index do | type, index |
                 guid = network_params[type]
                 if !empty_guid?(guid)
@@ -1128,9 +1130,22 @@ class ASM::ServiceDeployment
                   next_require = "Esx_vswitch[#{vswitch_title}]"
                   if type == 'storage_network'
                     storage_network_require = []
+                    storage_network_vmk_index = vmk_index
                     vswitch_resources['esx_portgroup'].each do |portgroupname, portgroupparams|
                       storage_network_require.push("Esx_portgroup[#{portgroupname}]")
                     end
+                  end
+
+                  vswitch_resources['esx_portgroup'].each do |title, portgroup|
+                    if portgroup['portgrouptype'] == 'VMkernel'
+                      vmk_index += 1
+                    end
+                  end
+
+                  if type == 'hypervisor_network' && vmk_index < 1
+                    # Even if we don't create a vmk for hypervisor_network
+                    # one will have been automatically created
+                    vmk_index = 1
                   end
 
                   log("Built vswitch resources = #{vswitch_resources.to_yaml}")
@@ -1160,6 +1175,8 @@ class ASM::ServiceDeployment
                       'iscsi_target_ip' => ASM::Util.find_equallogic_iscsi_ip(storage_cert),
                       'chapname' => storage_params['chap_user_name'],
                       'chapsecret' => storage_params['passwd'],
+                      'vmknics' => "vmk#{storage_network_vmk_index}",
+                      'vmknics1' => "vmk#{storage_network_vmk_index + 1}",
                       'require' => storage_network_require,
                     }
                   end
@@ -1430,7 +1447,7 @@ class ASM::ServiceDeployment
       end
       logger.debug "iSCSI GUID  #{iscsiguid}"
       workloadguids = network_params["workload_network"]
-      workloadguids = workloadguids.split(",")
+      workloadguids = empty_guid?(workloadguids) ? [] : workloadguids.split(",")
       workloadguids.each do |workloadguid|
         workloadguid = workloadguid.strip
         if !empty_guid?(workloadguid)
