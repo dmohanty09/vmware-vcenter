@@ -109,6 +109,44 @@ module ASM
       end
       return chassis_info
     end
+    
+    def self.get_iom_type(server_cert_name,iom_cert_name, logger)
+      chassis_info = {}
+      url = "#{CHASSIS_RA_URL}"
+      logger.debug "URL : #{url}"
+      data = RestClient.get(url, {:accept => :json})
+      ret = JSON.parse(data)
+      ret.each do |chassis|
+        serverinfo = chassis['servers']
+        serverinfo.each do |server|
+          logger.debug "server : #{server} : server_cert_name : #{server_cert_name}"
+          updated_service_tag = server['serviceTag'].downcase
+          logger.debug "updated_service_tag :: #{updated_service_tag} *** server_cert_name : #{server_cert_name}"
+          if server_cert_name.downcase == updated_service_tag.downcase
+            logger.debug "Found the matching server #{server['serviceTag']}"
+            # Got chassis. get chassis information
+            chassis_ip = chassis['managementIP']
+            chassisvervicetag = chassis['serviceTag']
+            chassisvervicetag = chassisvervicetag.downcase
+            ioainfo = chassis['ioms']
+            logger.debug "IOM info: #{ioainfo}"
+            ioainfo.each do |ioa|
+              ioaip = "dell_iom-"+"#{ioa['managementIP']}"
+              model = ioa['model']
+              if ioaip == iom_cert_name
+                if model =~ /Aggregator/
+                  ioatype = "ioa"
+                elsif model =~ /MXL/
+                  ioatype = "mxl"
+                end
+                return ioatype
+              end
+            end
+          end
+        end
+      end
+    end
+
 
     # Execute getVmInfo.pl script to find UUID for given VM name
     #
