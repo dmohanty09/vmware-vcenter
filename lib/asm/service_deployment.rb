@@ -838,25 +838,27 @@ class ASM::ServiceDeployment
       inventory  ||= ASM::Util.fetch_server_inventory(cert_name)
     end
 
-    # Putting the re-direction as per the blade type
-    # Blade and RACK server
-    get_server_networks(component,cert_name)
-    blade_type = inventory['serverType'].downcase
-    logger.debug("Server Blade type: #{blade_type}")
-    if blade_type == "rack"
-      logger.debug "Configuring rack server"
-      if $configured_rack_switches.length() > 0
-        logger.debug "Configuring ToR configuration for server #{cert_name}"
-        configure_tor(cert_name)
+    if inventory
+      # Putting the re-direction as per the blade type
+      # Blade and RACK server
+      get_server_networks(component,cert_name)
+      blade_type = inventory['serverType'].downcase
+      logger.debug("Server Blade type: #{blade_type}")
+      if blade_type == "rack"
+        logger.debug "Configuring rack server"
+        if $configured_rack_switches.length() > 0
+          logger.debug "Configuring ToR configuration for server #{cert_name}"
+          configure_tor(cert_name)
+        else
+          logger.debug "INFO: There are no RACK ToR Switches in the ASM Inventory"
+        end
       else
-        logger.debug "INFO: There are no RACK ToR Switches in the ASM Inventory"
-      end
-    else
-      if $configured_blade_switches.length() > 0
-        logger.debug "Configuring blade server"
-        configure_tor_blade(cert_name)
-      else
-        logger.debug "INFO: There are no IOM Switches in the ASM Inventory"
+        if $configured_blade_switches.length() > 0
+          logger.debug "Configuring blade server"
+          configure_tor_blade(cert_name)
+        else
+          logger.debug "INFO: There are no IOM Switches in the ASM Inventory"
+        end
       end
     end
 
