@@ -880,7 +880,7 @@ class ASM::ServiceDeployment
 
   # Find components of the given type which are related to component
   def find_related_components(type, component)
-    all = @components_by_type[type]
+    all = (@components_by_type[type] || [])
     relatedComponents = component['relatedComponents']
     if !relatedComponents || (relatedComponents.is_a?(String) && relatedComponents.empty?)
       related = []
