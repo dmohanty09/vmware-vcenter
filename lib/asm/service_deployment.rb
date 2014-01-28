@@ -816,25 +816,27 @@ class ASM::ServiceDeployment
       inventory  ||= ASM::Util.fetch_server_inventory(cert_name)
     end
 
-    # Putting the re-direction as per the blade type
-    # Blade and RACK server
-    get_server_networks(component,cert_name)
-    blade_type = inventory['serverType'].downcase
-    logger.debug("Server Blade type: #{blade_type}")
-    if blade_type == "rack"
-      logger.debug "Configuring rack server"
-      if $configured_rack_switches.length() > 0
-        logger.debug "Configuring ToR configuration for server #{cert_name}"
-        configure_tor(cert_name)
+    if inventory
+      # Putting the re-direction as per the blade type
+      # Blade and RACK server
+      get_server_networks(component,cert_name)
+      blade_type = inventory['serverType'].downcase
+      logger.debug("Server Blade type: #{blade_type}")
+      if blade_type == "rack"
+        logger.debug "Configuring rack server"
+        if $configured_rack_switches.length() > 0
+          logger.debug "Configuring ToR configuration for server #{cert_name}"
+          configure_tor(cert_name)
+        else
+          logger.debug "INFO: There are no RACK ToR Switches in the ASM Inventory"
+        end
       else
-        logger.debug "INFO: There are no RACK ToR Switches in the ASM Inventory"
-      end
-    else
-      if $configured_blade_switches.length() > 0
-        logger.debug "Configuring blade server"
-        configure_tor_blade(cert_name)
-      else
-        logger.debug "INFO: There are no IOM Switches in the ASM Inventory"
+        if $configured_blade_switches.length() > 0
+          logger.debug "Configuring blade server"
+          configure_tor_blade(cert_name)
+        else
+          logger.debug "INFO: There are no IOM Switches in the ASM Inventory"
+        end
       end
     end
 
@@ -993,7 +995,7 @@ class ASM::ServiceDeployment
       networks = [ networks[0], networks[0] ]
     else
       if index == 2
-        portgrouptype = 'VMkernel'
+        portgrouptype = 'VirtualMachine'
       end
       portgroup_names = networks.map { |network| network['name'] }
     end
@@ -1085,6 +1087,8 @@ class ASM::ServiceDeployment
 
               next_require = "Asm::Host[#{server_cert}]"
               storage_network_require = nil
+              storage_network_vmk_index = nil
+              vmk_index = 0
               [ 'hypervisor_network', 'vmotion_network', 'workload_network', 'storage_network' ].each_with_index do | type, index |
                 guid = network_params[type]
                 if !empty_guid?(guid)
@@ -1104,9 +1108,22 @@ class ASM::ServiceDeployment
                   next_require = "Esx_vswitch[#{vswitch_title}]"
                   if type == 'storage_network'
                     storage_network_require = []
+                    storage_network_vmk_index = vmk_index
                     vswitch_resources['esx_portgroup'].each do |portgroupname, portgroupparams|
                       storage_network_require.push("Esx_portgroup[#{portgroupname}]")
                     end
+                  end
+
+                  vswitch_resources['esx_portgroup'].each do |title, portgroup|
+                    if portgroup['portgrouptype'] == 'VMkernel'
+                      vmk_index += 1
+                    end
+                  end
+
+                  if type == 'hypervisor_network' && vmk_index < 1
+                    # Even if we don't create a vmk for hypervisor_network
+                    # one will have been automatically created
+                    vmk_index = 1
                   end
 
                   log("Built vswitch resources = #{vswitch_resources.to_yaml}")
@@ -1136,6 +1153,8 @@ class ASM::ServiceDeployment
                       'iscsi_target_ip' => ASM::Util.find_equallogic_iscsi_ip(storage_cert),
                       'chapname' => storage_params['chap_user_name'],
                       'chapsecret' => storage_params['passwd'],
+                      'vmknics' => "vmk#{storage_network_vmk_index}",
+                      'vmknics1' => "vmk#{storage_network_vmk_index + 1}",
                       'require' => storage_network_require,
                     }
                   end
@@ -1186,35 +1205,14 @@ class ASM::ServiceDeployment
       cluster_params ||= params
     end
 
-    # TODO: title is not set correctly, needs to come from asm::server
-    # section
-    hostname = nil
-    resource_hash['asm::vm'].each do |title, params|
-      ['cluster', 'datacenter', 'datastore'].each do |key|
-        params[key] = cluster_params[key]
-      end
-
-      if resource_hash['asm::server']
-        server_params = (resource_hash['asm::server'][title] || {})
-      else
-        server_params = {}
-      end
-
-      if server_params['os_type'] == 'windows'
-        params['os_type'] = 'windows'
-      else
-        params['os_type'] = 'linux'
-      end
-      params['hostname'] = server_params['os_host_name']
-      hostname ||= params['hostname']
-      params['vcenter_username'] = cluster_deviceconf[:user]
-      params['vcenter_password'] = cluster_deviceconf[:password]
-      params['vcenter_server'] = cluster_deviceconf[:host]
-      params['vcenter_options'] = { 'insecure' => true }
-      params['ensure'] = 'present'
-    end
     vm_params['hostname'] = (server_params || {})['os_host_name']
     hostname = vm_params['hostname'] || raise(Exception, "VM host name not specified")
+    if server_params['os_image_type'] == 'windows'
+      vm_params['os_type'] = 'windows'
+    else
+      vm_params['os_type'] = 'linux'
+    end
+    
     vm_params['vcenter_username'] = cluster_deviceconf[:user]
     vm_params['vcenter_password'] = cluster_deviceconf[:password]
     vm_params['vcenter_server'] = cluster_deviceconf[:host]
@@ -1258,8 +1256,8 @@ class ASM::ServiceDeployment
         server_params['os_image_type'] = old_image_param
       end
 
-      massage_asm_server_params(ASM::Util.vm_uuid_to_serial_number(uuid),
-      server_params)
+      serial_number = @debug ? "vmware_debug_serial_no" : ASM::Util.vm_uuid_to_serial_number(uuid)
+      massage_asm_server_params(serial_number, server_params)
 
       resource_hash = { 'asm::server' => { hostname => server_params } }
       process_generic(server_cert_name, resource_hash, 'apply')
@@ -1427,7 +1425,7 @@ class ASM::ServiceDeployment
       end
       logger.debug "iSCSI GUID  #{iscsiguid}"
       workloadguids = network_params["workload_network"]
-      workloadguids = workloadguids.split(",")
+      workloadguids = empty_guid?(workloadguids) ? [] : workloadguids.split(",")
       workloadguids.each do |workloadguid|
         workloadguid = workloadguid.strip
         if !empty_guid?(workloadguid)
