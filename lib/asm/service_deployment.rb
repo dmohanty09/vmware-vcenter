@@ -1053,6 +1053,17 @@ class ASM::ServiceDeployment
               vmk_index = 0
               [ 'hypervisor_network', 'vmotion_network', 'workload_network', 'storage_network' ].each_with_index do | type, index |
                 guid = network_params[type]
+                
+                if type == 'hypervisor_network'
+                  # Skip hypervisor network for now, it is causing problems
+                  # because it is configuring the same interface that rbvmomi
+                  # is talking to esxi through
+                  guid = nil
+                  # Even if we don't create a vmk for hypervisor_network
+                  # one will have been automatically created
+                  vmk_index = 1
+                end
+
                 if !empty_guid?(guid)
                   # For workload, guid may be a comma-separated list
                   log("Configuring #{type} = #{guid}")
@@ -1068,10 +1079,16 @@ class ASM::ServiceDeployment
                   # Set next require to this vswitch so they are all
                   # ordered properly
                   next_require = "Esx_vswitch[#{vswitch_title}]"
-                  if type == 'storage_network'
-                    storage_network_require = []
-                    storage_network_vmk_index = vmk_index
-                    vswitch_resources['esx_portgroup'].each do |portgroupname, portgroupparams|
+                  vswitch_resources['esx_portgroup'].each do |portgroupname, portgroupparams|
+                    # Enforce very strict ordering of each vswitch,
+                    # its portgroups, then the next vswitch, etc.
+                    # This is necessary to guess what vmk the portgroups
+                    # end up on so that the datastore can be configured.
+                    next_require = "Esx_portgroup[#{portgroupname}]"
+
+                    if type == 'storage_network'
+                      storage_network_require ||= []
+                      storage_network_vmk_index ||= vmk_index
                       storage_network_require.push("Esx_portgroup[#{portgroupname}]")
                     end
                   end
@@ -1080,12 +1097,6 @@ class ASM::ServiceDeployment
                     if portgroup['portgrouptype'] == 'VMkernel'
                       vmk_index += 1
                     end
-                  end
-
-                  if type == 'hypervisor_network' && vmk_index < 1
-                    # Even if we don't create a vmk for hypervisor_network
-                    # one will have been automatically created
-                    vmk_index = 1
                   end
 
                   log("Built vswitch resources = #{vswitch_resources.to_yaml}")
@@ -1191,12 +1202,6 @@ class ASM::ServiceDeployment
       else
       end
 
-      #if server_params['os_image_type'] == 'windows'
-      #  params['os_type'] = 'windows'
-      #else
-      #  params['os_type'] = 'linux'
-      #end
-
       params['hostname'] = server_params['os_host_name']
       hostname ||= params['hostname']
       params['vcenter_username'] = cluster_deviceconf[:user]
@@ -1207,6 +1212,17 @@ class ASM::ServiceDeployment
     end
     vm_params['hostname'] = (server_params || {})['os_host_name']
     hostname = vm_params['hostname'] || raise(Exception, "VM host name not specified")
+    if server_params['os_image_type'] == 'windows'
+      vm_params['os_type'] = 'windows'
+      vm_params['os_guest_id'] = 'windows8Server64Guest'
+    else
+      vm_params['os_type'] = 'linux'
+      vm_params['os_guest_id'] = 'rhel6_64Guest'
+    end
+
+    vm_params['cluster'] = cluster_params['cluster']    
+    vm_params['datacenter'] = cluster_params['datacenter']    
+    vm_params['datastore'] = cluster_params['datastore']    
     vm_params['vcenter_username'] = cluster_deviceconf[:user]
     vm_params['vcenter_password'] = cluster_deviceconf[:password]
     vm_params['vcenter_server'] = cluster_deviceconf[:host]
