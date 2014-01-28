@@ -1202,12 +1202,6 @@ class ASM::ServiceDeployment
       else
       end
 
-      #if server_params['os_image_type'] == 'windows'
-      #  params['os_type'] = 'windows'
-      #else
-      #  params['os_type'] = 'linux'
-      #end
-
       params['hostname'] = server_params['os_host_name']
       hostname ||= params['hostname']
       params['vcenter_username'] = cluster_deviceconf[:user]
@@ -1218,6 +1212,17 @@ class ASM::ServiceDeployment
     end
     vm_params['hostname'] = (server_params || {})['os_host_name']
     hostname = vm_params['hostname'] || raise(Exception, "VM host name not specified")
+    if server_params['os_image_type'] == 'windows'
+      vm_params['os_type'] = 'windows'
+      vm_params['os_guest_id'] = 'windows8Server64Guest'
+    else
+      vm_params['os_type'] = 'linux'
+      vm_params['os_guest_id'] = 'rhel6_64Guest'
+    end
+
+    vm_params['cluster'] = cluster_params['cluster']    
+    vm_params['datacenter'] = cluster_params['datacenter']    
+    vm_params['datastore'] = cluster_params['datastore']    
     vm_params['vcenter_username'] = cluster_deviceconf[:user]
     vm_params['vcenter_password'] = cluster_deviceconf[:password]
     vm_params['vcenter_server'] = cluster_deviceconf[:host]
