@@ -24,6 +24,8 @@ class ASM::ServiceDeployment
     @id = id
     @configured_rack_switches = Array.new
     @configured_blade_switches = Array.new
+    @rack_server_switchhash = {}
+    @blade_server_switchhash = {}
   end
 
   def logger
@@ -60,9 +62,10 @@ class ASM::ServiceDeployment
       # of a given component type in the future, e.g. VSwitch configuration
       # information is contained in the server component type data
       @components_by_type = components_by_type(service_deployment)
-      #$configured_rack_switches = get_all_rack_switches()
-      #$configured_blade_switches = get_all_blade_switches()
       get_all_switches()
+      @rack_server_switchhash = self.populate_rack_switch_hash()
+      @blade_server_switchhash = self.populate_blade_switch_hash()
+      process_tor_switches()
       process_components()
     rescue Exception => e
       File.open(File.join(deployment_dir, "exception.log"), 'w') do |fh|
@@ -74,6 +77,39 @@ class ASM::ServiceDeployment
       raise(e)
     end
     log("Status: Completed")
+  end
+  
+  def process_tor_switches()
+    # Get all Servers
+    @components_by_type['SERVER'].each do |server_component|
+      server_cert_name =  server_component['id']
+      logger.debug "Server cert name: #{server_cert_name}"
+      
+      inventory  ||= ASM::Util.fetch_server_inventory(server_cert_name)
+      if inventory
+        # Putting the re-direction as per the blade type
+        # Blade and RACK server
+        server_vlan_info = get_server_networks(server_component,server_cert_name)
+        blade_type = inventory['serverType'].downcase
+        logger.debug("Server Blade type: #{blade_type}")
+        if blade_type == "rack"
+          logger.debug "Configuring rack server"
+          if @configured_rack_switches.length() > 0
+            logger.debug "Configuring ToR configuration for server #{server_cert_name}"
+            configure_tor(server_cert_name, server_vlan_info)
+          else
+            logger.debug "INFO: There are no RACK ToR Switches in the ASM Inventory"
+          end
+        else
+          if @configured_blade_switches.length() > 0
+            logger.debug "Configuring blade server"
+            configure_tor_blade(server_cert_name, server_vlan_info)
+          else
+            logger.debug "INFO: There are no IOM Switches in the ASM Inventory"
+          end
+        end
+      end
+    end
   end
 
   def components_by_type(service_deployment)
@@ -119,11 +155,15 @@ class ASM::ServiceDeployment
     end
   end
 
-  def process_generic(cert_name, config, puppet_run_type, override = true)
+  def process_generic(cert_name, config, puppet_run_type, override = true, server_cert_name = nil)
     raise(Exception, 'Component has no certname') unless cert_name
     log("Starting processing resources for endpoint #{cert_name}")
 
-    resource_file = File.join(resources_dir, "#{cert_name}.yaml")
+    if server_cert_name != nil
+      resource_file = File.join(resources_dir, "#{cert_name}-#{server_cert_name}.yaml")
+    else
+      resource_file = File.join(resources_dir, "#{cert_name}.yaml")
+    end
 
     wwpn = ""
     wwpnSet = Set.new()
@@ -173,7 +213,7 @@ class ASM::ServiceDeployment
       end
 
       File.open(tempfileloc,"a") do |tempfile|
-        tempfile.puts("wwn: '#{wwpn}'")
+        tempfile.puts("    wwn: '#{wwpn}'")
         tempfile.close
       end
       FileUtils.mv(tempfileloc, resource_file)
@@ -334,39 +374,11 @@ class ASM::ServiceDeployment
     inv = nil
     switchhash = {}
     serverhash =  {}
-    deviceConfDir ='/etc/puppetlabs/puppet/devices'
-    @configured_rack_switches.each do |certname|
-      logger.debug "****************** certname :: #{certname} ********************"
-      conf_file = File.join(deviceConfDir, "#{certname}.conf")
-      if !File.exist?(conf_file)
-        next
-      end
-      device_conf = nil
-      switchpropertyhash = {}
-      switchpropertyhash = Hash.new
-      device_conf ||= ASM::Util.parse_device_config(certname)
-      logger.debug "******* In process_tor device_conf is #{device_conf} ***********\n"
-      torip = device_conf[:host]
-      torusername = device_conf[:user]
-      torpassword = device_conf['password']
-      torurl = device_conf['url']
-      logger.debug "****** #{device_conf} ******"
-      logger.debug "torip :: #{torip} torusername :: #{torusername} torpassword :: #{torpassword}\n"
-      logger.debug "tor url :: #{torurl}\n"
-      switchpropertyhash['connection_url'] = torurl
-      if certname =~ /dell_ftos/
-        switchpropertyhash['device_type'] = "dell_ftos"
-      else
-        switchpropertyhash['device_type'] = "dell_powerconnect"
-      end
-      logger.debug "********* switch property hash is #{switchpropertyhash} *************\n"
-      switchhash["#{certname}"] = switchpropertyhash
-      logger.debug "********* switch hash is #{switchhash} *************\n"
-    end
+    
     serverhash = get_server_inventory(server_cert_name)
     logger.debug "******** In process_tor after getServerInventory serverhash is #{serverhash} **********\n"
-    switchinfoobj = Get_switch_information.new(serverhash,switchhash)
-    switchportdetail = switchinfoobj.get_info(logger)
+    switchinfoobj = Get_switch_information.new()
+    switchportdetail = switchinfoobj.get_info(serverhash,@rack_server_switchhash,logger)
     logger.debug "******** In process_tor switchportdetail :: #{switchportdetail} *********\n"
     tagged_vlaninfo = server_vlan_info["#{server_cert_name}_taggedvlanlist"]
     tagged_workloadvlaninfo = server_vlan_info["#{server_cert_name}_taggedworkloadvlanlist"]
@@ -417,7 +429,7 @@ class ASM::ServiceDeployment
             logger.debug "Non-supported switch type"
             return
           end
-          process_generic(switchcertname, resource_hash, 'device')
+          process_generic(switchcertname, resource_hash, 'device', true, server_cert_name)
         end
         untagged_vlaninfo.each do |vlanid|
           logger.debug "vlanid :: #{vlanid}"
@@ -439,7 +451,7 @@ class ASM::ServiceDeployment
             logger.debug "Non-supported switch type"
             return
           end
-          process_generic(switchcertname, resource_hash, 'device')
+          process_generic(switchcertname, resource_hash, 'device', true, server_cert_name)
         end
       end
     end
@@ -451,35 +463,11 @@ class ASM::ServiceDeployment
     inv = nil
     switchhash = {}
     serverhash = {}
-    deviceConfDir ='/etc/puppetlabs/puppet/devices'
-    @configured_blade_switches.each do |certname|
-      conf_file = File.join(deviceConfDir, "#{certname}.conf")
-      if !File.exist?(conf_file)
-        next
-      end
-      switchpropertyhash = {}
-      switchpropertyhash = Hash.new
-      device_conf ||= ASM::Util.parse_device_config(certname)
-      puts "******* In process_tor device_conf is #{device_conf} ***********\n"
-      torip = device_conf[:host]
-      torusername = device_conf[:user]
-      torpassword = device_conf['password']
-      torurl = device_conf['url']
-      logger.debug "****** #{device_conf} ******"
-      logger.debug "torip :: #{torip} torusername :: #{torusername} torpassword :: #{torpassword}\n"
-      logger.debug "tor url :: #{torurl}\n"
-      switchpropertyhash['connection_url'] = torurl
-      if certname =~ /dell_iom/
-        switchpropertyhash['device_type'] = "dell_iom"
-      end
-      logger.debug "********* switch property hash is #{switchpropertyhash} *************\n"
-      switchhash["#{certname}"] = switchpropertyhash
-      logger.debug "********* switch hash is #{switchhash} *************\n"
-    end
+    deviceConfDir ='/etc/puppetlabs/puppet/devices'    
     serverhash = get_server_inventory(server_cert_name)
     logger.debug "******** In process_tor after getServerInventory serverhash is #{serverhash} **********\n"
-    switchinfoobj = Get_switch_information.new(serverhash,switchhash)
-    switchportdetail = switchinfoobj.get_info(logger)
+    switchinfoobj = Get_switch_information.new()
+    switchportdetail = switchinfoobj.get_info(serverhash,@blade_server_switchhash,logger)
     logger.debug "******** In process_tor switchportdetail :: #{switchportdetail} *********\n"
     tagged_vlaninfo = server_vlan_info["#{server_cert_name}_taggedvlanlist"]
     tagged_workloadvlaninfo = server_vlan_info["#{server_cert_name}_taggedworkloadvlanlist"]
@@ -516,7 +504,7 @@ class ASM::ServiceDeployment
                 }
               }
               logger.debug("*** resource_hash is #{resource_hash} ******")
-              process_generic(switchcertname, resource_hash, 'device')
+              process_generic(switchcertname, resource_hash, 'device', true, server_cert_name)
             end
           elsif iom_type == "mxl"
             match = interface.match(/(\w*)(\d.*)/)
@@ -535,7 +523,7 @@ class ASM::ServiceDeployment
                   }
                 }
                 logger.debug("*** resource_hash is #{resource_hash} ******")
-                process_generic(switchcertname, resource_hash, 'device')
+                process_generic(switchcertname, resource_hash, 'device', true, server_cert_name)
               end
             end # end of tagged vlan loop
 
@@ -554,7 +542,7 @@ class ASM::ServiceDeployment
                   }
                 }
                 logger.debug("*** resource_hash is #{resource_hash} ******")
-                process_generic(switchcertname, resource_hash, 'device')
+                process_generic(switchcertname, resource_hash, 'device', true, server_cert_name)
               end
 
             end
@@ -626,7 +614,7 @@ class ASM::ServiceDeployment
     dracpassword = device_conf[:password]
     servicetag = inv['serviceTag']
     model = inv['model'].split(' ').last
-    logger.debug "dracipaddress :: #{dracipaddress} dracusername :: #{dracusername} dracpassword :: #{dracpassword}\n"
+    #logger.debug "dracipaddress :: #{dracipaddress} dracusername :: #{dracusername} dracpassword :: #{dracpassword}\n"
     logger.debug "servicetag :: #{servicetag} model :: #{model}\n"
     if (model =~ /R620/ || model =~ /R720/)
       serverpropertyhash['bladetype'] = "rack"
@@ -696,31 +684,80 @@ class ASM::ServiceDeployment
     logger.debug "Blade IOM Switch certificate name list is #{@configured_blade_switches}"
     #return switchList
   end
+  
+  def populate_rack_switch_hash
+    deviceConfDir ='/etc/puppetlabs/puppet/devices'
+    switchhash = {}
+    @configured_rack_switches.each do |certname|
+      logger.debug "****************** certname :: #{certname} ********************"
+      conf_file = File.join(deviceConfDir, "#{certname}.conf")
+      if !File.exist?(conf_file)
+        next
+      end
+      device_conf = nil
+      switchpropertyhash = {}
+      switchpropertyhash = Hash.new
+      device_conf ||= ASM::Util.parse_device_config(certname)
+      logger.debug "******* In process_tor device_conf is #{device_conf} ***********\n"
+      torip = device_conf[:host]
+      torusername = device_conf[:user]
+      torpassword = device_conf['password']
+      torurl = device_conf['url']
+      logger.debug "****** #{device_conf} ******"
+      #logger.debug "torip :: #{torip} torusername :: #{torusername} torpassword :: #{torpassword}\n"
+      logger.debug "tor url :: #{torurl}\n"
+      switchpropertyhash['connection_url'] = torurl
+      if certname =~ /dell_ftos/
+        switchpropertyhash['device_type'] = "dell_ftos"
+      else
+        switchpropertyhash['device_type'] = "dell_powerconnect"
+      end
+      logger.debug "********* switch property hash is #{switchpropertyhash} *************\n"
+      switchhash["#{certname}"] = switchpropertyhash
+      logger.debug "********* switch hash is #{switchhash} *************\n"
+    end
+    switchhash
+  end
+  
+  def populate_blade_switch_hash
+    deviceConfDir ='/etc/puppetlabs/puppet/devices'
+    switchhash = {}
+    @configured_blade_switches.each do |certname|
+      logger.debug "****************** certname :: #{certname} ********************"
+      conf_file = File.join(deviceConfDir, "#{certname}.conf")
+      if !File.exist?(conf_file)
+        next
+      end
+      device_conf = nil
+      switchpropertyhash = {}
+      switchpropertyhash = Hash.new
+      device_conf ||= ASM::Util.parse_device_config(certname)
+      logger.debug "******* In process_tor device_conf is #{device_conf} ***********\n"
+      torip = device_conf[:host]
+      torusername = device_conf[:user]
+      torpassword = device_conf['password']
+      torurl = device_conf['url']
+      logger.debug "****** #{device_conf} ******"
+      #logger.debug "torip :: #{torip} torusername :: #{torusername} torpassword :: #{torpassword}\n"
+      logger.debug "tor url :: #{torurl}\n"
+      switchpropertyhash['connection_url'] = torurl
+      if certname =~ /dell_ftos/
+        switchpropertyhash['device_type'] = "dell_ftos"
+      else
+        switchpropertyhash['device_type'] = "dell_powerconnect"
+      end
+      logger.debug "********* switch property hash is #{switchpropertyhash} *************\n"
+      switchhash["#{certname}"] = switchpropertyhash
+      logger.debug "********* switch hash is #{switchhash} *************\n"
+    end
+    switchhash
+  end
 
-  #  def get_all_blade_switches()
-  #    switchList = Array.new
-  #    cmd = "sudo puppet cert list --all"
-  #    puppet_out = File.join(deployment_dir, "puppetcert.out")
-  #    ASM::Util.run_command(cmd, puppet_out)
-  #    resp = File.read(puppet_out)
-  #    resp.split("\n").each do |line|
-  #      if line =~ /dell_iom/
-  #        logger.debug "Found dell iom certificate"
-  #        res = line.to_s.strip.split(' ')
-  #        switchCert = res[1]
-  #        switchCert = switchCert.gsub(/\"/, "")
-  #        logger.debug "Dell IOM switch certificate is #{switchCert}"
-  #        switchList.push(switchCert)
-  #      end
-  #    end
-  #    logger.debug "Switch certificate name list is #{switchList}"
-  #    return switchList
-  #  end
-
+  
   def get_server_macaddress(dracipaddress,dracusername,dracpassword,certname)
     macAddressList = Array.new
     cmd = "wsman enumerate http://schemas.dmtf.org/wbem/wscim/1/cim-schema/2/root/dcim/DCIM_NICView -h  #{dracipaddress}  -V -v -c dummy.cert -P 443 -u #{dracusername} -p #{dracpassword} -j utf-8 -y basic"
-    puppet_out = File.join(deployment_dir, "servermac.out")
+    puppet_out = File.join(deployment_dir, "servermac-#{certname}.out")
     if File.exists?(puppet_out)
       File.delete(puppet_out)
     end
@@ -776,30 +813,6 @@ class ASM::ServiceDeployment
     if resource_hash['asm::idrac']
       deviceconf ||= ASM::Util.parse_device_config(cert_name)
       inventory  ||= ASM::Util.fetch_server_inventory(cert_name)
-    end
-
-    if inventory
-      # Putting the re-direction as per the blade type
-      # Blade and RACK server
-      server_vlan_info = get_server_networks(component,cert_name)
-      blade_type = inventory['serverType'].downcase
-      logger.debug("Server Blade type: #{blade_type}")
-      if blade_type == "rack"
-        logger.debug "Configuring rack server"
-        if @configured_rack_switches.length() > 0
-          logger.debug "Configuring ToR configuration for server #{cert_name}"
-          configure_tor(cert_name, server_vlan_info)
-        else
-          logger.debug "INFO: There are no RACK ToR Switches in the ASM Inventory"
-        end
-      else
-        if @configured_blade_switches.length() > 0
-          logger.debug "Configuring blade server"
-          configure_tor_blade(cert_name, server_vlan_info)
-        else
-          logger.debug "INFO: There are no IOM Switches in the ASM Inventory"
-        end
-      end
     end
 
     (resource_hash['asm::server'] || {}).each do |title, params|
@@ -1053,6 +1066,17 @@ class ASM::ServiceDeployment
               vmk_index = 0
               [ 'hypervisor_network', 'vmotion_network', 'workload_network', 'storage_network' ].each_with_index do | type, index |
                 guid = network_params[type]
+                
+                if type == 'hypervisor_network'
+                  # Skip hypervisor network for now, it is causing problems
+                  # because it is configuring the same interface that rbvmomi
+                  # is talking to esxi through
+                  guid = nil
+                  # Even if we don't create a vmk for hypervisor_network
+                  # one will have been automatically created
+                  vmk_index = 1
+                end
+
                 if !empty_guid?(guid)
                   # For workload, guid may be a comma-separated list
                   log("Configuring #{type} = #{guid}")
@@ -1068,10 +1092,16 @@ class ASM::ServiceDeployment
                   # Set next require to this vswitch so they are all
                   # ordered properly
                   next_require = "Esx_vswitch[#{vswitch_title}]"
+                  vswitch_resources['esx_portgroup'].each do |portgroupname, portgroupparams|
+                    # Enforce very strict ordering of each vswitch,
+                    # its portgroups, then the next vswitch, etc.
+                    # This is necessary to guess what vmk the portgroups
+                    # end up on so that the datastore can be configured.
+                    next_require = "Esx_portgroup[#{portgroupname}]"
+
                   if type == 'storage_network'
-                    storage_network_require = []
-                    storage_network_vmk_index = vmk_index
-                    vswitch_resources['esx_portgroup'].each do |portgroupname, portgroupparams|
+                      storage_network_require ||= []
+                      storage_network_vmk_index ||= vmk_index
                       storage_network_require.push("Esx_portgroup[#{portgroupname}]")
                     end
                   end
@@ -1080,12 +1110,6 @@ class ASM::ServiceDeployment
                     if portgroup['portgrouptype'] == 'VMkernel'
                       vmk_index += 1
                     end
-                  end
-
-                  if type == 'hypervisor_network' && vmk_index < 1
-                    # Even if we don't create a vmk for hypervisor_network
-                    # one will have been automatically created
-                    vmk_index = 1
                   end
 
                   log("Built vswitch resources = #{vswitch_resources.to_yaml}")
@@ -1167,46 +1191,19 @@ class ASM::ServiceDeployment
       cluster_params ||= params
     end
 
-    # TODO: title is not set correctly, needs to come from asm::server
-    # section
-    hostname = nil
-    resource_hash['asm::vm'].each do |title, params|
-      ['cluster', 'datacenter', 'datastore'].each do |key|
-        params[key] = cluster_params[key]
-      end
-
-      if resource_hash['asm::server']
-        server_params = (resource_hash['asm::server'][title] || {})
-      else
-        server_params = {}
-      end
-
-      case server_params['os_image_type']
-      when 'windows'
-        params['os_type'] = 'windows8Server64Guest'
-        params['scsi_controller_type'] = 'LSI Logic SAS'
-      when 'linux'
-        params['os_type'] = 'rhel6_64Guest'
-        params['scsi_controller_type'] = 'VMware Paravirtual'
-      else
-      end
-
-      #if server_params['os_image_type'] == 'windows'
-      #  params['os_type'] = 'windows'
-      #else
-      #  params['os_type'] = 'linux'
-      #end
-
-      params['hostname'] = server_params['os_host_name']
-      hostname ||= params['hostname']
-      params['vcenter_username'] = cluster_deviceconf[:user]
-      params['vcenter_password'] = cluster_deviceconf[:password]
-      params['vcenter_server'] = cluster_deviceconf[:host]
-      params['vcenter_options'] = { 'insecure' => true }
-      params['ensure'] = 'present'
-    end
     vm_params['hostname'] = (server_params || {})['os_host_name']
     hostname = vm_params['hostname'] || raise(Exception, "VM host name not specified")
+    if server_params['os_image_type'] == 'windows'
+      vm_params['os_type'] = 'windows'
+      vm_params['os_guest_id'] = 'windows8Server64Guest'
+      else
+      vm_params['os_type'] = 'linux'
+      vm_params['os_guest_id'] = 'rhel6_64Guest'
+      end
+
+    vm_params['cluster'] = cluster_params['cluster']    
+    vm_params['datacenter'] = cluster_params['datacenter']    
+    vm_params['datastore'] = cluster_params['datastore']    
     vm_params['vcenter_username'] = cluster_deviceconf[:user]
     vm_params['vcenter_password'] = cluster_deviceconf[:password]
     vm_params['vcenter_server'] = cluster_deviceconf[:host]
