@@ -85,7 +85,13 @@ class ASM::ServiceDeployment
       server_cert_name =  server_component['id']
       logger.debug "Server cert name: #{server_cert_name}"
       
-      inventory  ||= ASM::Util.fetch_server_inventory(server_cert_name)
+      if service_tag = cert_name_to_service_tag(server_cert_name)
+        # If we got service tag, it is a dell server and we get inventory
+        inventory = ASM::Util.fetch_server_inventory(server_cert_name)
+      else
+        inventory = nil
+      end
+        
       if inventory
         # Putting the re-direction as per the blade type
         # Blade and RACK server
