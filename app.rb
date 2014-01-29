@@ -25,6 +25,12 @@ class ASM::App < Sinatra::Base
     logs.to_json
   end
 
+  get '/puppetreport/:id/:certname' do |id, certname|
+    content_type :json
+    report = ASM::Util.get_report(id, certname)
+    report.to_json
+  end
+
   get '/status' do
     content_type :json
     ASM.active_deployments.to_json
