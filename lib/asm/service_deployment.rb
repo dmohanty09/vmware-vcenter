@@ -81,7 +81,7 @@ class ASM::ServiceDeployment
   
   def process_tor_switches()
     # Get all Servers
-    @components_by_type['SERVER'].each do |server_component|
+    (@components_by_type['SERVER'] || []).each do |server_component|
       server_cert_name =  server_component['id']
       logger.debug "Server cert name: #{server_cert_name}"
       
