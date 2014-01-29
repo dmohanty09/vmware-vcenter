@@ -10,9 +10,10 @@ describe ASM::ServiceDeployment do
     @tmp_dir = Dir.mktmpdir
     @sd = ASM::ServiceDeployment.new('8000')
     @sd.stubs(:find_node).returns({})
-    @sd.stubs(:create_broker_if_needed).returns("STUB-BROKER-NAME")
+    @sd.stubs(:create_broker_if_needed).returns('STUB-BROKER-NAME')
     @sd.stubs(:get_all_switches).returns([])
     @sd.stubs(:get_server_inventory).returns({})
+    @sd.stubs(:await_agent_checkin).returns('STUB-CERTIFICATE-NAME')
     ASM.stubs(:base_dir).returns(@tmp_dir)
   end
 
