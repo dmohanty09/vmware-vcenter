@@ -1178,38 +1178,6 @@ class ASM::ServiceDeployment
       cluster_params ||= params
     end
 
-    # TODO: title is not set correctly, needs to come from asm::server
-    # section
-    hostname = nil
-    resource_hash['asm::vm'].each do |title, params|
-      ['cluster', 'datacenter', 'datastore'].each do |key|
-        params[key] = cluster_params[key]
-      end
-
-      if resource_hash['asm::server']
-        server_params = (resource_hash['asm::server'][title] || {})
-      else
-        server_params = {}
-      end
-
-      case server_params['os_image_type']
-      when 'windows'
-        params['os_type'] = 'windows8Server64Guest'
-        params['scsi_controller_type'] = 'LSI Logic SAS'
-      when 'linux'
-        params['os_type'] = 'rhel6_64Guest'
-        params['scsi_controller_type'] = 'VMware Paravirtual'
-      else
-      end
-
-      params['hostname'] = server_params['os_host_name']
-      hostname ||= params['hostname']
-      params['vcenter_username'] = cluster_deviceconf[:user]
-      params['vcenter_password'] = cluster_deviceconf[:password]
-      params['vcenter_server'] = cluster_deviceconf[:host]
-      params['vcenter_options'] = { 'insecure' => true }
-      params['ensure'] = 'present'
-    end
     vm_params['hostname'] = (server_params || {})['os_host_name']
     hostname = vm_params['hostname'] || raise(Exception, "VM host name not specified")
     if server_params['os_image_type'] == 'windows'
