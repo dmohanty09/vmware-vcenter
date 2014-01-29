@@ -492,5 +492,10 @@ module ASM
 
     end
 
+    def self.get_puppet_log(id, certname)
+      log_file = File.join(ASM.base_dir, id.to_s, "#{certname}.out")
+      File.read(log_file)
+    end
+
   end
 end
