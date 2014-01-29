@@ -173,7 +173,7 @@ class ASM::ServiceDeployment
       end
 
       File.open(tempfileloc,"a") do |tempfile|
-        tempfile.puts("wwn: '#{wwpn}'")
+        tempfile.puts("    wwn: '#{wwpn}'")
         tempfile.close
       end
       FileUtils.mv(tempfileloc, resource_file)
