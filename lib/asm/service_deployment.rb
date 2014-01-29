@@ -151,10 +151,17 @@ class ASM::ServiceDeployment
           #
           Thread.new do
             raise(Exception, 'Component has no certname') unless comp['id']
+            Thread.current[:certname] = comp['id']
             send("process_#{type.downcase}", comp)
           end
         end.each do |thrd|
-          thrd.join
+          begin
+            thrd.join
+            log("Status: Completed_component_#{type.downcase}/#{thrd[:certname]}")
+          rescue Exception => e
+            log("Status: Failed_component_#{type.downcase}/#{thrd[:certname]}")
+            raise(e)
+          end
         end
         log("Finsished components of type #{type}")
       end
