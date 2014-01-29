@@ -475,5 +475,22 @@ module ASM
       end
     end
 
+    def self.get_report(id, certname)
+      report_dir = File.join(ASM.base_dir,
+                             id.to_s,
+                             'resources',
+                             'state',
+                             certname
+                             )
+      report_file = File.join(report_dir, 'last_run_report.yaml')
+      out_file    = File.join(report_dir, 'last_run_report_summary.yaml')
+      result = run_command_simple("sudo puppet asm summarize_report --infile #{report_file} --outfile #{out_file}")
+      unless result['exit_status'] == 0
+        raise(Exception, "Command failed: stdout #{result['stdout']} stderr:#{result['stderr']}")
+      end     
+      YAML.load_file(out_file)
+
+    end
+
   end
 end
