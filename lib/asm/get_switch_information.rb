@@ -14,23 +14,23 @@ require "#{module_path}/rack_server_switch_information"
 require "#{module_path}/blade_server_switch_information"
 
 class Get_switch_information
-  def initialize (serverinfo, switchinfo)
+  def initialize ()
     # Check the blade server type
-    @serverinformation= serverinfo
-    @switchinformation = switchinfo
+    #@serverinformation= serverinfo
+    #@switchinformation = switchinfo
   end
 
-  def get_info(logger)
+  def get_info(ser_info,sw_info,logger)
     switchinfolist = []
     switchinfohash = {}
-    @serverinformation.each do |nodename,sinfo|
+    ser_info.each do |nodename,sinfo|
       sinfo.each do |key,value|
         if key == 'bladetype'
           bladetype = value
           if bladetype == "rack"
-            switchinfohash = rack_server_switch_info(nodename,sinfo,@switchinformation,logger)
+            switchinfohash = rack_server_switch_info(nodename,sinfo,sw_info,logger)
           else
-            switchinfohash = blade_server_switch_info(nodename,sinfo,logger)
+            switchinfohash = blade_server_switch_info(nodename,sinfo,sw_info,logger)
             if switchinfohash.length() > 0
               switchinfohash.keys().each do |macaddress|
               end
@@ -44,15 +44,15 @@ class Get_switch_information
   end
   
 
-  def blade_server_switch_info(nname,server,logger)
-    bladeObj=Blade_server_switch_information.new(nname,server,@switchinformation)
+  def blade_server_switch_info(nname,server,swinfo,logger)
+    bladeObj=Blade_server_switch_information.new(nname,server,swinfo)
     serverinformation=bladeObj.identify_switch_ports logger
     pp serverinformation
     return serverinformation
   end
 
   def rack_server_switch_info(nname,sinfo,switchinfo,logger)
-    rackObj=Rack_server_switch_information.new(nname,sinfo,@switchinformation)
+    rackObj=Rack_server_switch_information.new(nname,sinfo,switchinfo)
     serverinformation=rackObj.identify_switch_ports(logger)
     servermacaddress=rackObj.search_server_Macaddress(logger)
     # Check if all the
@@ -63,7 +63,7 @@ class Get_switch_information
       RestartIDRAC.new(sinfo,switchinfo).restartidrac(logger)
       sleep(60)
       # Initiate the discovery of the switches
-      discoverallswitch = Discoverswitch.new(@switchinformation)
+      discoverallswitch = Discoverswitch.new(switchinfo)
       resp = discoverallswitch.discoverswitch(logger)
       logger.debug "resp :: #{resp}"
       # Need to run the fact search once again
