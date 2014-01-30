@@ -1,5 +1,7 @@
 require 'rexml/document'
 require 'pathname'
+require 'uri'
+require '/etc/puppetlabs/puppet/modules/asm_lib/lib/security/encode'
 
 include REXML
 
@@ -8,6 +10,7 @@ class Reboot
     @ip = ip
     @username = username
     @password = password
+	@password = URI.decode(asm_decrypt(@password))
     module_path = Pathname.new(__FILE__).parent
     @rebootfilepath = "#{module_path}/rebootfilepath.xml"
   end
