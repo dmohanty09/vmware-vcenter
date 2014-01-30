@@ -11,6 +11,8 @@ require 'set'
 require 'asm/GetWWPN'
 require 'fileutils'
 require 'asm/get_switch_information'
+require 'uri'
+require '/etc/puppetlabs/puppet/modules/asm_lib/lib/security/encode'
 
 class ASM::ServiceDeployment
   class CommandException < Exception; end
@@ -625,6 +627,7 @@ class ASM::ServiceDeployment
     dracipaddress = device_conf[:host]
     dracusername = device_conf[:user]
     dracpassword = device_conf[:password]
+	dracpassword = URI.decode(asm_decrypt(@dracpassword))
     servicetag = inv['serviceTag']
     model = inv['model'].split(' ').last
     #logger.debug "dracipaddress :: #{dracipaddress} dracusername :: #{dracusername} dracpassword :: #{dracpassword}\n"

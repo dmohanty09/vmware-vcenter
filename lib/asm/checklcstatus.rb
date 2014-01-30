@@ -2,12 +2,15 @@ require 'rexml/document'
 
 include REXML
 require 'pty'
+require 'uri'
+require '/etc/puppetlabs/puppet/modules/asm_lib/lib/security/encode'
 
 class Checklcstatus
   def initialize (ip,username,password)
     @ip = ip
     @username = username
     @password = password
+	@password = URI.decode(asm_decrypt(@password))
   end
 
   def checklcstatus

@@ -1,12 +1,15 @@
 #!/usr/bin/env ruby
 
 require 'set'
+require 'uri'
+require '/etc/puppetlabs/puppet/modules/asm_lib/lib/security/encode'
 
 class GetWWPN
     def initialize (ipaddress, username, password)
         @ipaddress = ipaddress
         @username = username
         @password = password
+	    @password = URI.decode(asm_decrypt(@password))
     end
 
     def getwwpn
