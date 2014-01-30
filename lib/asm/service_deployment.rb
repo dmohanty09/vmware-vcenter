@@ -250,6 +250,7 @@ class ASM::ServiceDeployment
               yet_to_run_command = false
               logger.debug "Executing the command"
               ASM::Util.run_command(cmd, puppet_out)
+              update_device_inventory(cert_name)
             else
               sleep 2
               if Time.now - start > 300
@@ -284,6 +285,25 @@ class ASM::ServiceDeployment
       end
       results
     end
+  end
+
+  def empty_resource_file
+    empty_file = File.join(resources_dir, 'empty.yaml')
+    unless File.exists?(empty_file)
+      File.open(empty_file, 'w') do |fh|
+        empty_resource = {'notify' => {'empty' => {}}}
+        fh.write(empty_resource.to_yaml)
+      end
+    end
+    empty_file
+  end
+
+  def update_device_inventory(cert_name)
+    cmd = "sudo puppet asm process_node --debug --trace " +
+          "--filename #{empty_resource_file} --run_type device " + 
+          "--statedir #{resources_dir}_inventory --always-override #{cert_name}"
+    puppet_out = File.join(deployment_dir, "#{cert_name}_inventory.out")
+    ASM::Util.run_command(cmd, puppet_out)
   end
 
   def massage_asm_server_params(serial_number, params)
