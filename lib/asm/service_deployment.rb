@@ -42,6 +42,10 @@ class ASM::ServiceDeployment
     @debug = debug
   end
 
+  def noop=(noop)
+    @noop = noop
+  end
+
   def process(service_deployment)
     begin
       # Before we go multi-threaded, check whether puppet broker exists
@@ -235,7 +239,8 @@ class ASM::ServiceDeployment
     end
 
     override_opt = override ? "--always-override " : ""
-    cmd = "sudo puppet asm process_node --debug --trace --filename #{resource_file} --run_type #{puppet_run_type} --statedir #{resources_dir} #{override_opt}#{cert_name}"
+    noop_opt     = @noop ? '--noop' : ''
+    cmd = "sudo puppet asm process_node --debug --trace --filename #{resource_file} --run_type #{puppet_run_type} --statedir #{resources_dir} #{noop_opt} #{override_opt}#{cert_name}"
     if @debug
       logger.info("[DEBUG MODE] execution skipped for '#{cmd}'")
     else
