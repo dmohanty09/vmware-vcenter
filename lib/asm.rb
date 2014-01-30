@@ -56,6 +56,9 @@ module ASM
       if data['debug'] && data['debug'].downcase == 'true'
         service_deployment.debug = true
       end
+      if (data['noop'] || '').downcase == 'true'
+        service_deployment.noop = true
+      end
       service_deployment.process(data)
     ensure
       complete_deployment(id)
