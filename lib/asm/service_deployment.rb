@@ -931,7 +931,12 @@ class ASM::ServiceDeployment
       process_generic(component['id'], resource_hash, 'apply', 'true')
       unless @debug
         (resource_hash['asm::server'] || []).each do |title, params|
-          block_until_server_ready(title, params, timeout=3600)
+          type = params['os_image_type']
+          if type == 'vmware_esxi'
+            block_until_esxi_ready(title, params, timeout=3600)
+          else
+            await_agent_checkin(serial_number, timeout = 3600)
+          end
         end
       end
     end
@@ -1185,8 +1190,6 @@ class ASM::ServiceDeployment
                     end
                   end
 
-                  log("Built vswitch resources = #{vswitch_resources.to_yaml}")
-
                   # merge these in
                   resource_hash['esx_vswitch'] = (resource_hash['esx_vswitch'] || {}).merge(vswitch_resources['esx_vswitch'])
                   resource_hash['esx_portgroup'] = (resource_hash['esx_portgroup'] || {}).merge(vswitch_resources['esx_portgroup'])
@@ -1313,7 +1316,6 @@ class ASM::ServiceDeployment
       end
       log("Found UUID #{uuid} for #{hostname}")
       log("Initiating O/S install for VM #{hostname}")
-      server_cert_name = "server-#{hostname}"
 
       # Work around incorrect name in GUI for now
       # TODO: remove when no longer needed
@@ -1326,15 +1328,73 @@ class ASM::ServiceDeployment
       serial_number = @debug ? "vmware_debug_serial_no" : ASM::Util.vm_uuid_to_serial_number(uuid)
       massage_asm_server_params(serial_number, server_params)
 
-      resource_hash = { 'asm::server' => { hostname => server_params } }
-      process_generic(server_cert_name, resource_hash, 'apply')
+      resource_hash['asm::server'] = { hostname => server_params }
+      process_generic(vm_cert_name, resource_hash, 'apply')
+      
+      unless @debug
+        await_agent_checkin(serial_number, timeout = 3600)
+      end
     end
   end
 
   def process_service(component)
     log("Processing service component: #{component['id']}")
     config = ASM::Util.build_component_configuration(component)
-    process_generic(component['id'], config, 'apply')
+
+    certificates = find_related_components('SERVER', component).map do |server_component|
+      server_id = server_component['id']
+      serial_number = cert_name_to_service_tag(server_id) || server_id
+
+      # Previous swim lanes should have already awaited agent checkin
+      # so no timeout should be necessary, but including one just
+      # to ensure the lookup command has time to run
+      await_agent_checkin(serial_number, timeout = 300)
+    end
+
+    certificates += find_related_components('VIRTUALMACHINE', component).map do |vm_component|
+      clusters = find_related_components('CLUSTER', vm_component) 
+      raise(Exception, "Expected one cluster for #{vm_component['id']} but found #{clusters.size}") unless clusters && clusters.size == 1
+      cluster = clusters[0]
+      cluster_deviceconf = ASM::Util.parse_device_config(cluster['id'])
+
+      resource_hash = ASM::Util.build_component_configuration(vm_component)
+
+      if resource_hash['asm::server']
+        # O/S install was started
+        unless resource_hash['asm::server'].size == 1 
+          raise(Exception, "Exactly one set of VM configuration parameters is required")
+        end
+        
+        server_params = resource_hash['asm::server'][resource_hash['asm::server'].keys[0]]
+        hostname = server_params['os_host_name']
+        uuid = nil
+        begin
+          uuid = ASM::Util.find_vm_uuid(cluster_deviceconf, hostname)
+        rescue Exception => e
+          if @debug
+            puts e
+            uuid = "DEBUG-MODE-UUID"
+          else
+            raise e
+          end
+        end
+        
+        serial_number = @debug ? "vmware_debug_serial_no" : ASM::Util.vm_uuid_to_serial_number(uuid)
+        # Previous swim lanes should have already awaited agent checkin
+        # so no timeout should be necessary, but including one just
+        # to ensure the lookup command has time to run
+        if @debug
+          "DEBUG-CERT-#{vm_component['id']}"
+        else
+          await_agent_checkin(serial_number, timeout = 300)
+        end
+      end
+    end.select { |cert| !cert.nil? }
+
+    certificates.each do |certificate| 
+      log("Applying application configuration to #{certificate}")
+      process_generic(certificate, config, 'agent')
+    end
   end
 
   def find_node(serial_num)
@@ -1371,33 +1431,54 @@ class ASM::ServiceDeployment
     ipaddress
   end
 
+  def await_agent_checkin(serial_number, timeout = 3600)
+    cert_name = nil
+    cmd = "sudo puppet query nodes 'serialnumber=\"#{serial_number}\"'"
+    ASM::Util.block_and_retry_until_ready(timeout, CommandException, 60) do 
+      log("Waiting for puppet agent to check in for serial number #{serial_number}")
+      result = ASM::Util.run_command_simple(cmd)
+      raise(Exception, "Puppetdb query for serialnumber #{serial_number} failed: #{result.inspect}") unless result['exit_status'] == 0
+      cert_names = result['stdout'].split.map { |x| x.strip! }
+      case cert_names.size
+      when 0
+        raise(CommandException, "Did not find our node by its serial number. Will try again")
+      when 1
+        cert_name = cert_names[0]
+      else
+        raise(Exception, "Multiple certificate names found for serial number #{serial_number}: #{cert_names.join(',')}")
+      end
+    end
+    
+    if cert_name
+      log("Found puppet certificate name #{cert_name} for serial number #{serial_number}")
+    end
+
+    cert_name
+  end
+
   # converts from an ASM style server resource into
   # a method call to check if the esx host is up
-  def block_until_server_ready(title, params, timeout=3600)
+  def block_until_esxi_ready(title, params, timeout=3600)
     serial_num = params['serial_number'] || raise(Exception, "resource #{title} is missing required server attribute admin_password")
     password = params['admin_password'] || raise(Exception, "resource #{title} is missing required server attribute admin_password")
     type = params['os_image_type'] || raise(Exception, "resource #{title} is missing required server attribute os_image_type")
     hostname = params['os_host_name'] || raise(Exception, "resource #{title} is missing required server attribute os_host_name")
 
-    if type == 'vmware_esxi'
-      log("Waiting until #{hostname} has checked in with Razor")
-      ip_address = find_host_ip_blocking(serial_num, timeout)
-      log("#{hostname} has checked in with Razor with ip address #{ip_address}")
-
-      log("Waiting until #{hostname} (#{serial_num}) is ready")
-      ASM::Util.block_and_retry_until_ready(timeout, CommandException, 150) do
-        esx_command =  "system uuid get"
-        cmd = "esxcli --server=#{ip_address} --username=root --password=#{password} #{esx_command}"
-        log("Checking for system uuid on #{ip_address}")
-        results = ASM::Util.run_command_simple(cmd)
-        unless results['exit_status'] == 0 and results['stdout'] =~ /[1-9a-z-]+/
-          raise(CommandException, results['stderr'])
-        end
+    log("Waiting until #{hostname} has checked in with Razor")
+    ip_address = find_host_ip_blocking(serial_num, timeout)
+    log("#{hostname} has checked in with Razor with ip address #{ip_address}")
+    
+    log("Waiting until #{hostname} (#{serial_num}) is ready")
+    ASM::Util.block_and_retry_until_ready(timeout, CommandException, 150) do
+      esx_command =  "system uuid get"
+      cmd = "esxcli --server=#{ip_address} --username=root --password=#{password} #{esx_command}"
+      log("Checking for system uuid on #{ip_address}")
+      results = ASM::Util.run_command_simple(cmd)
+      unless results['exit_status'] == 0 and results['stdout'] =~ /[1-9a-z-]+/
+        raise(CommandException, results['stderr'])
       end
-    else
-      logger.warn("Do not know how to block for servers of type #{type}")
     end
-    log("Server #{hostname} is available")
+    log("ESXi server #{hostname} is available")
   end
 
   private
