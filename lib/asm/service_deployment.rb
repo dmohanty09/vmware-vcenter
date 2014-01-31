@@ -1461,7 +1461,8 @@ class ASM::ServiceDeployment
       log("Waiting for puppet agent to check in for serial number #{serial_number}")
       result = ASM::Util.run_command_simple(cmd)
       raise(Exception, "Puppetdb query for serialnumber #{serial_number} failed: #{result.inspect}") unless result['exit_status'] == 0
-      cert_names = result['stdout'].split.map { |x| x.strip! }
+      cert_names = result['stdout'].split("\n").map { |x| x.strip }
+      logger.debug("Found certname(s): #{cert_names.inspect}")
       case cert_names.size
       when 0
         raise(CommandException, "Did not find our node by its serial number. Will try again")
