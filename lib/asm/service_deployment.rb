@@ -1380,7 +1380,7 @@ class ASM::ServiceDeployment
       cluster = clusters[0]
       cluster_deviceconf = ASM::Util.parse_device_config(cluster['id'])
 
-      resource_hash = ASM::Util.build_component_configuration(vm_component)
+      resource_hash = ASM::Util.build_component_configuration(vm_component, 'class')
 
       if resource_hash['asm::server']
         # O/S install was started

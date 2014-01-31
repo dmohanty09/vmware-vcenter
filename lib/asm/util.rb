@@ -401,8 +401,13 @@ module ASM
       end
     end
 
-    def self.append_resource_configuration!(resource, resources={}, generate_title=nil)
-      resource_type = resource['id'] || raise(Exception, 'resource found with no type')
+    def self.append_resource_configuration!(resource, resources={}, generate_title=nil, type='class')
+      resource_type = nil
+      if type == 'class'
+        resource_type = 'class'
+      else
+        resource_type = resource['id'] || raise(Exception, 'resource found with no type')
+      end
       resource_type.downcase!
       resources[resource_type] ||= {}
 
@@ -416,8 +421,10 @@ module ASM
           end
         end
       end
-
       title = param_hash.delete('title')
+      if type == 'class'
+        title = resource['id']
+      end
       if title
         if generate_title
           raise(Exception, "Generated title passed for resource with title #{resource_type}")
@@ -437,11 +444,11 @@ module ASM
 
     # Build data appropriate for serializing to YAML and using for component
     # configuration via the puppet asm command.
-    def self.build_component_configuration(component)
+    def self.build_component_configuration(component, type='resource')
       resource_hash = {}
       resources = ASM::Util.asm_json_array(component['resources'])
       resources.each do |resource|
-        resource_hash = append_resource_configuration!(resource, resource_hash)
+        resource_hash = append_resource_configuration!(resource, resource_hash, nil, type)
       end
       resource_hash
     end
