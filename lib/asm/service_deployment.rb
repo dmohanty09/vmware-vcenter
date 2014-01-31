@@ -12,7 +12,7 @@ require 'asm/GetWWPN'
 require 'fileutils'
 require 'asm/get_switch_information'
 require 'uri'
-require '/etc/puppetlabs/puppet/modules/asm_lib/lib/security/encode'
+#require '/etc/puppetlabs/puppet/modules/asm_lib/lib/security/encode'
 
 class ASM::ServiceDeployment
   class CommandException < Exception; end
@@ -93,6 +93,8 @@ class ASM::ServiceDeployment
       
       if service_tag = cert_name_to_service_tag(server_cert_name)
         # If we got service tag, it is a dell server and we get inventory
+        logger.debug("Server CERT NAME IS: #{server_cert_name}")
+        logger.debug("Service Tag: #{service_tag}")
         inventory = ASM::Util.fetch_server_inventory(server_cert_name)
       else
         inventory = nil
@@ -530,6 +532,10 @@ class ASM::ServiceDeployment
           server_service_tag = inv['serviceTag']
           iom_type = ASM::Util.get_iom_type(server_service_tag,switchcertname, logger)
           logger.debug "IOM Type: #{iom_type}"
+          if iom_type == "" 
+             logger.debug("IOM Type is empty.")
+             next
+          end
 
           logger.debug "switchcertname :: #{switchcertname} interface :: #{interface}"
           logger.debug "Configuring tagged VLANs"
@@ -652,7 +658,8 @@ class ASM::ServiceDeployment
     dracipaddress = device_conf[:host]
     dracusername = device_conf[:user]
     dracpassword = device_conf[:password]
-  	dracpassword = URI.decode(asm_decrypt(dracpassword))
+  	#dracpassword = URI.decode(asm_decrypt(dracpassword))
+    dracpassword=URI.decode(get_plain_password(dracpassword))
     servicetag = inv['serviceTag']
     model = inv['model'].split(' ').last
     #logger.debug "dracipaddress :: #{dracipaddress} dracusername :: #{dracusername} dracpassword :: #{dracpassword}\n"
@@ -1064,6 +1071,14 @@ class ASM::ServiceDeployment
 
     ret
   end
+  
+  def get_plain_password(encoded_password)
+    logger.debug("Base password: #{encoded_password}")
+    plain_password=`/opt/puppet/bin/ruby /opt/asm-deployer/lib/asm/encode_asm.rb #{encoded_password}`
+    plain_password=plain_password.strip
+    logger.debug("Updated password: #{plain_password}")
+    return URI.decode(plain_password)
+  end
 
   def process_cluster(component)
     cert_name = component['id']
@@ -1074,10 +1089,11 @@ class ASM::ServiceDeployment
 
     # Add vcenter creds to asm::cluster resources
     deviceconf = ASM::Util.parse_device_config(cert_name)
+    vcenter_password=get_plain_password(deviceconf[:password])
     resource_hash['asm::cluster'].each do |title, params|
       resource_hash['asm::cluster'][title]['vcenter_server'] = deviceconf[:host]
       resource_hash['asm::cluster'][title]['vcenter_username'] = deviceconf[:user]
-      resource_hash['asm::cluster'][title]['vcenter_password'] = deviceconf[:password]
+      resource_hash['asm::cluster'][title]['vcenter_password'] = vcenter_password
       resource_hash['asm::cluster'][title]['vcenter_options'] = { 'insecure' => true }
       resource_hash['asm::cluster'][title]['ensure'] = 'present'
 
@@ -1260,11 +1276,12 @@ class ASM::ServiceDeployment
       vm_params['scsi_controller_type'] = 'VMware Paravirtual'
     end
 
+    vcenter_password=get_plain_password(cluster_deviceconf[:password])
     vm_params['cluster'] = cluster_params['cluster']    
     vm_params['datacenter'] = cluster_params['datacenter']    
     vm_params['datastore'] = cluster_params['datastore']    
     vm_params['vcenter_username'] = cluster_deviceconf[:user]
-    vm_params['vcenter_password'] = cluster_deviceconf[:password]
+    vm_params['vcenter_password'] = vcenter_password
     vm_params['vcenter_server'] = cluster_deviceconf[:host]
     vm_params['vcenter_options'] = { 'insecure' => true }
     vm_params['ensure'] = 'present'

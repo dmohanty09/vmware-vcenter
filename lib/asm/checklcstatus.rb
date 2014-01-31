@@ -10,7 +10,13 @@ class Checklcstatus
     @ip = ip
     @username = username
     @password = password
-	@password = URI.decode(asm_decrypt(@password))
+	@password = URI.decode(get_plain_password(@password))
+  end
+  
+  def get_plain_password(encoded_password)
+    plain_password=`/opt/puppet/bin/ruby /opt/asm-deployer/lib/asm/encode_asm.rb #{encoded_password}`
+    plain_password=plain_password.strip
+    return plain_password
   end
 
   def checklcstatus
