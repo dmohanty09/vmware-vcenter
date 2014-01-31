@@ -48,6 +48,7 @@ def search_server_Macaddress_force10(certname,mac,logger)
   cert_port=[]
   intfLoc1=[]
   ports=[]
+    cert_ports=[]
   @mainremotehash[certname].keys.each do |intf|
     newremotehash1=@mainremotehash[certname]
     intfHash = newremotehash1[intf]
@@ -57,8 +58,8 @@ def search_server_Macaddress_force10(certname,mac,logger)
     end
     intfLoc=intf
     logger.debug "search_server_Macaddress_force10: intfLoc: #{intfLoc}  mac: #{mac} remote_mac: #{remote_mac.upcase} "
-    if mac.include?(remote_mac)
-      logger.debug "search_server_Macaddress_force10: Matched intfLoc: #{intfLoc}  macArray: #{macArray} remote_mac: #{remote_mac.upcase} "
+    if mac.include?(remote_mac.upcase)
+      logger.debug "search_server_Macaddress_force10: Matched intfLoc: #{intfLoc}  macArray: #{mac} remote_mac: #{remote_mac.upcase} "
       lag=getLAGFromIntf(intf,certname)
       if !lag.empty?
         ports=intfLoc1.push(lag)
@@ -68,12 +69,12 @@ def search_server_Macaddress_force10(certname,mac,logger)
       interface_found="true"
     end
   end
-  if @interface_found == "true"
+  if interface_found == "true"
     cert_port.push(certname)
     cert_port.push(ports)
-    @cert_ports.push(cert_port)
-    logger.debug "search_server_Macaddress_force10: Adding in matchedhash remote_mac.: #{remote_mac} and  cert_port: #{cert_port} and cert_ports: #{@cert_ports} "
-    @matchedHash.store(mac.upcase,@cert_ports)
+    cert_ports.push(cert_port)
+    #logger.debug "search_server_Macaddress_force10: Adding in matchedhash remote_mac.: #{remote_mac} and  cert_port: #{cert_port} and cert_ports: #{@cert_ports} "
+    @matchedHash.store(mac.upcase,cert_ports)
   end
 
 end
@@ -82,6 +83,7 @@ def search_server_Macaddress_powerconnect(certname,mac,logger)
   interface_found="false"
   remote_mac=""
   cert_port=[]
+    cert_ports=[]
   intfLoc1=[]
   ports=[]
 
@@ -91,20 +93,20 @@ def search_server_Macaddress_powerconnect(certname,mac,logger)
     intfLoc=newremotehash1[remote_mac]
     remote_mac=remote_mac.gsub(/(\w{2})(\w{2})\.(\w{2})(\w{2})\.(\w{2})(\w{2})/,'\1:\2:\3:\4:\5:\6')
     logger.debug "search_server_Macaddress_powerconnect : intfLoc: #{intfLoc}  mac: #{mac} remote_mac: #{remote_mac.upcase} "
-    if mac.include?(remote_mac)
+    if mac.include?(remote_mac.upcase)
       logger.debug "search_server_Macaddress_powerconnect : intfLoc: #{intfLoc}   remote_mac: #{remote_mac.upcase} "
       ports=intfLoc1.push(intfLoc)
-      @interface_found="true"
+      interface_found="true"
     end
 
   end
   #end
-  if @interface_found == "true"
+  if interface_found == "true"
     cert_port.push(certname)
     cert_port.push(ports)
-    @cert_ports.push(cert_port)
-    logger.debug "search_server_Macaddress_powerconnect: Adding in matchedhash remote_mac.: #{remote_mac} and  cert_port: #{cert_port} and @cert_ports: #{@cert_ports} "
-    @matchedHash.store(mac.upcase,@cert_ports)
+    cert_ports.push(cert_port)
+    #logger.debug "search_server_Macaddress_powerconnect: Adding in matchedhash remote_mac.: #{remote_mac} and  cert_port: #{cert_port} and @cert_ports: #{@cert_ports} "
+    @matchedHash.store(mac.upcase,cert_ports)
   end
 
 end
