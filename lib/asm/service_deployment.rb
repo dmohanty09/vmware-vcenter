@@ -1362,7 +1362,7 @@ class ASM::ServiceDeployment
 
   def process_service(component)
     log("Processing service component: #{component['id']}")
-    config = ASM::Util.build_component_configuration(component)
+    config = ASM::Util.build_component_configuration(component, 'class')
 
     certificates = find_related_components('SERVER', component).map do |server_component|
       server_id = server_component['id']
@@ -1380,7 +1380,7 @@ class ASM::ServiceDeployment
       cluster = clusters[0]
       cluster_deviceconf = ASM::Util.parse_device_config(cluster['id'])
 
-      resource_hash = ASM::Util.build_component_configuration(vm_component, 'class')
+      resource_hash = ASM::Util.build_component_configuration(vm_component)
 
       if resource_hash['asm::server']
         # O/S install was started
