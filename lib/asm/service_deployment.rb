@@ -81,6 +81,8 @@ class ASM::ServiceDeployment
       end
       log("Status: Error")
       raise(e)
+    ensure
+      update_vcenters
     end
     log("Status: Completed")
   end
@@ -939,6 +941,7 @@ class ASM::ServiceDeployment
           end
         end
       end
+      update_inventory_through_controller(component['asmGUID'])
     end
   end
 
@@ -953,6 +956,25 @@ class ASM::ServiceDeployment
     # the time at Jan 1, 2014
     offset = 1388534400 # time at Jan 1, 2014
     ((currtime - offset) * 100) + (ASM.counter % 100)
+  end
+
+
+  def mark_vcenter_as_needs_update(vcenter_guid)
+    (@vcenter_to_refresh ||= []).push(vcenter_guid)
+  end
+
+  def update_vcenters
+    @vcenter_to_refresh.uniq.each do |vc_guid|
+      update_inventory_through_controller(vc_guid)
+    end
+  end
+
+  # calls the Java controller to update the inventory service
+  def update_inventory_through_controller(asm_guid)
+    logger.debug("Updating inventory for #{asm_guid}")
+    url      = "http://localhost:9080/AsmManager/ManagedDevice/#{asm_guid}"
+    asm_obj  = JSON.parse(RestClient.get(url, :content_type => :json, :accept => :json))
+    response = RestClient.put(url, asm_obj.to_json,  :content_type => :json, :accept => :json)
   end
 
   # Find components of the given type which are related to component
@@ -1232,6 +1254,7 @@ class ASM::ServiceDeployment
     # Running into issues with hosts not coming out of maint mode
     # Try it again for good measure.
     process_generic(cert_name, resource_hash, 'apply')
+    mark_vcenter_as_needs_update(component['asmGUID'])
   end
 
   def process_virtualmachine(component)
