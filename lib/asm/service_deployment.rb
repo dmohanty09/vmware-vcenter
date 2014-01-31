@@ -964,7 +964,7 @@ class ASM::ServiceDeployment
   end
 
   def update_vcenters
-    @vcenter_to_refresh.uniq.each do |vc_guid|
+    (@vcenter_to_refresh || []).uniq.each do |vc_guid|
       update_inventory_through_controller(vc_guid)
     end
   end
