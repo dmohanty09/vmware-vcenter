@@ -668,13 +668,14 @@ class ASM::ServiceDeployment
       serverpropertyhash['chassis_password'] = chassis_conf['chassis_password']
       serverpropertyhash['slot_num'] = chassis_conf['slot_num']
       serverpropertyhash['ioaips'] = chassis_conf['ioaips']
+      serverpropertyhash['ioaslots'] = chassis_conf['ioaslots']
     end
     serverpropertyhash['servermodel'] = model
     serverpropertyhash['idrac_ip'] = dracipaddress
     serverpropertyhash['idrac_username'] =  dracusername
     serverpropertyhash['idrac_password'] = dracpassword
 
-    serverpropertyhash['mac_addresses'] = get_server_macaddress(dracipaddress,dracusername,dracpassword,certname)
+    serverpropertyhash['mac_addresses'] = get_server_macaddress(dracipaddress,dracusername,dracpassword,certname,model)
     logger.debug "******* In getServerInventory server property hash is #{serverpropertyhash} ***********\n"
     serverhash["#{servicetag}"] = serverpropertyhash
     logger.debug "********* In getServerInventory server Hash is #{serverhash} **************\n"
@@ -794,8 +795,7 @@ class ASM::ServiceDeployment
     switchhash
   end
 
-  
-  def get_server_macaddress(dracipaddress,dracusername,dracpassword,certname)
+  def get_server_macaddress(dracipaddress,dracusername,dracpassword,certname,servermodel)
     macAddressList = Array.new
     cmd = "wsman enumerate http://schemas.dmtf.org/wbem/wscim/1/cim-schema/2/root/dcim/DCIM_NICView -h  #{dracipaddress}  -V -v -c dummy.cert -P 443 -u #{dracusername} -p #{dracpassword} -j utf-8 -y basic"
     puppet_out = File.join(deployment_dir, "servermac-#{certname}.out")
@@ -804,7 +804,7 @@ class ASM::ServiceDeployment
     end
     ASM::Util.run_command(cmd, puppet_out)
     resp = File.read(puppet_out)
-    if certname =~ /rackserver/
+    if servermodel.downcase =~ /r720/
       macAddress = ""
       resp.split("\n").each do |line|
         line = line.to_s
@@ -819,7 +819,7 @@ class ASM::ServiceDeployment
           end
         end
       end
-    else
+    elsif servermodel.downcase == "m620" || servermodel.downcase == "m420" || servermodel.downcase == "m820" ||
       macAddress = ""
       resp.split("\n").each do |line|
         line = line.to_s
@@ -833,6 +833,22 @@ class ASM::ServiceDeployment
           end
         end
       end
+    elsif servermodel.downcase == "r620"
+      macAddress = ""
+      resp.split("\n").each do |line|
+        line = line.to_s
+        if line =~ /\<n1:CurrentMACAddress\>(\S+)\<\/n1:CurrentMACAddress\>/
+          macAddress = $1
+        end
+        if line =~ /\<n1:FQDD\>(\S+)\<\/n1:FQDD\>/
+          nicName = $1
+          if (nicName == "NIC.Integrated.1-1-1" || nicName == "NIC.Integrated.1-2-1")
+            macAddressList.push(macAddress)
+          end
+        end
+      end
+    else 
+      logger.debug "Unsupported server model #{servermodel}"
     end
     logger.debug "********* MAC Address List is #{macAddressList} **************\n"
     return macAddressList

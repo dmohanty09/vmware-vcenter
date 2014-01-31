@@ -33,9 +33,15 @@ class Blade_server_switch_information
     #    end
     #  end
     #end
+    index = 0
     switchlist = @sinfo['ioaips']
+    
     logger.debug "A-- switchlist ::: #{switchlist}"
     switchlist.each do |ioa|
+      ioaslot=@sinfo['ioaslots'][index]
+      logger.debug"IOA Slot information: #{ioaslot}"
+      index +=1
+      logger.debug "IOA Slot : #{ioaslot}"
       bladeModel = ""
       fullBladeModelList.each do|model|
         if model.to_s == serverModel.to_s
@@ -73,9 +79,10 @@ class Blade_server_switch_information
         interfaceLocationList = interfaceLocationList.push(interfaceLoc)
       end
       if  bladeModel == "Quater"
+        if ioaslot == "A1" || ioaslot == "B1" || ioaslot == "C1"
         if slot =~ /(\d+)(\S+)/
           if $2 == "a"
-            intLoc = "0/$1"
+              intLoc = "0/#{$1}"
           end
           if $2 == "b"
             slotoperation = $1.to_i + 16
@@ -91,6 +98,27 @@ class Blade_server_switch_information
           end
           interfaceLoc = "Tengigabitethernet#{intLoc}"
         end
+        elsif ioaslot == "A2" || ioaslot == "B2" || ioaslot == "C2"
+          if slot =~ /(\d+)(\S+)/
+            if $2 == "a"
+              slotoperation = $1.to_i + 16
+              intLoc = "0/#{slotoperation}"
+            end
+            if $2 == "b"
+              intLoc = "0/#{$1}"
+            end
+            if $2 == "c"
+              slotoperation = $1.to_i + 24
+              intLoc = "0/#{slotoperation}"
+            end
+            if $2 == "d"
+              slotoperation = $1.to_i + 8
+              intLoc = "0/#{slotoperation}"
+            end
+            interfaceLoc = "Tengigabitethernet#{intLoc}"
+          end
+        end
+        
         interfaceLocationList = interfaceLocationList.push(interfaceLoc)
       end
       logger.debug "A-- IOA #{ioa} interfaceLocationList #{interfaceLocationList}"

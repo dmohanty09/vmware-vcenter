@@ -92,16 +92,20 @@ module ASM
             logger.debug "chassis_username : #{chassis_username} chassis_password #{chassis_password}"
             if chassis_username == ""
               chassis_username = "root"
-              chassis_password = "calvini"
+              chassis_password = "calvin"
             end
             slot_num = server['slot']
             ioainfo = chassis['ioms']
+            ioaslots = Array.new
             ioainfo.each do |ioa|
               ioaip = "dell_iom-"+"#{ioa['managementIP']}"
+              ioaslot = ioa['location']
+              logger.debug"IOA Location: #{ioaslot}"
+              ioaslots.push ioaslot
               ioaips.push ioaip
             end
             logger.debug "ioaips.pushioaips :::: #{ioaips}"
-            chassis_info = {'chassis_ip' => chassis_ip, 'chassis_username' => chassis_username, 'chassis_password' => chassis_password, 'slot_num' => slot_num, 'ioaips' => ioaips }
+            chassis_info = {'chassis_ip' => chassis_ip, 'chassis_username' => chassis_username, 'chassis_password' => chassis_password, 'slot_num' => slot_num, 'ioaips' => ioaips, 'ioaslots' => ioaslots }
             logger.debug "*** chassis_info : #{chassis_info}"
             break
           end
