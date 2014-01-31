@@ -652,7 +652,7 @@ class ASM::ServiceDeployment
     dracipaddress = device_conf[:host]
     dracusername = device_conf[:user]
     dracpassword = device_conf[:password]
-	dracpassword = URI.decode(asm_decrypt(@dracpassword))
+  	dracpassword = URI.decode(asm_decrypt(dracpassword))
     servicetag = inv['serviceTag']
     model = inv['model'].split(' ').last
     #logger.debug "dracipaddress :: #{dracipaddress} dracusername :: #{dracusername} dracpassword :: #{dracpassword}\n"
