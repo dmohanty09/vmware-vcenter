@@ -48,10 +48,6 @@ class ASM::ServiceDeployment
 
   def process(service_deployment)
     begin
-      # Before we go multi-threaded, check whether puppet broker exists
-      # and create it if needed
-      @puppet_broker = create_broker_if_needed
-
       ASM.logger.info("Deploying #{service_deployment['deploymentName']} with id #{service_deployment['id']}")
       log("Status: Started")
       log("Starting deployment #{service_deployment['deploymentName']}")
@@ -325,7 +321,7 @@ class ASM::ServiceDeployment
     if params['os_image_type'] == 'vmware_esxi'
       params['broker_type'] = 'noop'
     else
-      params['broker_type'] = @puppet_broker
+      params['broker_type'] = 'puppet'
     end
 
     params['serial_number'] = serial_number
@@ -1641,39 +1637,4 @@ class ASM::ServiceDeployment
     end
     return server_vlan_info
   end
-
-  def create_broker_if_needed()
-    hostip = ASM::Util.first_host_ip
-    broker_name = "puppet-#{hostip}"
-    found_broker = nil
-    results = get('brokers').each do |node|
-      if node['name'] == broker_name
-        found_broker = true
-      end
-    end
-
-    unless found_broker
-      response = nil
-      broker = {
-        'name' => broker_name,
-        'configuration' => { 'server' => hostip, },
-        'broker-type' => 'puppet',
-      }
-      url = 'http://localhost:8080/api/commands/create-broker'
-      begin
-        response = RestClient.post(url, broker.to_json,
-        :content_type => :json,
-        :accept => :json)
-      rescue RestClient::ResourceNotFound => e
-        raise(CommandException, "rest call failed #{e}")
-      end
-      if response.code == 200 || response.code == 202
-        JSON.parse(response)
-      else
-        raise(CommandException, "bad http code: #{response.code}:#{response.to_str}")
-      end
-    end
-    broker_name
-  end
-
 end
