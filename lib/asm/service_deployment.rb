@@ -971,10 +971,12 @@ class ASM::ServiceDeployment
 
   # calls the Java controller to update the inventory service
   def update_inventory_through_controller(asm_guid)
-    logger.debug("Updating inventory for #{asm_guid}")
-    url      = "http://localhost:9080/AsmManager/ManagedDevice/#{asm_guid}"
-    asm_obj  = JSON.parse(RestClient.get(url, :content_type => :json, :accept => :json))
-    response = RestClient.put(url, asm_obj.to_json,  :content_type => :json, :accept => :json)
+    unless @debug
+      logger.debug("Updating inventory for #{asm_guid}")
+      url      = "http://localhost:9080/AsmManager/ManagedDevice/#{asm_guid}"
+      asm_obj  = JSON.parse(RestClient.get(url, :content_type => :json, :accept => :json))
+      response = RestClient.put(url, asm_obj.to_json,  :content_type => :json, :accept => :json)
+    end
   end
 
   # Find components of the given type which are related to component
