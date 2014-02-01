@@ -47,7 +47,7 @@ class ASM::ServiceDeployment
   end
 
   # Network values come from the GUI as a list of ASM network guids.
-  # Those must be looked up from an ASM REST service, and if they 
+  # Those must be looked up from an ASM REST service, and if they
   # correspond to a static network, static IPs must be reserved from
   # the ASM REST service.
   #
@@ -56,7 +56,7 @@ class ASM::ServiceDeployment
   # will have an additional field added corresponding to the IP to use:
   # parameter['value']['staticNetworkConfiguration']['ip_address']
   #
-  # Doing this lookup and reservation in advance of processing the 
+  # Doing this lookup and reservation in advance of processing the
   # components is done for two reasons:
   #
   # 1. The deployment will fail immediately if there are not enough
@@ -70,7 +70,7 @@ class ASM::ServiceDeployment
     guid_to_params = {}
 
     # Build guid_to_params map of network guid to list of matching parameters
-    networks = [ 'hypervisor_network', 'vmotion_network', 
+    networks = [ 'hypervisor_network', 'vmotion_network',
                  'workload_network', 'storage_network', 'pxe_network' ]
     server_components.each do |component|
       resources = ASM::Util.asm_json_array(component['resources']) || []
@@ -83,13 +83,13 @@ class ASM::ServiceDeployment
               # case it will lead with a comma, e.g. ,1,2,3
               # The reject below gets rid of the initial empty element
               guids = param['value'].split(',').reject { |x| x.empty? }
-              
+
               # Storage network special case: two portgroups are always
               # created, so we need two networks, but only one is passed in
               if param['id'] == 'storage_network' && guids.size == 1
                 guids.push(guids[0])
               end
-              
+
               guids.each do |guid|
                 guid_to_params[guid] ||= []
                 guid_to_params[guid].push(param)
@@ -161,13 +161,13 @@ class ASM::ServiceDeployment
     end
     log("Status: Completed")
   end
-  
+
   def process_tor_switches()
     # Get all Servers
     (@components_by_type['SERVER'] || []).each do |server_component|
       server_cert_name =  server_component['id']
       logger.debug "Server cert name: #{server_cert_name}"
-      
+
       if service_tag = cert_name_to_service_tag(server_cert_name)
         # If we got service tag, it is a dell server and we get inventory
         logger.debug("Server CERT NAME IS: #{server_cert_name}")
@@ -176,7 +176,7 @@ class ASM::ServiceDeployment
       else
         inventory = nil
       end
-        
+
       if inventory
         # Putting the re-direction as per the blade type
         # Blade and RACK server
@@ -384,7 +384,7 @@ class ASM::ServiceDeployment
 
   def update_device_inventory(cert_name)
     cmd = "sudo puppet asm process_node --debug --trace " +
-          "--filename #{empty_resource_file} --run_type device " + 
+          "--filename #{empty_resource_file} --run_type device " +
           "--statedir #{resources_dir}_inventory --always-override #{cert_name}"
     puppet_out = File.join(deployment_dir, "#{cert_name}_inventory.out")
     ASM::Util.run_command(cmd, puppet_out)
@@ -493,7 +493,7 @@ class ASM::ServiceDeployment
     inv = nil
     switchhash = {}
     serverhash =  {}
-    
+
     serverhash = get_server_inventory(server_cert_name)
     logger.debug "******** In process_tor after getServerInventory serverhash is #{serverhash} **********\n"
     switchinfoobj = Get_switch_information.new()
@@ -582,7 +582,7 @@ class ASM::ServiceDeployment
     inv = nil
     switchhash = {}
     serverhash = {}
-    deviceConfDir ='/etc/puppetlabs/puppet/devices'    
+    deviceConfDir ='/etc/puppetlabs/puppet/devices'
     serverhash = get_server_inventory(server_cert_name)
     logger.debug "******** In process_tor after getServerInventory serverhash is #{serverhash} **********\n"
     switchinfoobj = Get_switch_information.new()
@@ -609,7 +609,7 @@ class ASM::ServiceDeployment
           server_service_tag = inv['serviceTag']
           iom_type = ASM::Util.get_iom_type(server_service_tag,switchcertname, logger)
           logger.debug "IOM Type: #{iom_type}"
-          if iom_type == "" 
+          if iom_type == ""
              logger.debug("IOM Type is empty.")
              next
           end
@@ -810,7 +810,7 @@ class ASM::ServiceDeployment
     logger.debug "Blade IOM Switch certificate name list is #{@configured_blade_switches}"
     #return switchList
   end
-  
+
   def populate_rack_switch_hash
     deviceConfDir ='/etc/puppetlabs/puppet/devices'
     switchhash = {}
@@ -844,7 +844,7 @@ class ASM::ServiceDeployment
     end
     switchhash
   end
-  
+
   def populate_blade_switch_hash
     deviceConfDir ='/etc/puppetlabs/puppet/devices'
     switchhash = {}
@@ -931,7 +931,7 @@ class ASM::ServiceDeployment
           end
         end
       end
-    else 
+    else
       logger.debug "Unsupported server model #{servermodel}"
     end
     logger.debug "********* MAC Address List is #{macAddressList} **************\n"
@@ -1169,7 +1169,7 @@ class ASM::ServiceDeployment
 
     ret
   end
-  
+
   def get_plain_password(encoded_password)
     logger.debug("Base password: #{encoded_password}")
     plain_password=`/opt/puppet/bin/ruby /opt/asm-deployer/lib/asm/encode_asm.rb #{encoded_password}`
@@ -1379,9 +1379,9 @@ class ASM::ServiceDeployment
     end
 
     vcenter_password=get_plain_password(cluster_deviceconf[:password])
-    vm_params['cluster'] = cluster_params['cluster']    
-    vm_params['datacenter'] = cluster_params['datacenter']    
-    vm_params['datastore'] = cluster_params['datastore']    
+    vm_params['cluster'] = cluster_params['cluster']
+    vm_params['datacenter'] = cluster_params['datacenter']
+    vm_params['datastore'] = cluster_params['datastore']
     vm_params['vcenter_username'] = cluster_deviceconf[:user]
     vm_params['vcenter_password'] = vcenter_password
     vm_params['vcenter_server'] = cluster_deviceconf[:host]
@@ -1429,7 +1429,7 @@ class ASM::ServiceDeployment
 
       resource_hash['asm::server'] = { hostname => server_params }
       process_generic(vm_cert_name, resource_hash, 'apply')
-      
+
       unless @debug
         await_agent_checkin(serial_number, timeout = 3600)
       end
@@ -1451,7 +1451,7 @@ class ASM::ServiceDeployment
     end
 
     certificates += find_related_components('VIRTUALMACHINE', component).map do |vm_component|
-      clusters = find_related_components('CLUSTER', vm_component) 
+      clusters = find_related_components('CLUSTER', vm_component)
       raise(Exception, "Expected one cluster for #{vm_component['id']} but found #{clusters.size}") unless clusters && clusters.size == 1
       cluster = clusters[0]
       cluster_deviceconf = ASM::Util.parse_device_config(cluster['id'])
@@ -1460,10 +1460,10 @@ class ASM::ServiceDeployment
 
       if resource_hash['asm::server']
         # O/S install was started
-        unless resource_hash['asm::server'].size == 1 
+        unless resource_hash['asm::server'].size == 1
           raise(Exception, "Exactly one set of VM configuration parameters is required")
         end
-        
+
         server_params = resource_hash['asm::server'][resource_hash['asm::server'].keys[0]]
         hostname = server_params['os_host_name']
         uuid = nil
@@ -1477,7 +1477,7 @@ class ASM::ServiceDeployment
             raise e
           end
         end
-        
+
         serial_number = @debug ? "vmware_debug_serial_no" : ASM::Util.vm_uuid_to_serial_number(uuid)
         # Previous swim lanes should have already awaited agent checkin
         # so no timeout should be necessary, but including one just
@@ -1490,7 +1490,7 @@ class ASM::ServiceDeployment
       end
     end.select { |cert| !cert.nil? }
 
-    certificates.each do |certificate| 
+    certificates.each do |certificate|
       log("Applying application configuration to #{certificate}")
       process_generic(certificate, config, 'agent')
     end
@@ -1533,7 +1533,7 @@ class ASM::ServiceDeployment
   def await_agent_checkin(serial_number, timeout = 3600)
     cert_name = nil
     cmd = "sudo puppet query nodes 'serialnumber=\"#{serial_number}\"'"
-    ASM::Util.block_and_retry_until_ready(timeout, CommandException, 60) do 
+    ASM::Util.block_and_retry_until_ready(timeout, CommandException, 60) do
       log("Waiting for puppet agent to check in for serial number #{serial_number}")
       result = ASM::Util.run_command_simple(cmd)
       raise(Exception, "Puppetdb query for serialnumber #{serial_number} failed: #{result.inspect}") unless result['exit_status'] == 0
@@ -1548,7 +1548,7 @@ class ASM::ServiceDeployment
         raise(Exception, "Multiple certificate names found for serial number #{serial_number}: #{cert_names.join(',')}")
       end
     end
-    
+
     if cert_name
       log("Found puppet certificate name #{cert_name} for serial number #{serial_number}")
     end
@@ -1567,7 +1567,7 @@ class ASM::ServiceDeployment
     log("Waiting until #{hostname} has checked in with Razor")
     ip_address = find_host_ip_blocking(serial_num, timeout)
     log("#{hostname} has checked in with Razor with ip address #{ip_address}")
-    
+
     log("Waiting until #{hostname} (#{serial_num}) is ready")
     ASM::Util.block_and_retry_until_ready(timeout, CommandException, 150) do
       esx_command =  "system uuid get"
@@ -1685,9 +1685,9 @@ class ASM::ServiceDeployment
         raise(Exception, "Exactly one pxe network expected, found #{network_params['pxe_network'].inspect}") unless networks.size == 1
         pxevlanid = networks[0]['vlanId']
       end
-      
+
       logger.debug "hypervisormanagementvlanid :: #{hypervisormanagementvlanid} vmotionvlanid :: #{vmotionvlanid} iscsivlanid :: #{iscsivlanid} workloadvlanids :: #{tagged_workloadvlaninfo} pxevlanid :: #{pxevlanid}"
-      
+
       if hypervisormanagementvlanid != ""
         tagged_vlaninfo.push(hypervisormanagementvlanid.to_s)
       end
