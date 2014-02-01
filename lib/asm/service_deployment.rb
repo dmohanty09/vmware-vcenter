@@ -12,7 +12,6 @@ require 'asm/GetWWPN'
 require 'fileutils'
 require 'asm/get_switch_information'
 require 'uri'
-#require '/etc/puppetlabs/puppet/modules/asm_lib/lib/security/encode'
 
 class ASM::ServiceDeployment
   class CommandException < Exception; end
@@ -280,7 +279,6 @@ class ASM::ServiceDeployment
       myfile.each do |line|
         if ( line =~ /(.*)wwn\:(.*)/ )
           data = line.scan(/wwn\:(.*)/)
-          #data = data.gsub!(/\"/, "")
           temp = data[0]
           temp1 = temp[0]
           temp2=temp1.strip
@@ -735,11 +733,9 @@ class ASM::ServiceDeployment
     dracipaddress = device_conf[:host]
     dracusername = device_conf[:user]
     dracpassword = device_conf[:password]
-  	#dracpassword = URI.decode(asm_decrypt(dracpassword))
     dracpassword=URI.decode(get_plain_password(dracpassword))
     servicetag = inv['serviceTag']
     model = inv['model'].split(' ').last
-    #logger.debug "dracipaddress :: #{dracipaddress} dracusername :: #{dracusername} dracpassword :: #{dracpassword}\n"
     logger.debug "servicetag :: #{servicetag} model :: #{model}\n"
     if (model =~ /R620/ || model =~ /R720/)
       serverpropertyhash['bladetype'] = "rack"
@@ -767,9 +763,6 @@ class ASM::ServiceDeployment
   end
 
   def get_all_switches()
-    #$configured_rack_switches = get_all_rack_switches()
-    #$configured_blade_switches = get_all_blade_switches()
-    #switchList = Array.new
     puppet_out = File.join(deployment_dir, "puppetcert.out")
     cmd = "sudo puppet cert list --all"
     if File.exists?(puppet_out)
@@ -808,7 +801,6 @@ class ASM::ServiceDeployment
     @configured_blade_switches.uniq
     logger.debug "Rack ToR Switch certificate name list is #{@configured_rack_switches}"
     logger.debug "Blade IOM Switch certificate name list is #{@configured_blade_switches}"
-    #return switchList
   end
 
   def populate_rack_switch_hash
@@ -830,7 +822,6 @@ class ASM::ServiceDeployment
       torpassword = device_conf['password']
       torurl = device_conf['url']
       logger.debug "****** #{device_conf} ******"
-      #logger.debug "torip :: #{torip} torusername :: #{torusername} torpassword :: #{torpassword}\n"
       logger.debug "tor url :: #{torurl}\n"
       switchpropertyhash['connection_url'] = torurl
       if certname =~ /dell_ftos/
@@ -864,7 +855,6 @@ class ASM::ServiceDeployment
       torpassword = device_conf['password']
       torurl = device_conf['url']
       logger.debug "****** #{device_conf} ******"
-      #logger.debug "torip :: #{torip} torusername :: #{torusername} torpassword :: #{torpassword}\n"
       logger.debug "tor url :: #{torurl}\n"
       switchpropertyhash['connection_url'] = torurl
       if certname =~ /dell_ftos/
