@@ -129,9 +129,8 @@ describe ASM::ServiceDeployment do
                     'resources' => { 'parameters' => [ param ] } } ]
       @sd.massage_networks!(servers)
       updated = servers[0]['resources']['parameters'][0]
-      expected_network = network.dup
-      expected_network['staticNetworkConfiguration']['ip_address'] = '172.28.118.1'
-      updated['value'].should == [ expected_network ]
+      updated['value'].size.should == 1
+      updated['value'][0]['staticNetworkConfiguration']['ip_address'].should == '172.28.118.1'
     end
     
     it 'should reserve two networks for storage_network' do
@@ -149,14 +148,9 @@ describe ASM::ServiceDeployment do
       @sd.massage_networks!(servers)
 
       updated = servers[0]['resources']['parameters'][0]
-
-      expected1 = network.dup
-      expected1['staticNetworkConfiguration']['ip_address'] = '172.28.118.1'
-
-      expected2 = network.dup
-      expected2['staticNetworkConfiguration']['ip_address'] = '172.28.118.2'
-
-      updated['value'].should == [ expected1, expected2 ]
+      updated['value'].size.should == 2
+      updated['value'][0]['staticNetworkConfiguration']['ip_address'].should == '172.28.118.1'
+      updated['value'][1]['staticNetworkConfiguration']['ip_address'].should == '172.28.118.2'
     end
 
     it 'should not reserve ips for dhcp networks' do
@@ -172,6 +166,7 @@ describe ASM::ServiceDeployment do
       @sd.massage_networks!(servers)
 
       updated = servers[0]['resources']['parameters'][0]
+      updated['value'].size.should == 1
       updated['value'].should == [ network ]
     end
 

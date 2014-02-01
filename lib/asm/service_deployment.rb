@@ -117,8 +117,12 @@ class ASM::ServiceDeployment
       params.each_with_index do |param, index|
         value = network.dup
         if value['staticNetworkConfiguration']
+          # WARNING: dup doesn't dup the values! staticNetworkConfiguration
+          # is a hash, so we have to dup it again to maintain separate objects
+          value['staticNetworkConfiguration'] = network['staticNetworkConfiguration'].dup
           value['staticNetworkConfiguration']['ip_address'] = ips[index]
         end
+
         param['value'] ||= []
         param['value'].push(value)
       end
