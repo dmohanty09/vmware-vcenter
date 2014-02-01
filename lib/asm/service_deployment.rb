@@ -61,9 +61,6 @@ class ASM::ServiceDeployment
         file.write(JSON.pretty_generate({ "Deployment" => service_deployment }))
       end
 
-      # TODO: pass deployment into constructor instead of here
-      @deployment = service_deployment
-
       # Will need to access other component types during deployment
       # of a given component type in the future, e.g. VSwitch configuration
       # information is contained in the server component type data
