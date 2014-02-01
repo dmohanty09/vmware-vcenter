@@ -408,6 +408,7 @@ module ASM
       else
         resource_type = resource['id'] || raise(Exception, 'resource found with no type')
       end
+
       resource_type.downcase!
       resources[resource_type] ||= {}
 
@@ -427,7 +428,7 @@ module ASM
       end
       if title
         if generate_title
-          raise(Exception, "Generated title passed for resource with title #{resource_type}")
+          raise(Exception, "Generated title (#{generate_title}) passed for resource with title #{title}")
         end
       else
         title = generate_title
