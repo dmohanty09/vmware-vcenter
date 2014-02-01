@@ -16,6 +16,14 @@ describe ASM::ServiceDeployment do
     @sd.stubs(:await_agent_checkin).returns('STUB-CERTIFICATE-NAME')
     @sd.stubs(:update_inventory_through_controller)
     ASM.stubs(:base_dir).returns(@tmp_dir)
+    network = {
+      'id' => '1', 'name' => 'Management Network', 'vlanId' => '28', 
+      'staticNetworkConfiguration' => {
+        'gateway' => '172.28.0.1', 'subnet' => '255.255.0.0'
+      }
+    }
+    ASM::Util.stubs(:fetch_network_settings).returns(network)
+    ASM::Util.stubs(:reserve_network_ips).returns(['172.28.118.1'])
   end
 
   describe 'when data is valid' do
@@ -106,6 +114,83 @@ describe ASM::ServiceDeployment do
       
     end
 
+    it 'should replace network guids with networks' do
+      network = {
+        'id' => '1', 'name' => 'Management Network', 'vlanId' => '28', 
+        'staticNetworkConfiguration' => {
+          'gateway' => '172.28.0.1', 'subnet' => '255.255.0.0'
+        }
+      }
+      ASM::Util.stubs(:fetch_network_settings).returns(network)
+      ASM::Util.stubs(:reserve_network_ips).returns(['172.28.118.1'])
+      
+      param = { 'id' => 'hypervisor_network', 'value' => '1', }
+      servers = [ {'id' => 'cert', 
+                    'resources' => { 'parameters' => [ param ] } } ]
+      @sd.massage_networks!(servers)
+      updated = servers[0]['resources']['parameters'][0]
+      expected_network = network.dup
+      expected_network['staticNetworkConfiguration']['ip_address'] = '172.28.118.1'
+      updated['value'].should == [ expected_network ]
+    end
+    
+    it 'should reserve two networks for storage_network' do
+      network = {
+        'id' => '1', 'name' => 'Management Network', 'vlanId' => '28', 
+        'staticNetworkConfiguration' => {
+          'gateway' => '172.28.0.1', 'subnet' => '255.255.0.0'
+        }
+      }
+      ASM::Util.stubs(:fetch_network_settings).returns(network)
+      ASM::Util.stubs(:reserve_network_ips).returns(['172.28.118.1', '172.28.118.2'])
+      
+      param = { 'id' => 'storage_network', 'value' => '1', }
+      servers = [ {'id' => 'cert', 'resources' => { 'parameters' => [ param ] } } ]
+      @sd.massage_networks!(servers)
+
+      updated = servers[0]['resources']['parameters'][0]
+
+      expected1 = network.dup
+      expected1['staticNetworkConfiguration']['ip_address'] = '172.28.118.1'
+
+      expected2 = network.dup
+      expected2['staticNetworkConfiguration']['ip_address'] = '172.28.118.2'
+
+      updated['value'].should == [ expected1, expected2 ]
+    end
+
+    it 'should not reserve ips for dhcp networks' do
+      network = {
+        'id' => '1', 'name' => 'Management Network',
+        'vlanId' => '28', "static" => 'false'
+      }
+      ASM::Util.stubs(:fetch_network_settings).returns(network)
+      ASM::Util.expects(:reserve_network_ips).never
+      
+      param = { 'id' => 'workload_network', 'value' => '1', }
+      servers = [ {'id' => 'cert', 'resources' => { 'parameters' => [ param ] } } ]
+      @sd.massage_networks!(servers)
+
+      updated = servers[0]['resources']['parameters'][0]
+      updated['value'].should == [ network ]
+    end
+
+    it 'should only change known network parameters' do
+      network = {
+        'id' => '1', 'name' => 'Management Network',
+        'vlanId' => '28', "static" => 'false'
+      }
+      ASM::Util.stubs(:fetch_network_settings).returns(network)
+      ASM::Util.expects(:reserve_network_ips).never
+      
+      param = { 'id' => 'unknown_network', 'value' => '1', }
+      servers = [ {'id' => 'cert', 'resources' => { 'parameters' => [ param ] } } ]
+      @sd.massage_networks!(servers)
+
+      updated = servers[0]['resources']['parameters'][0]
+      updated['value'].should == '1'
+    end
+
   end
 
   describe 'when data is invalid' do
@@ -171,7 +256,7 @@ describe ASM::ServiceDeployment do
         ]}})
       end.to raise_error(Exception, 'Component has resource user with no title')
     end
-
+    
   end
 
 end

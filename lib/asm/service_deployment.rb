@@ -46,6 +46,87 @@ class ASM::ServiceDeployment
     @noop = noop
   end
 
+  # Network values come from the GUI as a list of ASM network guids.
+  # Those must be looked up from an ASM REST service, and if they 
+  # correspond to a static network, static IPs must be reserved from
+  # the ASM REST service.
+  #
+  # This method replaces the parameter's list of guids with the
+  # corresponding list of ASM networks. For static IPs, those networks
+  # will have an additional field added corresponding to the IP to use:
+  # parameter['value']['staticNetworkConfiguration']['ip_address']
+  #
+  # Doing this lookup and reservation in advance of processing the 
+  # components is done for two reasons:
+  #
+  # 1. The deployment will fail immediately if there are not enough
+  #    static IP addresses available to fulfill the deployment.
+  #
+  # 2. All reserved IP addresses will be tied to the same "usage id",
+  #    which will be the deployment id. This allows all of the static
+  #    IPs associated with a deployment to be relased by calling the
+  #    reservation service with the deployment id.
+  def massage_networks!(server_components)
+    guid_to_params = {}
+
+    # Build guid_to_params map of network guid to list of matching parameters
+    networks = [ 'hypervisor_network', 'vmotion_network', 
+                 'workload_network', 'storage_network', 'pxe_network' ]
+    server_components.each do |component|
+      resources = ASM::Util.asm_json_array(component['resources']) || []
+      resources.each do |resource|
+        parameters = ASM::Util.asm_json_array(resource['parameters']) || []
+        parameters.each do |param|
+          if networks.include?(param['id'])
+            if !empty_guid?(param['value'])
+              # value may be a comma-separated list, but if that is the
+              # case it will lead with a comma, e.g. ,1,2,3
+              # The reject below gets rid of the initial empty element
+              guids = param['value'].split(',').reject { |x| x.empty? }
+              
+              # Storage network special case: two portgroups are always
+              # created, so we need two networks, but only one is passed in
+              if param['id'] == 'storage_network' && guids.size == 1
+                guids.push(guids[0])
+              end
+              
+              guids.each do |guid|
+                guid_to_params[guid] ||= []
+                guid_to_params[guid].push(param)
+              end
+            end
+
+            # Overwrite value with nil, later we will add the value
+            param['value'] = nil
+          end
+        end
+      end
+    end
+
+    # Look up each network guid, and do static IP reservations if necessary
+    guid_to_params.each do |guid, params|
+      network = ASM::Util.fetch_network_settings(guid)
+      n_ips = params.size
+      ips = nil
+      if network['staticNetworkConfiguration']
+        ips = ASM::Util.reserve_network_ips(network['id'], n_ips, @id)
+      else
+        ips = Array.new(n_ips) # empty array, won't be used
+      end
+
+      # Add a copy of the network to param['value']
+      params.each_with_index do |param, index|
+        value = network.dup
+        if value['staticNetworkConfiguration']
+          value['staticNetworkConfiguration']['ip_address'] = ips[index]
+        end
+        param['value'] ||= []
+        param['value'].push(value)
+      end
+    end
+
+  end
+
   def process(service_deployment)
     begin
       # Before we go multi-threaded, check whether puppet broker exists
@@ -68,6 +149,7 @@ class ASM::ServiceDeployment
       # of a given component type in the future, e.g. VSwitch configuration
       # information is contained in the server component type data
       @components_by_type = components_by_type(service_deployment)
+      massage_networks!(@components_by_type['SERVER'] || [])
       get_all_switches()
       @rack_server_switchhash = self.populate_rack_switch_hash()
       @blade_server_switchhash = self.populate_blade_switch_hash()
@@ -1021,7 +1103,7 @@ class ASM::ServiceDeployment
     }
   end
 
-  def build_vswitch(server_cert, index, network_guids, hostip,
+  def build_vswitch(server_cert, index, networks, hostip,
     params, server_params)
     vswitch_name = "vSwitch#{index}"
     vmnic1 = "vmnic#{index * 2}"
@@ -1048,9 +1130,6 @@ class ASM::ServiceDeployment
     portgrouptype = 'VMkernel'
     next_require = "Esx_vswitch[#{hostip}:#{vswitch_name}]"
 
-    networks = network_guids.map do |guid|
-      ASM::Util.fetch_network_settings(guid)
-    end
     portgroup_names = nil
     if index == 3
       # iSCSI network
@@ -1059,8 +1138,7 @@ class ASM::ServiceDeployment
       # give ISCSI0 vmk2 and ISCSI1 vmk3 vmknics. The datastore
       # configuration relies on that.
       portgroup_names = [ 'ISCSI0', 'ISCSI1' ]
-      raise(Exception, "Only one network expected for storage network") unless networks.size ==1
-      networks = [ networks[0], networks[0] ]
+      raise(Exception, "Exactly two networks expected for storage network") unless networks.size == 2
     else
       if index == 2
         portgrouptype = 'VirtualMachine'
@@ -1079,9 +1157,7 @@ class ASM::ServiceDeployment
       if static
         # TODO: we should consolidate our reservation requests
         reservation_guid = "#{@id}-#{portgroup_title}"
-        ip = ASM::Util.reserve_network_ips(network['id'],
-        portgroup_names.size,
-        reservation_guid)[0]
+        ip = static['ip_address'] || raise(Exception, "ip_address not set")
         raise(Exception, "Subnet not found in configuration #{static.inspect}") unless static['subnet']
 
         portgroup['ipsettings'] = 'static'
@@ -1167,24 +1243,29 @@ class ASM::ServiceDeployment
               storage_network_vmk_index = nil
               vmk_index = 0
               [ 'hypervisor_network', 'vmotion_network', 'workload_network', 'storage_network' ].each_with_index do | type, index |
-                guid = network_params[type]
-                
+                networks = network_params[type]
+
                 if type == 'hypervisor_network'
                   # Skip hypervisor network for now, it is causing problems
                   # because it is configuring the same interface that rbvmomi
                   # is talking to esxi through
-                  guid = nil
+                  networks = nil
                   # Even if we don't create a vmk for hypervisor_network
                   # one will have been automatically created
                   vmk_index = 1
                 end
 
-                if !empty_guid?(guid)
+                if networks
                   # For workload, guid may be a comma-separated list
-                  log("Configuring #{type} = #{guid}")
-                  guids = guid.split(',').select { |x| !x.empty? }
+                  networks.each_with_index do |network, index|
+                    # Storage network has two duplicate networks for
+                    # iSCSI configuration, only log one message for it
+                    unless type == 'storage_network' && index > 0
+                      log("Configuring #{type} #{network['name']}")
+                    end
+                  end
                   vswitch_resources = build_vswitch(server_cert, index,
-                  guids, hostip,
+                  networks, hostip,
                   params, server_params)
                   # Should be exactly one vswitch in response
                   vswitch_title = vswitch_resources['esx_vswitch'].keys[0]
@@ -1580,42 +1661,40 @@ class ASM::ServiceDeployment
     server_conf = ASM::Util.build_component_configuration(server_component)
     network_params = (server_conf['asm::esxiscsiconfig'] || {})[server_cert]
     if network_params
-      hypervisormanagementguid = network_params["hypervisor_network"]
-      logger.debug "hypervisormanagementguid :: #{hypervisormanagementguid}"
-      if !empty_guid?(hypervisormanagementguid)
-        network = ASM::Util.fetch_network_settings(hypervisormanagementguid)
-        logger.debug "network :: #{network}"
-        hypervisormanagementvlanid = network['vlanId']
+      if network_params['hypervisor_network']
+        networks = network_params['hypervisor_network']
+        raise(Exception, 'Exactly one hypervisor network expected') unless networks.size == 1
+        hypervisormanagementvlanid = networks[0]['vlanId']
       end
-      vmotionguid = network_params["vmotion_network"]
-      if !empty_guid?(vmotionguid)
-        network = ASM::Util.fetch_network_settings(vmotionguid)
-        vmotionvlanid = network['vlanId']
+
+      if network_params['vmotion_network']
+        networks = network_params['hypervisor_network']
+        raise(Exception, 'Exactly one hypervisor network expected') unless networks.size == 1
+        vmotionvlanid = networks[0]['vlanId']
       end
-      logger.debug "Vmotion GUID: #{vmotionguid}"
-      iscsiguid = network_params["storage_network"]
-      if !empty_guid?(iscsiguid)
-        network = ASM::Util.fetch_network_settings(iscsiguid)
-        iscsivlanid = network['vlanId']
+
+      if network_params['storage_network']
+        networks = network_params['storage_network']
+        raise(Exception, 'Exactly two storage networks expected') unless networks.size == 2
+        iscsivlanid = networks[0]['vlanId']
+        raise(Exception, 'iSCSI vlan ids must be the same') unless iscsivlanid == networks[1]['vlanId']
       end
-      logger.debug "iSCSI GUID  #{iscsiguid}"
-      workloadguids = network_params["workload_network"]
-      workloadguids = empty_guid?(workloadguids) ? [] : workloadguids.split(",")
-      workloadguids.each do |workloadguid|
-        workloadguid = workloadguid.strip
-        if !empty_guid?(workloadguid)
-          network = ASM::Util.fetch_network_settings(workloadguid)
+
+      if network_params['workload_network']
+        networks = network_params['workload_network']
+        networks.each do |network|
           tagged_workloadvlaninfo.push(network['vlanId'])
         end
       end
-      pxeguid = network_params["pxe_network"]
-      if !empty_guid?(pxeguid)
-        network = ASM::Util.fetch_network_settings(pxeguid)
-        pxevlanid = network['vlanId']
-      end
-      logger.debug "pxeguid: #{pxeguid}"
-      logger.debug "hypervisormanagementvlanid :: #{hypervisormanagementvlanid} vmotionvlanid :: #{vmotionvlanid} iscsivlanid :: #{iscsivlanid} workloadvlanids :: #{tagged_workloadvlaninfo} pxevlanid :: #{pxevlanid}"
 
+      if network_params['pxe_network']
+        networks = network_params['pxe_network']
+        raise(Exception, "Exactly one pxe network expected, found #{network_params['pxe_network'].inspect}") unless networks.size == 1
+        pxevlanid = networks[0]['vlanId']
+      end
+      
+      logger.debug "hypervisormanagementvlanid :: #{hypervisormanagementvlanid} vmotionvlanid :: #{vmotionvlanid} iscsivlanid :: #{iscsivlanid} workloadvlanids :: #{tagged_workloadvlaninfo} pxevlanid :: #{pxevlanid}"
+      
       if hypervisormanagementvlanid != ""
         tagged_vlaninfo.push(hypervisormanagementvlanid.to_s)
       end
