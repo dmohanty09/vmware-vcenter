@@ -238,16 +238,23 @@ module ASM
       end.ip_address
     end
 
+    def self.get_plain_password(encoded_password)
+      plain_password = `/opt/puppet/bin/ruby /opt/asm-deployer/lib/asm/encode_asm.rb #{encoded_password}`
+      plain_password = plain_password.strip
+      return URI.decode(plain_password)
+    end
+    
     def self.parse_device_config(cert_name)
       conf_file = File.join(DEVICE_CONF_DIR, "#{cert_name}.conf")
       conf_file_data = parse_device_config_file(conf_file)
       uri = URI.parse(conf_file_data[cert_name].url)
       host = uri.host
       user = URI.decode(uri.user)
-      password = URI.decode(uri.password)
+      enc_password = URI.decode(uri.password)
       { :host => host,
         :user => user,
-        :password => password,
+        :enc_password => enc_password,
+        :password => get_plain_password(enc_password),
         :url => uri,
         :conf_file_data => conf_file_data }
     end

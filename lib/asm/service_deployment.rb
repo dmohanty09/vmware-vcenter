@@ -737,7 +737,6 @@ class ASM::ServiceDeployment
     dracipaddress = device_conf[:host]
     dracusername = device_conf[:user]
     dracpassword = device_conf[:password]
-    dracpassword=URI.decode(get_plain_password(dracpassword))
     servicetag = inv['serviceTag']
     model = inv['model'].split(' ').last
     logger.debug "servicetag :: #{servicetag} model :: #{model}\n"
@@ -1164,14 +1163,6 @@ class ASM::ServiceDeployment
     ret
   end
 
-  def get_plain_password(encoded_password)
-    logger.debug("Base password: #{encoded_password}")
-    plain_password=`/opt/puppet/bin/ruby /opt/asm-deployer/lib/asm/encode_asm.rb #{encoded_password}`
-    plain_password=plain_password.strip
-    logger.debug("Updated password: #{plain_password}")
-    return URI.decode(plain_password)
-  end
-
   def process_cluster(component)
     cert_name = component['id']
     raise(Exception, 'Component has no certname') unless cert_name
@@ -1181,11 +1172,10 @@ class ASM::ServiceDeployment
 
     # Add vcenter creds to asm::cluster resources
     deviceconf = ASM::Util.parse_device_config(cert_name)
-    vcenter_password=get_plain_password(deviceconf[:password])
     resource_hash['asm::cluster'].each do |title, params|
       resource_hash['asm::cluster'][title]['vcenter_server'] = deviceconf[:host]
       resource_hash['asm::cluster'][title]['vcenter_username'] = deviceconf[:user]
-      resource_hash['asm::cluster'][title]['vcenter_password'] = vcenter_password
+      resource_hash['asm::cluster'][title]['vcenter_password'] = deviceconf[:password]
       resource_hash['asm::cluster'][title]['vcenter_options'] = { 'insecure' => true }
       resource_hash['asm::cluster'][title]['ensure'] = 'present'
 
@@ -1372,12 +1362,11 @@ class ASM::ServiceDeployment
       vm_params['scsi_controller_type'] = 'VMware Paravirtual'
     end
 
-    vcenter_password=get_plain_password(cluster_deviceconf[:password])
     vm_params['cluster'] = cluster_params['cluster']
     vm_params['datacenter'] = cluster_params['datacenter']
     vm_params['datastore'] = cluster_params['datastore']
     vm_params['vcenter_username'] = cluster_deviceconf[:user]
-    vm_params['vcenter_password'] = vcenter_password
+    vm_params['vcenter_password'] = cluster_deviceconf[:password]
     vm_params['vcenter_server'] = cluster_deviceconf[:host]
     vm_params['vcenter_options'] = { 'insecure' => true }
     vm_params['ensure'] = 'present'
