@@ -962,7 +962,7 @@ class ASM::ServiceDeployment
       params['nfslocaldir'] = '/var/nfs/idrac_config_xml'
       params['dracipaddress'] = deviceconf[:host]
       params['dracusername'] = deviceconf[:user]
-      params['dracpassword'] = deviceconf[:password]
+      params['dracpassword'] = deviceconf[:enc_password]
       params['servicetag'] = inventory['serviceTag']
       params['model'] = inventory['model'].split(' ').last.downcase
 
