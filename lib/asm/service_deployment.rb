@@ -1561,6 +1561,13 @@ class ASM::ServiceDeployment
         raise(CommandException, results['stderr'])
       end
     end
+
+    # Still cases where ESXi is not available to be added to the cluster
+    # in the process_cluster method even after the uuid has been
+    # obtained above; trying a 2 minute sleep... Seems to happen more
+    # frequently when only one ESXi host is in the deployment.
+    sleep(120)
+
     log("ESXi server #{hostname} is available")
   end
 
