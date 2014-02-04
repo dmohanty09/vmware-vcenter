@@ -1284,6 +1284,8 @@ class ASM::ServiceDeployment
                   storage_cert = storage_component['id']
                   storage_creds = ASM::Util.parse_device_config(storage_cert)
                   storage_hash = ASM::Util.build_component_configuration(storage_component)
+                  hba_list = parse_hbas(hostip, resource_hash['asm::host'][server_cert]['username'], server_params['admin_password'])
+
                   (storage_hash['equallogic::create_vol_chap_user_access'] || {}).each do |storage_title, storage_params|
                     resource_hash['asm::datastore'] = (resource_hash['asm::datastore'] || {})
                     resource_hash['asm::datastore']["#{hostip}:#{storage_title}"] = {
@@ -1294,6 +1296,8 @@ class ASM::ServiceDeployment
                       'esxhost' => hostip,
                       'esxusername' => 'root',
                       'esxpassword' => server_params['admin_password'],
+                      'hba1' => hba_list[0],
+                      'hba2' => hba_list[1],
                       'iscsi_target_ip' => ASM::Util.find_equallogic_iscsi_ip(storage_cert),
                       'chapname' => storage_params['chap_user_name'],
                       'chapsecret' => storage_params['passwd'],
@@ -1316,7 +1320,22 @@ class ASM::ServiceDeployment
     process_generic(cert_name, resource_hash, 'apply')
     mark_vcenter_as_needs_update(component['asmGUID'])
   end
-
+  
+  def parse_hbas(hostip, username, password)
+    log("getting hba information for #{hostip}")
+    cmd = "esxcli --server=#{hostip} --username=#{username} --password=#{password} iscsi adapter list"
+    results = ASM::Util.run_command_simple(cmd)
+    hba_list = []
+    results['stdout'].split("\n").each do |line|
+      hba_list << line.split(" ")[0] if line.include? "iSCSI Adapter"
+    end
+    if hba_list.count > 2
+      raise "only two hba adapters are allowed"
+    end
+    log("hba adapters for #{hostip} are #{ hba_list[0]} and  #{hba_list[1]}")
+    hba_list
+  end
+ 
   def process_virtualmachine(component)
     log("Processing virtualmachine component: #{component['id']}")
     resource_hash = ASM::Util.build_component_configuration(component)
