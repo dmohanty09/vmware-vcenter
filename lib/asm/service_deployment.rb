@@ -328,7 +328,19 @@ class ASM::ServiceDeployment
       puppet_out = File.join(deployment_dir, "#{cert_name}.out")
       if puppet_run_type == 'device'
         begin
-          timeout = 300
+          # The timeout to obtain the device lock was originally 5
+          # minutes.  However, the equallogic module currently takes >
+          # 5 minutes to provision a single volume which seems
+          # unreasonable. An issue was raised for that here:
+          #
+          # https://github.com/dell-asm/dell-equallogic/issues/6
+          #
+          # As a short-term workaround to allow at least a few
+          # deployments involving the same equallogic to be started
+          # simultaneously, the timeout has been raised to 30
+          # minutes. When the equallogic issue above has been resolved
+          # it should be reduced back down to about 5 minutes.
+          timeout = 30 * 60
           start = Time.now
           yet_to_run_command = true
           while(yet_to_run_command)
@@ -339,7 +351,7 @@ class ASM::ServiceDeployment
               update_device_inventory(cert_name)
             else
               sleep 2
-              if Time.now - start > 300
+              if Time.now - start > timeout
                 raise(SyncException, "Timed out waiting for a lock for device cert #{cert_name}")
               end
             end
