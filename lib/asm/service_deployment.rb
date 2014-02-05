@@ -949,39 +949,44 @@ class ASM::ServiceDeployment
 
     # In the case of Dell servers the cert_name should contain
     # the service tag and we retrieve it here
-    serial_number = cert_name_to_service_tag(cert_name) || cert_name
-
+    serial_number = nil
+    service_tag = cert_name_to_service_tag(cert_name)
+    if service_tag
+      is_dell_server = true
+      serial_number = service_tag
+    else
+      is_dell_server = false
+      serial_number = cert_name
+    end
     resource_hash = {}
     server_vlan_info = {}
     deviceconf = nil
     inventory = nil
     resource_hash = ASM::Util.build_component_configuration(component)
-    if resource_hash['asm::idrac']
-      deviceconf ||= ASM::Util.parse_device_config(cert_name)
-      inventory  ||= ASM::Util.fetch_server_inventory(cert_name)
-    end
 
     (resource_hash['asm::server'] || {}).each do |title, params|
       massage_asm_server_params(serial_number, params)
     end
-
-    (resource_hash['asm::idrac'] || {}).each do |title, params|
-      # Attempt to determine this machine's IP address, which
-      # should also be the NFS server. This is error-prone
-      # and should be fixed later.
-      params['nfsipaddress'] = ASM::Util.first_host_ip
-      params['nfssharepath'] = '/var/nfs/idrac_config_xml'
-      params['nfslocaldir'] = '/var/nfs/idrac_config_xml'
-      params['dracipaddress'] = deviceconf[:host]
-      params['dracusername'] = deviceconf[:user]
-      params['dracpassword'] = deviceconf[:enc_password]
-      params['servicetag'] = inventory['serviceTag']
-      params['model'] = inventory['model'].split(' ').last.downcase
-
-      if resource_hash['asm::server']
-        params['before'] = "Asm::Server[#{title}]"
+    
+    if is_dell_server
+      (resource_hash['asm::idrac'] || {}).each do |title, params|
+        # Attempt to determine this machine's IP address, which
+        # should also be the NFS server. This is error-prone
+        # and should be fixed later.
+        deviceconf ||= ASM::Util.parse_device_config(cert_name)
+        inventory  ||= ASM::Util.fetch_server_inventory(cert_name)
+        params['nfsipaddress'] = ASM::Util.first_host_ip
+        params['nfssharepath'] = '/var/nfs/idrac_config_xml'
+        params['nfslocaldir'] = '/var/nfs/idrac_config_xml'
+        params['dracipaddress'] = deviceconf[:host]
+        params['dracusername'] = deviceconf[:user]
+        params['dracpassword'] = deviceconf[:enc_password]
+        params['servicetag'] = inventory['serviceTag']
+        params['model'] = inventory['model'].split(' ').last.downcase
+        if resource_hash['asm::server']
+          params['before'] = "Asm::Server[#{title}]"
+        end
       end
-
     end
 
     # Network settings (vswitch config) is done in cluster swim lane
