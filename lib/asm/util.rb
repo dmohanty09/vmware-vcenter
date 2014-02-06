@@ -374,21 +374,19 @@ module ASM
         rescue Exception => e
 
           exceptions = Array(exceptions)
-
           if ! exceptions.empty? and (
-          exceptions.include?(key = e.class) or
-          exceptions.include?(key = key.name.to_s) or
-          exceptions.include?(key = key.to_sym))
+            exceptions.include?(key = e.class) or
+            exceptions.include?(key = key.name.to_s) or
+            exceptions.include?(key = key.to_sym)
+         )
             then
             logger.info("Caught exception #{e.class}: #{e}")
             failures += 1
-            old_sleep_time = sleep_time
             sleep_time     = (((2 ** failures) -1) * 0.1)
             if max_sleep and (sleep_time > max_sleep)
-              sleep old_sleep_time
-            else
-              sleep sleep_time
+              sleep_time = max_sleep
             end
+            sleep sleep_time
             retry
           else
             # If the exceptions is not in the list of retry_exceptions re-raise.
