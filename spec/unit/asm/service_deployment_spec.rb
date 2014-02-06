@@ -17,7 +17,7 @@ describe ASM::ServiceDeployment do
     @sd.stubs(:update_inventory_through_controller)
     ASM.stubs(:base_dir).returns(@tmp_dir)
     network = {
-      'id' => '1', 'name' => 'Management Network', 'vlanId' => '28', 
+      'id' => '1', 'name' => 'Test Network', 'vlanId' => '28', 
       'staticNetworkConfiguration' => {
         'gateway' => '172.28.0.1', 'subnet' => '255.255.0.0'
       }
@@ -116,7 +116,7 @@ describe ASM::ServiceDeployment do
 
     it 'should replace network guids with networks' do
       network = {
-        'id' => '1', 'name' => 'Management Network', 'vlanId' => '28', 
+        'id' => '1', 'name' => 'Test Network', 'vlanId' => '28', 
         'staticNetworkConfiguration' => {
           'gateway' => '172.28.0.1', 'subnet' => '255.255.0.0'
         }
@@ -135,7 +135,7 @@ describe ASM::ServiceDeployment do
     
     it 'should reserve two networks for storage_network' do
       network = {
-        'id' => '1', 'name' => 'Management Network', 'vlanId' => '28', 
+        'id' => '1', 'name' => 'Test Network', 'vlanId' => '28', 
         'staticNetworkConfiguration' => {
           'gateway' => '172.28.0.1', 'subnet' => '255.255.0.0'
         }
@@ -155,7 +155,7 @@ describe ASM::ServiceDeployment do
 
     it 'should not reserve ips for dhcp networks' do
       network = {
-        'id' => '1', 'name' => 'Management Network',
+        'id' => '1', 'name' => 'Test Network',
         'vlanId' => '28', "static" => 'false'
       }
       ASM::Util.stubs(:fetch_network_settings).returns(network)
@@ -170,9 +170,26 @@ describe ASM::ServiceDeployment do
       updated['value'].should == [ network ]
     end
 
-    it 'should only change known network parameters' do
+    it 'should disallow Management Network name' do
       network = {
         'id' => '1', 'name' => 'Management Network',
+        'vlanId' => '28', "static" => 'false'
+      }
+      ASM::Util.stubs(:fetch_network_settings).returns(network)
+      ASM::Util.expects(:reserve_network_ips).never
+      
+      param = { 'id' => 'workload_network', 'value' => '1', }
+      servers = [ {'id' => 'cert', 'resources' => { 'parameters' => [ param ] } } ]
+      @sd.massage_networks!(servers)
+
+      updated = servers[0]['resources']['parameters'][0]
+      updated['value'].size.should == 1
+      updated['value'][0]['name'].should == 'Management Network (1)'
+    end
+
+    it 'should only change known network parameters' do
+      network = {
+        'id' => '1', 'name' => 'Test Network',
         'vlanId' => '28', "static" => 'false'
       }
       ASM::Util.stubs(:fetch_network_settings).returns(network)
