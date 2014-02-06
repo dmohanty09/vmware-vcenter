@@ -46,7 +46,7 @@ class Get_switch_information
 
   def blade_server_switch_info(nname,server,swinfo,logger)
     bladeObj=Blade_server_switch_information.new(nname,server,swinfo)
-    serverinformation=bladeObj.identify_switch_ports logger
+    serverinformation=bladeObj.identify_switch_ports(swinfo,logger)
     pp serverinformation
     return serverinformation
   end
