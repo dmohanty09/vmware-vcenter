@@ -5,7 +5,7 @@ class Blade_server_switch_information
     @switchinfo=swinfo
   end
 
-  def identify_switch_ports(logger)
+  def identify_switch_ports(swinfo, logger)
     serviceTag=@nodename
     serverModel=@sinfo['servermodel']
     idracIp=@sinfo['idrac_ip']
@@ -35,9 +35,27 @@ class Blade_server_switch_information
     #end
     index = 0
     switchlist = @sinfo['ioaips']
+    switch_certs = Array.new
+      
+    # Eliminate the switches which are not discovered
+    swinfo.each do |switch_cert_name,switch_info|
+      switch_certs.push switch_cert_name
+    end
     
-    logger.debug "A-- switchlist ::: #{switchlist}"
-    switchlist.each do |ioa|
+    updated_switch_list = Array.new
+    logger.debug "IOM Info: Switch Certs #{switch_certs}"
+    logger.debug "IOM IP list: #{switchlist}"
+    switchlist.each do |ioa_ip|
+      logger.debug "temp_cert_name: #{ioa_ip}"
+      if switch_certs.include?(ioa_ip)
+        logger.debug "Matched with certificate"
+        updated_switch_list.push ioa_ip
+      end
+    end
+      
+    
+    logger.debug "A-- switchlist ::: #{updated_switch_list}"
+    updated_switch_list.each do |ioa|
       ioaslot=@sinfo['ioaslots'][index]
       logger.debug"IOA Slot information: #{ioaslot}"
       index +=1
@@ -66,7 +84,7 @@ class Blade_server_switch_information
         intLoc1 = "0/#{slot}"
         interfaceLoc1 = "Tengigabitethernet#{intLoc1}"
         #self.class.const_set(InterfaceLoc1,"Tengigabitethernet#{intLoc1})
-        slotoperation = slot + 8
+        slotoperation = slot.to_i + 8
         intLoc2 = "0/#{slotoperation}"
         interfaceLoc2 = "Tengigabitethernet#{intLoc2}"
         interfaceLocationList = interfaceLocationList.push(interfaceLoc1)

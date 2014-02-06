@@ -15,12 +15,26 @@ class Reboot
     @rebootfilepath = "#{module_path}/rebootfilepath.xml"
   end
 
+  def check_base64(string_input)
+    if string_input =~ /^([A-Za-z0-9+\/]{4})*([A-Za-z0-9+\/]{4}|[A-Za-z0-9+\/]{3}=|[A-Za-z0-9+\/]{2}==)$/
+      true
+    else
+      false
+    end
+  end
+
   def get_plain_password(encoded_password)
-    plain_password=`/opt/puppet/bin/ruby /opt/asm-deployer/lib/asm/encode_asm.rb #{encoded_password}`
-    plain_password=plain_password.strip
+    # Check if the password is encoded or not, if not then try to decrypt it
+    if check_base64(encoded_password)
+      plain_password=`/opt/puppet/bin/ruby /opt/asm-deployer/lib/asm/encode_asm.rb #{encoded_password}`
+      plain_password=plain_password.strip
+    else
+      plain_password=encoded_password
+    end
     return plain_password
   end
 
+    
   def reboot(logger)
     # Create the reboot job
     logger.debug "Rebooting server #{@ip}"

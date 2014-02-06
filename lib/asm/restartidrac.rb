@@ -26,7 +26,7 @@ class RestartIDRAC
               password = value
           end
       end
-      logger.debug "ip :: #{ip} username :: #{username} password :: #{password}"
+      logger.debug "ip :: #{ip} username :: #{username}"
       rebootidrac = Reboot.new(ip,username,password)
       resp =  rebootidrac.reboot(logger)
   end
