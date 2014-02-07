@@ -1038,10 +1038,20 @@ class ASM::ServiceDeployment
   # calls the Java controller to update the inventory service
   def update_inventory_through_controller(asm_guid)
     unless @debug
-      logger.debug("Updating inventory for #{asm_guid}")
-      url      = "http://localhost:9080/AsmManager/ManagedDevice/#{asm_guid}"
-      asm_obj  = JSON.parse(RestClient.get(url, :content_type => :json, :accept => :json))
-      response = RestClient.put(url, asm_obj.to_json,  :content_type => :json, :accept => :json)
+      if asm_guid.nil?
+        # TODO: this clause should never be hit, but currently switch
+        # devices which do not have asm guids are making it to this
+        # section of code from the device section of
+        # process_generic. We should change the update to only happen
+        # in a method that specific swim lanes (e.g. process_storage)
+        # can call, but for now we just skip inventory for them
+        logger.debug("Skipping inventory because asm_guid is empty")
+      else
+        logger.debug("Updating inventory for #{asm_guid}")
+        url      = "http://localhost:9080/AsmManager/ManagedDevice/#{asm_guid}"
+        asm_obj  = JSON.parse(RestClient.get(url, :content_type => :json, :accept => :json))
+        response = RestClient.put(url, asm_obj.to_json,  :content_type => :json, :accept => :json)
+      end
     end
   end
 
