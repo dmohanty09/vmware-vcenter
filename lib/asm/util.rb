@@ -309,6 +309,65 @@ module ASM
       end
     end
 
+    # Execute esxcli command and parse table into list of hashes. 
+    #
+    # Example output:
+    #
+    # [root@dellasm asm-deployer]# esxcli -s 172.25.15.174 -u root -p linux network vswitch standard portgroup list
+    # Name                    Virtual Switch  Active Clients  VLAN ID
+    # ----------------------  --------------  --------------  -------
+    # Management Network      vSwitch0                     1        0
+    # vMotion                 vSwitch1                     1       23
+    def self.esxcli(cmd_array, endpoint, logger = nil)
+      args = [ '-s', endpoint[:host], 
+               '-u', endpoint[:user],
+               '-p', endpoint[:password], ]
+      args = args + cmd_array.map { |arg| arg.to_s }
+
+      if logger
+        tmp = args.dup
+        tmp[5] = '******' # mask password
+        logger.debug("Executing esxcli #{tmp.join(' ')}")
+      end
+
+      result = Timeout::timeout(60) do
+        ASM::Util.run_command_with_args('esxcli', *args)
+      end
+
+      lines = result['stdout'].split(/\n/)
+      unless result['exit_status'] == 0
+        msg = "Failed to execute esxcli command on host #{endpoint[:host]}"
+        logger.error(msg) if logger
+        raise(Exception, "#{msg}: esxcli #{args.join(' ')}: #{result.inspect}")
+      end
+      
+      if lines.size > 2
+        header_line = lines.shift
+        seps = lines.shift.split
+        headers = []
+        pos = 0
+        seps.each do |sep|
+          header = header_line.slice(pos, sep.length).strip
+          headers.push(header)
+          pos = pos + sep.length + 2
+        end
+        
+        ret = []
+        lines.each do |line|
+          record = {}
+          pos = 0
+          seps.each_with_index do |sep, index|
+            value = line.slice(pos, sep.length).strip
+            record[headers[index]] = value
+            pos = pos + sep.length + 2
+          end
+          ret.push(record)
+        end
+        
+        ret
+      end
+    end
+
     def self.run_command_simple(cmd)
       result = {}
       Open3.popen3(cmd) do |stdin, stdout, stderr, wait_thr|

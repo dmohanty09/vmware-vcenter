@@ -14,6 +14,9 @@ require 'asm/get_switch_information'
 require 'uri'
 
 class ASM::ServiceDeployment
+
+  ESXI_ADMIN_USER = 'root'
+
   class CommandException < Exception; end
 
   class SyncException < Exception; end
@@ -1316,7 +1319,7 @@ class ASM::ServiceDeployment
                   if @debug
                     hba_list = [ 'vmhba33', 'vmhba34' ]
                   else
-                    hba_list = parse_hbas(hostip, resource_hash['asm::host'][server_cert]['username'], server_params['admin_password'])
+                    hba_list = parse_hbas(hostip, ESXI_ADMIN_USER, server_params['admin_password'])
                   end
 
                   (storage_hash['equallogic::create_vol_chap_user_access'] || {}).each do |storage_title, storage_params|
@@ -1356,12 +1359,16 @@ class ASM::ServiceDeployment
   
   def parse_hbas(hostip, username, password)
     log("getting hba information for #{hostip}")
-    cmd = "esxcli --server=#{hostip} --username=#{username} --password=#{password} iscsi adapter list"
-    results = ASM::Util.run_command_simple(cmd)
-    hba_list = []
-    results['stdout'].split("\n").each do |line|
-      hba_list << line.split(" ")[0] if line.include? "iSCSI Adapter"
-    end
+    endpoint = {
+      :host => hostip,
+      :user => username,
+      :password => password,
+    }
+    cmd = 'iscsi adapter list'.split
+    hba_list = ASM::Util.esxcli(cmd, endpoint, logger).select do |hba|
+      hba['Description'].end_with?('iSCSI Adapter')
+    end.map { |hba| hba['Adapter'] }
+    
     if hba_list.count > 2
       log("Found iSCSI adapters #{hba_list.join(', ')} for #{hostip}; using #{hba_list[0]} and #{hba_list[1]} for datastore")
     elsif hba_list.count < 2
