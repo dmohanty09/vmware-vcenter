@@ -365,7 +365,7 @@ module ASM
       end
     end
 
-    def self.block_and_retry_until_ready(timeout, exceptions=nil, max_sleep=nil, logger=ASM.logger, &block)
+    def self.block_and_retry_until_ready(timeout, exceptions=nil, max_sleep=nil, logger=nil, &block)
       failures = 0
       sleep_time = 0
       status = Timeout::timeout(timeout) do
@@ -380,7 +380,7 @@ module ASM
             exceptions.include?(key = key.to_sym)
          )
             then
-            logger.info("Caught exception #{e.class}: #{e}")
+            logger.info("Caught exception #{e.class}: #{e}") if logger
             failures += 1
             sleep_time     = (((2 ** failures) -1) * 0.1)
             if max_sleep and (sleep_time > max_sleep)
