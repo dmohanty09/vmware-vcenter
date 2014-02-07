@@ -165,7 +165,7 @@ module ASM
     # VM Provisioned size :83.3303845431656
     # VMNicNetworkMapping=1:HypMan28|*
     def self.find_vm_uuid(cluster_device, vmname)
-      # Have to use env command because jruby popen3 does not accept
+      # Have to use IO.popen because jruby popen3 does not accept
       # optional environment hash
       env = { 'PERL_LWP_SSL_VERIFY_HOSTNAME' => '0' }
       cmd = 'perl'
@@ -196,6 +196,35 @@ module ASM
       raise(Exception, "Failed to find UUID from output: #{stdout}") unless result_hash['VM uuid']
 
       result_hash['VM uuid']
+    end
+
+    def self.set_esxi_default_gateway(gateway, endpoint, logger = nil)
+      # Have to use IO.popen because jruby popen3 does not accept
+      # optional environment hash
+      env = { 'PERL_LWP_SSL_VERIFY_HOSTNAME' => '0' }
+      cmd = 'vicfg-route'
+      args = [ '--server', endpoint[:host],
+               '--username', endpoint[:user],
+               '--password', endpoint[:password],
+               gateway ]
+
+      if logger
+        tmp = args.dup
+        tmp[5] = '******' # mask password
+        logger.debug("Executing #{cmd} #{tmp.join(' ')}")
+      end
+
+      stdout = Timeout::timeout(120) do
+        IO.popen([ env, cmd, *args]) do |io|
+          stdout = io.read
+        end
+      end
+
+      unless stdout
+        msg = "Failed to set default gateway for host #{endpoint[:host]}"
+        logger.error(msg)
+        raise(Exception, msg)
+      end
     end
 
     # Hack to figure out cert name from uuid.
