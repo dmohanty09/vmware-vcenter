@@ -102,9 +102,33 @@ class ASM::ServiceDeployment
       end
     end
 
-    # Look up each network guid, and do static IP reservations if necessary
+    # Look up each network guid
+    guid_to_network = {}
     guid_to_params.each do |guid, params|
       network = ASM::Util.fetch_network_settings(guid)
+      guid_to_network[guid] = network
+    end
+
+    # By default our ESXi hosts boot with 'VM Network' and 'Management
+    # Network' names. To avoid having new networks conflict with
+    # those, replace those names with non-conflicting ones.
+    reserved_names = [ 'VM Network', 'Management Network' ]
+    all_names = guid_to_network.values.map { |network| network['name'] }
+    guid_to_network.each do |guid, network|
+      name = network['name']
+      if reserved_names.include?(name)
+        i = 1
+        begin
+          replacement = "#{name} (#{i})"
+          i += 1
+        end while all_names.include?(replacement)
+        network['name'] = replacement
+      end
+    end
+
+    # Do static IP reservations if necessary and update params
+    guid_to_params.each do |guid, params|
+      network = guid_to_network[guid]
       n_ips = params.size
       ips = nil
       if network['staticNetworkConfiguration']
