@@ -1685,8 +1685,8 @@ class ASM::ServiceDeployment
       end
 
       if network_params['vmotion_network']
-        networks = network_params['hypervisor_network']
-        raise(Exception, 'Exactly one hypervisor network expected') unless networks.size == 1
+        networks = network_params['vmotion_network']
+        raise(Exception, 'Exactly one vmotion network expected') unless networks.size == 1
         vmotionvlanid = networks[0]['vlanId']
       end
 
