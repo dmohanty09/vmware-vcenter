@@ -1347,9 +1347,12 @@ class ASM::ServiceDeployment
       hba_list << line.split(" ")[0] if line.include? "iSCSI Adapter"
     end
     if hba_list.count > 2
-      raise "only two hba adapters are allowed"
+      log("Found iSCSI adapters #{hba_list.join(', ')} for #{hostip}; using #{hba_list[0]} and #{hba_list[1]} for datastore")
+    elsif hba_list.count < 2
+      raise "At least 2 iSCSI adapters are required."
+    else
+      log("Found iSCSI adapters #{hba_list[0]} and #{hba_list[1]} for #{hostip}")
     end
-    log("hba adapters for #{hostip} are #{ hba_list[0]} and  #{hba_list[1]}")
     hba_list
   end
  
