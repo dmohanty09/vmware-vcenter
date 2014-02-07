@@ -55,10 +55,9 @@ END
 
     it 'should forgive a single exception' do
       mock_log = mock('foo')
-      ASM.expects(:logger).returns(mock_log)
       mock_log.expects(:info).with('Caught exception Exception: Exception')
       self.expects(:foo).twice.raises(Exception).then.returns('bar')
-      ASM::Util.block_and_retry_until_ready(5, Exception) do
+      ASM::Util.block_and_retry_until_ready(5, Exception, nil, mock_log) do
         foo
       end.should == 'bar'
     end
