@@ -121,6 +121,10 @@ class ASM::ServiceDeployment
           # is a hash, so we have to dup it again to maintain separate objects
           value['staticNetworkConfiguration'] = network['staticNetworkConfiguration'].dup
           value['staticNetworkConfiguration']['ip_address'] = ips[index]
+        elsif param['id'] == 'hypervisor_network'
+          msg = "Static networks are required for the hypervisor network and #{network['name']} is DHCP."
+          logger.error(msg)
+          raise(Exception, msg)
         end
 
         param['value'] ||= []
@@ -1216,19 +1220,14 @@ class ASM::ServiceDeployment
               next_require = "Asm::Host[#{server_cert}]"
               storage_network_require = nil
               storage_network_vmk_index = nil
+
+              # Each ESXi host will implicitly have a Management Network
+              # on vmk0. Other VMkernel portgroups that we add will enumerate
+              # from there.
               vmk_index = 0
+
               [ 'hypervisor_network', 'vmotion_network', 'workload_network', 'storage_network' ].each_with_index do | type, index |
                 networks = network_params[type]
-
-                if type == 'hypervisor_network'
-                  # Skip hypervisor network for now, it is causing problems
-                  # because it is configuring the same interface that rbvmomi
-                  # is talking to esxi through
-                  networks = nil
-                  # Even if we don't create a vmk for hypervisor_network
-                  # one will have been automatically created
-                  vmk_index = 1
-                end
 
                 if networks
                   # For workload, guid may be a comma-separated list
@@ -1250,23 +1249,21 @@ class ASM::ServiceDeployment
                   # Set next require to this vswitch so they are all
                   # ordered properly
                   next_require = "Esx_vswitch[#{vswitch_title}]"
-                  vswitch_resources['esx_portgroup'].each do |portgroupname, portgroupparams|
+                  vswitch_resources['esx_portgroup'].each do |title, portgroup|
+                    if portgroup['portgrouptype'] == 'VMkernel'
+                      vmk_index += 1
+                    end
+
                     # Enforce very strict ordering of each vswitch,
                     # its portgroups, then the next vswitch, etc.
                     # This is necessary to guess what vmk the portgroups
                     # end up on so that the datastore can be configured.
-                    next_require = "Esx_portgroup[#{portgroupname}]"
+                    next_require = "Esx_portgroup[#{title}]"
 
                     if type == 'storage_network'
                       storage_network_require ||= []
                       storage_network_vmk_index ||= vmk_index
-                      storage_network_require.push("Esx_portgroup[#{portgroupname}]")
-                    end
-                  end
-
-                  vswitch_resources['esx_portgroup'].each do |title, portgroup|
-                    if portgroup['portgrouptype'] == 'VMkernel'
-                      vmk_index += 1
+                      storage_network_require.push("Esx_portgroup[#{title}]")
                     end
                   end
 
