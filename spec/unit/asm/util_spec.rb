@@ -32,7 +32,7 @@ END
       conf[certname].provider.should eq 'equallogic'
       conf[certname].url.should eq 'https://eqluser:eqlpw@172.17.15.10'
     end
-    
+
   end
 
   describe 'retries and timeouts' do
@@ -59,6 +59,14 @@ END
       mock_log.expects(:info).with('Caught exception Exception: Exception')
       self.expects(:foo).twice.raises(Exception).then.returns('bar')
       ASM::Util.block_and_retry_until_ready(5, Exception) do
+        foo
+      end.should == 'bar'
+    end
+
+    it 'should defer to max sleep time' do
+      self.expects(:foo).twice.raises(Exception).then.returns('bar')
+      ASM::Util.expects(:sleep).with(0.01)
+      ASM::Util.block_and_retry_until_ready(5, Exception, 0.01) do
         foo
       end.should == 'bar'
     end
