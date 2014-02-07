@@ -1292,7 +1292,11 @@ class ASM::ServiceDeployment
                   storage_cert = storage_component['id']
                   storage_creds = ASM::Util.parse_device_config(storage_cert)
                   storage_hash = ASM::Util.build_component_configuration(storage_component)
-                  hba_list = parse_hbas(hostip, resource_hash['asm::host'][server_cert]['username'], server_params['admin_password'])
+                  if @debug
+                    hba_list = [ 'vmhba33', 'vmhba34' ]
+                  else
+                    hba_list = parse_hbas(hostip, resource_hash['asm::host'][server_cert]['username'], server_params['admin_password'])
+                  end
 
                   (storage_hash['equallogic::create_vol_chap_user_access'] || {}).each do |storage_title, storage_params|
                     resource_hash['asm::datastore'] = (resource_hash['asm::datastore'] || {})
