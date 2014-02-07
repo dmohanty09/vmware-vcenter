@@ -256,7 +256,7 @@ class ASM::ServiceDeployment
     end
   end
 
-  def process_generic(cert_name, config, puppet_run_type, override = true, server_cert_name = nil)
+  def process_generic(cert_name, config, puppet_run_type, override = true, server_cert_name = nil, asm_guid=nil)
     raise(Exception, 'Component has no certname') unless cert_name
     log("Starting processing resources for endpoint #{cert_name}")
 
@@ -348,7 +348,7 @@ class ASM::ServiceDeployment
               yet_to_run_command = false
               logger.debug "Executing the command"
               ASM::Util.run_command(cmd, puppet_out)
-              update_device_inventory(cert_name)
+              update_inventory_through_controller(asm_guid)
             else
               sleep 2
               if Time.now - start > timeout
@@ -383,25 +383,6 @@ class ASM::ServiceDeployment
       end
       results
     end
-  end
-
-  def empty_resource_file
-    empty_file = File.join(resources_dir, 'empty.yaml')
-    unless File.exists?(empty_file)
-      File.open(empty_file, 'w') do |fh|
-        empty_resource = {'notify' => {'empty' => {}}}
-        fh.write(empty_resource.to_yaml)
-      end
-    end
-    empty_file
-  end
-
-  def update_device_inventory(cert_name)
-    cmd = "sudo puppet asm process_node --debug --trace " +
-          "--filename #{empty_resource_file} --run_type device " +
-          "--statedir #{resources_dir}_inventory --always-override #{cert_name}"
-    puppet_out = File.join(deployment_dir, "#{cert_name}_inventory.out")
-    ASM::Util.run_command(cmd, puppet_out)
   end
 
   def massage_asm_server_params(serial_number, params)
@@ -494,7 +475,7 @@ class ASM::ServiceDeployment
   def process_storage(component)
     log("Processing storage component: #{component['id']}")
     config = ASM::Util.build_component_configuration(component)
-    process_generic(component['id'], config, 'device')
+    process_generic(component['id'], config, 'device', true, nil, component['asmGUID'])
   end
 
   def process_tor(component)
