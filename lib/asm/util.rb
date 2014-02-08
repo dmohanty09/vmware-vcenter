@@ -165,7 +165,7 @@ module ASM
     # VM Provisioned size :83.3303845431656
     # VMNicNetworkMapping=1:HypMan28|*
     def self.find_vm_uuid(cluster_device, vmname)
-      # Have to use env command because jruby popen3 does not accept
+      # Have to use IO.popen because jruby popen3 does not accept
       # optional environment hash
       env = { 'PERL_LWP_SSL_VERIFY_HOSTNAME' => '0' }
       cmd = 'perl'
@@ -196,6 +196,35 @@ module ASM
       raise(Exception, "Failed to find UUID from output: #{stdout}") unless result_hash['VM uuid']
 
       result_hash['VM uuid']
+    end
+
+    def self.set_esxi_default_gateway(gateway, endpoint, logger = nil)
+      # Have to use IO.popen because jruby popen3 does not accept
+      # optional environment hash
+      env = { 'PERL_LWP_SSL_VERIFY_HOSTNAME' => '0' }
+      cmd = 'vicfg-route'
+      args = [ '--server', endpoint[:host],
+               '--username', endpoint[:user],
+               '--password', endpoint[:password],
+               gateway ]
+
+      if logger
+        tmp = args.dup
+        tmp[5] = '******' # mask password
+        logger.debug("Executing #{cmd} #{tmp.join(' ')}")
+      end
+
+      stdout = Timeout::timeout(120) do
+        IO.popen([ env, cmd, *args]) do |io|
+          stdout = io.read
+        end
+      end
+
+      unless stdout
+        msg = "Failed to set default gateway for host #{endpoint[:host]}"
+        logger.error(msg)
+        raise(Exception, msg)
+      end
     end
 
     # Hack to figure out cert name from uuid.
@@ -306,6 +335,65 @@ module ASM
         device.options[:debug] = true
       else
         raise(Exception, "Invalid argument '#{var}' at line #{count}")
+      end
+    end
+
+    # Execute esxcli command and parse table into list of hashes. 
+    #
+    # Example output:
+    #
+    # [root@dellasm asm-deployer]# esxcli -s 172.25.15.174 -u root -p linux network vswitch standard portgroup list
+    # Name                    Virtual Switch  Active Clients  VLAN ID
+    # ----------------------  --------------  --------------  -------
+    # Management Network      vSwitch0                     1        0
+    # vMotion                 vSwitch1                     1       23
+    def self.esxcli(cmd_array, endpoint, logger = nil)
+      args = [ '-s', endpoint[:host], 
+               '-u', endpoint[:user],
+               '-p', endpoint[:password], ]
+      args = args + cmd_array.map { |arg| arg.to_s }
+
+      if logger
+        tmp = args.dup
+        tmp[5] = '******' # mask password
+        logger.debug("Executing esxcli #{tmp.join(' ')}")
+      end
+
+      result = Timeout::timeout(60) do
+        ASM::Util.run_command_with_args('esxcli', *args)
+      end
+
+      lines = result['stdout'].split(/\n/)
+      unless result['exit_status'] == 0
+        msg = "Failed to execute esxcli command on host #{endpoint[:host]}"
+        logger.error(msg) if logger
+        raise(Exception, "#{msg}: esxcli #{args.join(' ')}: #{result.inspect}")
+      end
+      
+      if lines.size > 2
+        header_line = lines.shift
+        seps = lines.shift.split
+        headers = []
+        pos = 0
+        seps.each do |sep|
+          header = header_line.slice(pos, sep.length).strip
+          headers.push(header)
+          pos = pos + sep.length + 2
+        end
+        
+        ret = []
+        lines.each do |line|
+          record = {}
+          pos = 0
+          seps.each_with_index do |sep, index|
+            value = line.slice(pos, sep.length).strip
+            record[headers[index]] = value
+            pos = pos + sep.length + 2
+          end
+          ret.push(record)
+        end
+        
+        ret
       end
     end
 

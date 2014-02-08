@@ -6,6 +6,7 @@ require 'logger'
 require 'open3'
 require 'rest_client'
 require 'timeout'
+require 'securerandom'
 require 'yaml'
 require 'set'
 require 'asm/GetWWPN'
@@ -14,6 +15,9 @@ require 'asm/get_switch_information'
 require 'uri'
 
 class ASM::ServiceDeployment
+
+  ESXI_ADMIN_USER = 'root'
+
   class CommandException < Exception; end
 
   class SyncException < Exception; end
@@ -1199,6 +1203,125 @@ class ASM::ServiceDeployment
     ret
   end
 
+  # See if specified management network exists by running esxcli command:
+  #
+  # [root@dellasm asm-deployer]# esxcli -s 172.25.15.174 -u root -p linux network vswitch standard portgroup list
+  # Name                    Virtual Switch  Active Clients  VLAN ID
+  # ----------------------  --------------  --------------  -------
+  # Management Network      vSwitch0                     1        0
+  # vMotion                 vSwitch1                     1       23
+  def portgroup_exists?(vswitch, name, endpoint)
+    cmd = 'network vswitch standard portgroup list'.split
+    portgroups = ASM::Util.esxcli(cmd, endpoint, logger)
+    portgroups.select do |portgroup|
+      (portgroup['Virtual Switch'] == vswitch &&
+       portgroup['Name'] == name)
+    end.size > 0
+  end
+
+  def create_portgroup(vswitch, vmk, network, endpoint)
+    ASM::Util.esxcli([ 'network', 'vswitch', 'standard', 'portgroup', 'add',
+                     '-p', network['name'], '-v', vswitch ],
+                     endpoint, logger)
+    ASM::Util.esxcli([ 'network', 'vswitch', 'standard', 'portgroup', 'set',
+                     '-p', network['name'], '-v', network['vlanId'] ],
+                     endpoint, logger)
+    ASM::Util.esxcli([ 'network', 'ip', 'interface', 'add', 
+                       '-i', vmk, '-p', network['name'] ],
+                     endpoint, logger)
+    ASM::Util.esxcli([ 'network', 'ip', 'interface', 'ipv4', 'set',
+                       '-i', vmk, '-t', 'static', 
+                       '-I', network['staticNetworkConfiguration']['ip_address'],
+                       '-N', network['staticNetworkConfiguration']['subnet'], ],
+                     endpoint, logger)
+  end
+
+  def remove_portgroup(vswitch, vmk, name, endpoint)
+    ASM::Util.esxcli([ 'network', 'ip', 'interface', 'remove', '-i', vmk],
+                     endpoint, logger)
+    ASM::Util.esxcli([ 'network', 'vswitch', 'standard', 'portgroup', 'remove',
+                       '-p', name, '-v', vswitch],
+                     endpoint, logger)
+  end
+
+  def create_temp_network(vswitch, vmk, network, endpoint)
+    # Create a temporary management network
+    tmp_network = network.dup
+    tmp_guid = SecureRandom.uuid
+    tmp_network['name'] = tmp_guid
+    tmp_network['staticNetworkConfiguration'] = network['staticNetworkConfiguration'].dup
+    ips = ASM::Util.reserve_network_ips(network['id'], 1, tmp_guid)
+    unless ips && ips.size == 1
+      msg = "Failed to retrieve temporary management IP from #{network['name']}"
+      logger.error(msg)
+      raise(Exception, msg)
+    end
+    tmp_network['staticNetworkConfiguration']['ip_address'] = ips[0]
+    
+    # Create a temporary management network on vmk1
+    create_portgroup(vswitch, 'vmk1', tmp_network, endpoint)
+
+    tmp_endpoint = endpoint.dup
+    tmp_endpoint[:host] = tmp_network['staticNetworkConfiguration']['ip_address']
+    
+    unless portgroup_exists?(vswitch, tmp_network['name'], tmp_endpoint)
+      msg = "Failed to create temporary management network for ESXi host #{endpoint[:host]}"
+      logger.error(msg)
+      raise(Exception, msg)
+    end
+    
+    tmp_network
+  end
+
+  def copy_endpoint(endpoint, ip)
+    ret = endpoint.dup
+    ret[:host] = ip
+    ret
+  end
+
+  # ESXi hosts installed by razor by default have a Management Network on
+  # vSwitch0 and vmk0. This method replaces it with the user-defined static
+  # network in the following convoluted manner:
+  #
+  # - create a temporary management network on vmk1
+  # - set the default gateway to user-defined gateway
+  # - remove the original Management Network
+  # - create the user-defined Management Network on vmk0
+  # - remove the temporary management network
+  def set_mgmt_network(network, endpoint)
+    vswitch = 'vSwitch0'
+    if portgroup_exists?(vswitch, 'Management Network', endpoint)
+      # Create a temporary management network on vmk1
+      tmp_network = create_temp_network(vswitch, 'vmk1', network, endpoint)
+      tmp_endpoint = copy_endpoint(endpoint, tmp_network['staticNetworkConfiguration']['ip_address'])
+
+      # Set default gateway. Note tmp_endpoint and new_endpoint are from the
+      # same static network so they have the same gateway
+      gateway = network['staticNetworkConfiguration']['gateway']
+      ASM::Util.set_esxi_default_gateway(gateway, tmp_endpoint, logger)
+
+      # Remove original DHCP management network
+      remove_portgroup(vswitch, 'vmk0', 'Management Network', tmp_endpoint)
+
+      # Create new user-specified management network
+      create_portgroup(vswitch, 'vmk0', network, tmp_endpoint)
+      new_endpoint = copy_endpoint(endpoint, network['staticNetworkConfiguration']['ip_address'])
+      
+      # Verify access via new management network
+      unless portgroup_exists?(vswitch, network['name'], new_endpoint)
+        msg = "Failed to create management network for ESXi host #{endpoint[:host]}"
+        logger.error(msg)
+        raise(Exception, msg)
+      end
+
+      # Remove temporary management network
+      remove_portgroup(vswitch, 'vmk1', tmp_network['name'], new_endpoint)
+
+      # Release temporary IP back to pool (reserved by create_temp_network)
+      ASM::Util.release_network_ips(tmp_network['name'])
+    end
+  end
+
   def process_cluster(component)
     cert_name = component['id']
     raise(Exception, 'Component has no certname') unless cert_name
@@ -1226,11 +1349,40 @@ class ASM::ServiceDeployment
               serial_number = server_cert
             end
 
+            # Determine host IP
             log("Finding host ip for serial number #{serial_number}")
             hostip = find_host_ip(serial_number)
             if @debug && !hostip
               hostip = "DEBUG-IP-ADDRESS"
             end
+            network_params = (server_conf['asm::esxiscsiconfig'] || {})[server_cert]
+            mgmt_networks = network_params['hypervisor_network']
+            if mgmt_networks
+              if mgmt_networks.size != 1
+                msg = "Only one hypervisor network allowed, found #{mgmt_networks.size}"
+                logger.error(msg)
+                raise(Exception, msg)
+              end
+              mgmt_network = mgmt_networks[0]
+              static = mgmt_network['staticNetworkConfiguration']
+              unless static
+                # This should have already been checked previously
+                msg = "Static network is required for hypervisor network"
+                logger.error(msg)
+                raise(Exception, msg)
+              end
+              endpoint = { 
+                :host => hostip, 
+                :user => ESXI_ADMIN_USER,
+                :password => server_params['admin_password'] 
+              }
+              log("Setting static management IP #{static['ip_address']} on ESXi host with serial number #{serial_number}")
+              hostip = static['ip_address']
+              unless @debug
+                set_mgmt_network(mgmt_network, endpoint)
+              end
+            end
+
             raise(Exception, "Could not find host ip for #{server_cert}") unless hostip
             serverdeviceconf = ASM::Util.parse_device_config(server_cert)
 
@@ -1240,13 +1392,11 @@ class ASM::ServiceDeployment
               'datacenter' => params['datacenter'],
               'cluster' => params['cluster'],
               'hostname' => hostip,
-              'username' => 'root',
+              'username' => ESXI_ADMIN_USER,
               'password' => server_params['admin_password'],
               'require' => "Asm::Cluster[#{title}]"
             }
 
-            network_params = (server_conf['asm::esxiscsiconfig'] || {})[server_cert]
-            @logger.debug("network_params = #{network_params.to_yaml}")
             if network_params
               # Add vswitch config to esx host
               resource_hash['asm::vswitch'] ||= {}
@@ -1284,10 +1434,6 @@ class ASM::ServiceDeployment
                   # ordered properly
                   next_require = "Esx_vswitch[#{vswitch_title}]"
                   vswitch_resources['esx_portgroup'].each do |title, portgroup|
-                    if portgroup['portgrouptype'] == 'VMkernel'
-                      vmk_index += 1
-                    end
-
                     # Enforce very strict ordering of each vswitch,
                     # its portgroups, then the next vswitch, etc.
                     # This is necessary to guess what vmk the portgroups
@@ -1299,6 +1445,13 @@ class ASM::ServiceDeployment
                       storage_network_vmk_index ||= vmk_index
                       storage_network_require.push("Esx_portgroup[#{title}]")
                     end
+
+                    # Increment vmk_index except for hypervisor_network which will 
+                    # always be vmk0
+                    if portgroup['portgrouptype'] == 'VMkernel' && title != 'hypervisor_network'
+                      vmk_index += 1
+                    end
+
                   end
 
                   # merge these in
@@ -1316,7 +1469,7 @@ class ASM::ServiceDeployment
                   if @debug
                     hba_list = [ 'vmhba33', 'vmhba34' ]
                   else
-                    hba_list = parse_hbas(hostip, resource_hash['asm::host'][server_cert]['username'], server_params['admin_password'])
+                    hba_list = parse_hbas(hostip, ESXI_ADMIN_USER, server_params['admin_password'])
                   end
 
                   (storage_hash['equallogic::create_vol_chap_user_access'] || {}).each do |storage_title, storage_params|
@@ -1356,12 +1509,16 @@ class ASM::ServiceDeployment
   
   def parse_hbas(hostip, username, password)
     log("getting hba information for #{hostip}")
-    cmd = "esxcli --server=#{hostip} --username=#{username} --password=#{password} iscsi adapter list"
-    results = ASM::Util.run_command_simple(cmd)
-    hba_list = []
-    results['stdout'].split("\n").each do |line|
-      hba_list << line.split(" ")[0] if line.include? "iSCSI Adapter"
-    end
+    endpoint = {
+      :host => hostip,
+      :user => username,
+      :password => password,
+    }
+    cmd = 'iscsi adapter list'.split
+    hba_list = ASM::Util.esxcli(cmd, endpoint, logger).select do |hba|
+      hba['Description'].end_with?('iSCSI Adapter')
+    end.map { |hba| hba['Adapter'] }
+    
     if hba_list.count > 2
       log("Found iSCSI adapters #{hba_list.join(', ')} for #{hostip}; using #{hba_list[0]} and #{hba_list[1]} for datastore")
     elsif hba_list.count < 2

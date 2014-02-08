@@ -132,5 +132,32 @@ END
       end.to raise_error(Exception)
     end
   end
+
+  it 'should parse esxcli output' do
+    stdout = <<-eos
+Name                    Virtual Switch  Active Clients  VLAN ID
+----------------------  --------------  --------------  -------
+ISCSI0                  vSwitch3                     1       16
+ISCSI1                  vSwitch3                     1       16
+Management Network      vSwitch0                     1        0
+Management Network (1)  vSwitch0                     1       28
+VM Network              vSwitch0                     1        0
+Workload Network        vSwitch2                     0       20
+vMotion                 vSwitch1                     1       23
+
+    eos
+    result = {
+      'exit_status' => 0,
+      'stdout' => stdout,
+    }
+    ASM::Util.stubs(:run_command_with_args).returns(result)
+    endpoint = {}
+    ret = ASM::Util.esxcli([], endpoint)
+    ret.size.should == 7
+    ret[3]['Name'].should == 'Management Network (1)'
+    ret[3]['Virtual Switch'].should == 'vSwitch0'
+    ret[3]['Active Clients'].should == '1'
+    ret[3]['VLAN ID'].should == '28'
+  end
   
 end
