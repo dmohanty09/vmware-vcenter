@@ -1440,16 +1440,16 @@ class ASM::ServiceDeployment
                     # end up on so that the datastore can be configured.
                     next_require = "Esx_portgroup[#{title}]"
 
+                    # Increment vmk_index except for hypervisor_network which will 
+                    # always be vmk0
+                    if portgroup['portgrouptype'] == 'VMkernel' && type != 'hypervisor_network'
+                      vmk_index += 1
+                    end
+
                     if type == 'storage_network'
                       storage_network_require ||= []
                       storage_network_vmk_index ||= vmk_index
                       storage_network_require.push("Esx_portgroup[#{title}]")
-                    end
-
-                    # Increment vmk_index except for hypervisor_network which will 
-                    # always be vmk0
-                    if portgroup['portgrouptype'] == 'VMkernel' && title != 'hypervisor_network'
-                      vmk_index += 1
                     end
 
                   end
