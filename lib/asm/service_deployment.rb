@@ -358,46 +358,44 @@ class ASM::ServiceDeployment
       logger.info("[DEBUG MODE] execution skipped for '#{cmd}'")
     else
       puppet_out = File.join(deployment_dir, "#{cert_name}.out")
-      if puppet_run_type == 'device'
-        begin
-          # The timeout to obtain the device lock was originally 5
-          # minutes.  However, the equallogic module currently takes >
-          # 5 minutes to provision a single volume which seems
-          # unreasonable. An issue was raised for that here:
-          #
-          # https://github.com/dell-asm/dell-equallogic/issues/6
-          #
-          # As a short-term workaround to allow at least a few
-          # deployments involving the same equallogic to be started
-          # simultaneously, the timeout has been raised to 30
-          # minutes. When the equallogic issue above has been resolved
-          # it should be reduced back down to about 5 minutes.
-          timeout = 30 * 60
-          start = Time.now
-          yet_to_run_command = true
-          while(yet_to_run_command)
-            if ASM.block_certname(cert_name)
-              yet_to_run_command = false
-              logger.debug "Executing the command"
-              ASM::Util.run_command(cmd, puppet_out)
+      begin
+        # The timeout to obtain the device lock was originally 5
+        # minutes.  However, the equallogic module currently takes >
+        # 5 minutes to provision a single volume which seems
+        # unreasonable. An issue was raised for that here:
+        #
+        # https://github.com/dell-asm/dell-equallogic/issues/6
+        #
+        # As a short-term workaround to allow at least a few
+        # deployments involving the same equallogic to be started
+        # simultaneously, the timeout has been raised to 30
+        # minutes. When the equallogic issue above has been resolved
+        # it should be reduced back down to about 5 minutes.
+        timeout = 30 * 60
+        start = Time.now
+        yet_to_run_command = true
+        while(yet_to_run_command)
+          if ASM.block_certname(cert_name)
+            yet_to_run_command = false
+            logger.debug "Executing the command"
+            ASM::Util.run_command(cmd, puppet_out)
+            if puppet_run_type == 'device'
               update_inventory_through_controller(asm_guid)
-            else
-              sleep 2
-              if Time.now - start > timeout
-                raise(SyncException, "Timed out waiting for a lock for device cert #{cert_name}")
-              end
+            end
+          else
+            sleep 2
+            if Time.now - start > timeout
+              raise(SyncException, "Timed out waiting for a lock for device cert #{cert_name}")
             end
           end
-        rescue Exception => e
-          unless e.class == SyncException
-            ASM.unblock_certname(cert_name)
-          end
-          raise(e)
         end
-        ASM.unblock_certname(cert_name)
-      else
-        ASM::Util.run_command(cmd, puppet_out)
+      rescue Exception => e
+        unless e.class == SyncException
+          ASM.unblock_certname(cert_name)
+        end
+        raise(e)
       end
+      ASM.unblock_certname(cert_name)
       results = {}
       found_result_line = false
       File.readlines(puppet_out).each do |line|
