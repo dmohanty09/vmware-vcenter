@@ -1686,6 +1686,7 @@ class ASM::ServiceDeployment
     certificates.each do |certificate|
       log("Applying application configuration to #{certificate}")
       process_generic(certificate, config, 'agent')
+      log("Application configuration successfully applied to #{certificate}. The configured applications will be installed on the remote O/S in about an hour.")
     end
   end
 
