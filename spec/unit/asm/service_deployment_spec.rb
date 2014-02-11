@@ -7,6 +7,7 @@ require 'asm/util'
 describe ASM::ServiceDeployment do
 
   before do
+    ASM.init
     @tmp_dir = Dir.mktmpdir
     @sd = ASM::ServiceDeployment.new('8000')
     @sd.stubs(:find_node).returns({})
@@ -24,6 +25,10 @@ describe ASM::ServiceDeployment do
     }
     ASM::Util.stubs(:fetch_network_settings).returns(network)
     ASM::Util.stubs(:reserve_network_ips).returns(['172.28.118.1'])
+  end
+
+  after do
+    ASM.clear_mutex
   end
 
   describe 'when data is valid' do
@@ -55,12 +60,6 @@ describe ASM::ServiceDeployment do
     end
 
     describe 'for server bare metal provisioining' do
-      before do
-        ASM.init
-      end
-      after do
-        ASM.clear_mutex
-      end
       it 'should fail is rule_number was already set' do
         @data['serviceTemplate']['components'][0]['type'] = 'SERVER'
         @data['serviceTemplate']['components'][0]['resources'].push(
