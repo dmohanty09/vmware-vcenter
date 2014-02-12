@@ -1821,11 +1821,11 @@ class ASM::ServiceDeployment
       response = nil
       if name
         response = RestClient.get(
-        "http://localhost:8080/api/collections/#{type}/#{name}"
+        "http://localhost:8081/api/collections/#{type}/#{name}"
         )
       else
         response = RestClient.get(
-        "http://localhost:8080/api/collections/#{type}"
+        "http://localhost:8081/api/collections/#{type}"
         )
       end
     rescue RestClient::ResourceNotFound => e
