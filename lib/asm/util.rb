@@ -81,15 +81,9 @@ module ASM
             chassisvertname = "chassism1000e-"+"#{chassisvervicetag}"
             logger.debug "************chassisvertname : #{chassisvertname}"
             device_conf ||= ASM::Util.parse_device_config(chassisvertname)
-            logger.debug "******** In getServerInventory device_conf is #{device_conf}************\n"
-
-            #            device_conf ||= ASM::Util.parse_device_config(certname)
-            #            inv  ||= ASM::Util.fetch_server_inventory(certname)
-            #            logger.debug "******** In getServerInventory device_conf is #{device_conf}************\n"
-            #            logger.debug "******** In getServerInventory inv is #{inv} **************\n"
             chassis_username = device_conf[:user]
             chassis_password = device_conf[:password]
-            logger.debug "chassis_username : #{chassis_username} chassis_password #{chassis_password}"
+            logger.debug "chassis_username : #{chassis_username}"
             if chassis_username == ""
               chassis_username = "root"
               chassis_password = "calvin"
@@ -106,7 +100,9 @@ module ASM
             end
             logger.debug "ioaips.pushioaips :::: #{ioaips}"
             chassis_info = {'chassis_ip' => chassis_ip, 'chassis_username' => chassis_username, 'chassis_password' => chassis_password, 'slot_num' => slot_num, 'ioaips' => ioaips, 'ioaslots' => ioaslots }
-            logger.debug "*** chassis_info : #{chassis_info}"
+            debug_chassis_info = chassis_info.dup
+            debug_chassis_info['chassis_password'] = '******'
+            logger.debug "*** chassis_info : #{debug_chassis_info}"
             break
           end
         end
