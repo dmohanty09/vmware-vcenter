@@ -8,8 +8,7 @@ require 'rest_client'
 require 'timeout'
 require 'securerandom'
 require 'yaml'
-require 'set'
-require 'asm/GetWWPN'
+require 'asm/WWPN'
 require 'fileutils'
 require 'asm/get_switch_information'
 require 'uri'
@@ -288,7 +287,14 @@ class ASM::ServiceDeployment
     end
   end
 
-  def process_generic(cert_name, config, puppet_run_type, override = true, server_cert_name = nil, asm_guid=nil)
+  def process_generic(
+    cert_name,
+    config,
+    puppet_run_type,
+    override = true,
+    server_cert_name = nil,
+    asm_guid=nil
+  )
     raise(Exception, 'Component has no certname') unless cert_name
     log("Starting processing resources for endpoint #{cert_name}")
 
@@ -298,57 +304,8 @@ class ASM::ServiceDeployment
       resource_file = File.join(resources_dir, "#{cert_name}.yaml")
     end
 
-    wwpn = ""
-    wwpnSet = Set.new()
     File.open(resource_file, 'w') do |fh|
       fh.write(config.to_yaml)
-    end
-    if ( cert_name =~ /(.*)[C|c]ompellent(.*)/ )
-      wwpnSet = process_compellent
-
-      myfile = File.open(resource_file, "r+")
-
-      time = Time.now.to_i
-      tempfileloc = "/tmp/temp#{time}.txt"
-      mytempfile = File.open(tempfileloc, "w")
-
-      myfile.each do |line|
-        if ( line =~ /(.*)wwn\:(.*)/ )
-          data = line.scan(/wwn\:(.*)/)
-          temp = data[0]
-          temp1 = temp[0]
-          temp2=temp1.strip
-          wwpnstring = temp2.split(',')
-          #for each_wwpnstring in wwpnstring
-          wwpnstring.each do | each_wwpnstring |
-            if each_wwpnstring.length > 0
-              wwpnSet.add("#{each_wwpnstring}")
-            end
-          end
-        else
-          mytempfile.puts("#{line}")
-        end
-      end
-
-      myfile.close
-      mytempfile.close
-
-      wwpnSet.each do |wwpndata|
-        wwpndata = wwpndata.gsub(/:/, '')
-        if wwpn.to_s.strip.length == 0
-          wwpn = "#{wwpndata}"
-        else
-          if wwpndata.to_s.strip.length > 4
-            wwpn.concat( ",#{wwpndata}")
-          end
-        end
-      end
-
-      File.open(tempfileloc,"a") do |tempfile|
-        tempfile.puts("    wwn: '#{wwpn}'")
-        tempfile.close
-      end
-      FileUtils.mv(tempfileloc, resource_file)
     end
 
     override_opt = override ? "--always-override " : ""
@@ -439,62 +396,27 @@ class ASM::ServiceDeployment
     end
   end
 
-  def process_compellent()
+  #
+  # This method is used for collecting server wwpn to
+  # provide to compellent for it's processing
+  #
+  def get_dell_server_wwpns
     log("Processing server component for compellent")
-
-    wwpnSet = Set.new
     if components = @components_by_type['SERVER']
       components.collect do |comp|
-        cert_name = comp['id']
-
-        resource_hash = {}
-        deviceconf = nil
-        inventory = nil
-        resource_hash = ASM::Util.build_component_configuration(comp)
-        if resource_hash['asm::idrac']
-          deviceconf ||= ASM::Util.parse_device_config(cert_name)
-          inventory  ||= ASM::Util.fetch_server_inventory(cert_name)
+        cert_name   = comp['id']
+        dell_service_tag = cert_name_to_service_tag(cert_name)
+        # service_tag is only set for Dell servers
+        if dell_service_tag
+          deviceconf = ASM::Util.parse_device_config(cert_name)
+          ASM::WWPN.get(
+            deviceconf[:host],
+            deviceconf[:user],
+            deviceconf[:password]
+          )
         end
-
-        (resource_hash['asm::server'] || {}).each do |title, params|
-          if params['rule_number']
-            raise(Exception, "Did not expect rule_number in asm::server")
-          else
-            params['rule_number'] = rule_number
-          end
-
-          # In the case of Dell servers the title should contain
-          # the service tag and we retrieve it here
-          service_tag = cert_name_to_service_tag(title)
-          if service_tag
-            params['serial_number'] = service_tag
-          else
-            params['serial_number'] = title
-          end
-
-          params['policy_name'] = "policy-#{params['serial_number']}-#{@id}"
-
-          # TODO: if present this should go in kickstart
-          params.delete('custom_script')
-        end
-
-        ## get list off WWPN
-
-        (resource_hash['asm::idrac'] || {}).each do |title, params|
-          ipaddress = deviceconf[:host]
-          username  = deviceconf[:user]
-          password  = deviceconf[:password]
-          getWWPNData = GetWWPN.new(ipaddress, username, password)
-          getWWPNd = getWWPNData.getwwpn
-          res = getWWPNd.split(",")
-          res.each do |setdata|
-            wwpnSet.add(setdata)
-          end
-
-        end
-      end
+      end.compact.flatten.uniq
     end
-    return wwpnSet
   end
 
   def process_test(component)
@@ -504,8 +426,29 @@ class ASM::ServiceDeployment
 
   def process_storage(component)
     log("Processing storage component: #{component['id']}")
-    config = ASM::Util.build_component_configuration(component)
-    process_generic(component['id'], config, 'device', true, nil, component['asmGUID'])
+
+    resource_hash = ASM::Util.build_component_configuration(component)
+
+    wwpns = nil
+    (resource_hash['compellent::createvol'] || {}).each do |title, params|
+
+      # TODO this can't be right, it should not be all servers, but
+      # just those that are related components
+      wwpns ||= (get_dell_server_wwpns || [])
+
+      new_wwns = params['wwn'].split(',') + wwpns
+
+      resource_hash['compellent::createvol'][title]['wwn'] = new_wwns
+    end
+
+    process_generic(
+      component['id'],
+      resource_hash,
+      'device',
+      true,
+      nil,
+      component['asmGUID']
+    )
   end
 
   def process_tor(component)
@@ -733,9 +676,12 @@ class ASM::ServiceDeployment
     return portchannellist
   end
 
-  # If certificate name is of the form bladeserver-SERVICETAG
-  # or rackserver-SERVICETAG, return the service tag;
-  # otherwise return the certificate name
+  #
+  # Dell specific servers have the service tag in
+  # the certificate name. This method returns a service
+  # tag for certificate names of Dell servers and
+  # returns nil for non-dell servers
+  #
   def cert_name_to_service_tag(title)
     match = /^(bladeserver|rackserver)-(.*)$/.match(title)
     if match
@@ -925,7 +871,7 @@ class ASM::ServiceDeployment
           end
         end
       end
-    elsif servermodel.downcase == "m620" || servermodel.downcase == "m420" || servermodel.downcase == "m820" ||
+    elsif servermodel.downcase == "m620" || servermodel.downcase == "m420" || servermodel.downcase == "m820"
       macAddress = ""
       resp.split("\n").each do |line|
         line = line.to_s
