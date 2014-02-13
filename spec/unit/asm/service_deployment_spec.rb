@@ -270,4 +270,33 @@ describe ASM::ServiceDeployment do
     
   end
 
+  describe 'dealing with duplicate certs in the same deployment' do
+    before do
+      @counter_files = [File.join(@tmp_dir, 'existing_file.yaml')]
+    end
+    after do
+      @counter_files.each do |f|
+        File.delete(f) if File.exists?(f)
+      end
+    end
+    def write_counter_files
+      @counter_files.each do |f|
+        File.open(f, 'w') do |fh|
+          fh.write('stuff') 
+        end
+      end
+    end
+    it 'should be able to create file counters labeled 2 when files exist' do
+      write_counter_files
+      @sd.iterate_resource_file(@counter_files.first).should == File.join(@tmp_dir, 'existing_file___2.yaml')
+    end
+    it 'should increment existing counter files' do
+      @counter_files.push(File.join(@tmp_dir, 'existing_file___4.yaml'))
+      write_counter_files
+      @sd.iterate_resource_file(@counter_files.first).should == File.join(@tmp_dir, 'existing_file___5.yaml')
+    end
+    it 'should return passed in file when no file exists' do
+      @sd.iterate_resource_file(@counter_files.first).should == File.join(@tmp_dir, 'existing_file.yaml')
+    end
+  end
 end

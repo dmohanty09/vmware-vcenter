@@ -304,17 +304,10 @@ class ASM::ServiceDeployment
       resource_file = File.join(resources_dir, "#{cert_name}.yaml")
     end
 
-    File.open(resource_file, 'w') do |fh|
-      fh.write(config.to_yaml)
-    end
-
-    override_opt = override ? "--always-override " : ""
-    noop_opt     = @noop ? '--noop' : ''
-    cmd = "sudo puppet asm process_node --filename #{resource_file} --run_type #{puppet_run_type} --statedir #{resources_dir} #{noop_opt} #{override_opt}#{cert_name}"
     if @debug
       logger.info("[DEBUG MODE] execution skipped for '#{cmd}'")
+      return nil
     else
-      puppet_out = File.join(deployment_dir, "#{cert_name}.out")
       begin
         # The timeout to obtain the device lock was originally 5
         # minutes.  However, the equallogic module currently takes >
@@ -334,6 +327,15 @@ class ASM::ServiceDeployment
         while(yet_to_run_command)
           if ASM.block_certname(cert_name)
             yet_to_run_command = false
+            puppet_out = File.join(deployment_dir, "#{cert_name}.out")
+            # synchronize creation of file counter
+            resource_file = iterate_resource_file(resource_file)
+            File.open(resource_file, 'w') do |fh|
+              fh.write(config.to_yaml)
+            end
+            override_opt = override ? "--always-override " : ""
+            noop_opt     = @noop ? '--noop' : ''
+            cmd = "sudo puppet asm process_node --debug --trace --filename #{resource_file} --run_type #{puppet_run_type} --statedir #{resources_dir} #{noop_opt} #{override_opt}#{cert_name}"
             logger.debug "Executing the command"
             ASM::Util.run_command(cmd, puppet_out)
             if puppet_run_type == 'device'
@@ -369,6 +371,34 @@ class ASM::ServiceDeployment
         raise(Exception, "Did not find result line in file #{puppet_out}") unless found_result_line
       end
       results
+    end
+  end
+
+  # 
+  # occassionally, the same certificate is re-used by multiple
+  # components in the same service deployment. This code checks
+  # if a given filename already exists, and creates a different 
+  # resource file by appending a counter to the end of the
+  # resource file name.
+  #
+  # NOTE : This method is not thread safe. I expects it's calling
+  # method to invoke it in a way that is thread safe
+  #
+  def iterate_resource_file(resource_file)
+    if File.exists?(resource_file)
+      # search for all files that match our pattern, increment us!
+      base_name = File.basename(resource_file, '.yaml')
+      dir       = File.dirname(resource_file)
+      matching_files = File.join(dir, "#{base_name}___*")
+      i = 1
+      Dir[matching_files].each do |file|
+        f_split   = File.basename(file, '.yaml').split('___')
+        num = Integer(f_split.last)
+        i = num > i ? num : i
+      end
+      resource_file = File.join(dir, "#{base_name}___#{i + 1}.yaml")
+    else
+      resource_file
     end
   end
 
