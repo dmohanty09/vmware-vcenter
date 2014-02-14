@@ -755,7 +755,7 @@ class ASM::ServiceDeployment
     inv = nil
     device_conf ||= ASM::Util.parse_device_config(certname)
     inv  ||= ASM::Util.fetch_server_inventory(certname)
-    logger.debug "******** In getServerInventory device_conf is #{device_conf}************\n"
+    logger.debug "******** In getServerInventory device_conf is #{sanitize(device_conf)}************\n"
     logger.debug "******** In getServerInventory inv is #{inv} **************\n"
     dracipaddress = device_conf[:host]
     dracusername = device_conf[:user]
@@ -829,6 +829,12 @@ class ASM::ServiceDeployment
     logger.debug "Blade IOM Switch certificate name list is #{@configured_blade_switches}"
   end
 
+  def sanitize(device_conf)
+    ret = device_conf.dup
+    ret[:password] = '******'
+    ret
+  end
+
   def populate_rack_switch_hash
     deviceConfDir ='/etc/puppetlabs/puppet/devices'
     switchhash = {}
@@ -842,12 +848,12 @@ class ASM::ServiceDeployment
       switchpropertyhash = {}
       switchpropertyhash = Hash.new
       device_conf ||= ASM::Util.parse_device_config(certname)
-      logger.debug "******* In process_tor device_conf is #{device_conf} ***********\n"
+      logger.debug "******* In process_tor device_conf is #{sanitize(device_conf)} ***********\n"
       torip = device_conf[:host]
       torusername = device_conf[:user]
       torpassword = device_conf['password']
       torurl = device_conf['url']
-      logger.debug "****** #{device_conf} ******"
+      logger.debug "****** #{sanitize(device_conf)} ******"
       logger.debug "tor url :: #{torurl}\n"
       switchpropertyhash['connection_url'] = torurl
       if certname =~ /dell_ftos/
@@ -875,12 +881,12 @@ class ASM::ServiceDeployment
       switchpropertyhash = {}
       switchpropertyhash = Hash.new
       device_conf ||= ASM::Util.parse_device_config(certname)
-      logger.debug "******* In process_tor device_conf is #{device_conf} ***********\n"
+      logger.debug "******* In process_tor device_conf is #{sanitize(device_conf)} ***********\n"
       torip = device_conf[:host]
       torusername = device_conf[:user]
       torpassword = device_conf['password']
       torurl = device_conf['url']
-      logger.debug "****** #{device_conf} ******"
+      logger.debug "****** #{sanitize(device_conf)} ******"
       logger.debug "tor url :: #{torurl}\n"
       switchpropertyhash['connection_url'] = torurl
       if certname =~ /dell_ftos/
