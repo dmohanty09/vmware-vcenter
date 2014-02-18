@@ -953,7 +953,6 @@ class ASM::ServiceDeployment
     end
     resource_hash = {}
     server_vlan_info = {}
-    deviceconf = nil
     inventory = nil
     resource_hash = ASM::Util.build_component_configuration(component)
 
@@ -966,14 +965,9 @@ class ASM::ServiceDeployment
         # Attempt to determine this machine's IP address, which
         # should also be the NFS server. This is error-prone
         # and should be fixed later.
-        deviceconf ||= ASM::Util.parse_device_config(cert_name)
         inventory  ||= ASM::Util.fetch_server_inventory(cert_name)
         params['nfsipaddress'] = ASM::Util.first_host_ip
         params['nfssharepath'] = '/var/nfs/idrac_config_xml'
-        params['nfslocaldir'] = '/var/nfs/idrac_config_xml'
-        params['dracipaddress'] = deviceconf[:host]
-        params['dracusername'] = deviceconf[:user]
-        params['dracpassword'] = deviceconf[:enc_password]
         params['servicetag'] = inventory['serviceTag']
         params['model'] = inventory['model'].split(' ').last.downcase
         if resource_hash['asm::server']
