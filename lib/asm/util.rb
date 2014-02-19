@@ -14,7 +14,9 @@ module ASM
     NETWORKS_RA_URL='http://localhost:9080/VirtualServices/Network'
     CHASSIS_RA_URL='http://localhost:9080/ChassisRA/Chassis'
     # TODO: give razor user access to this directory
-    DEVICE_CONF_DIR='/etc/puppetlabs/puppet/devices'
+    PUPPET_CONF_DIR='/etc/puppetlabs/puppet'
+    DEVICE_CONF_DIR="#{PUPPET_CONF_DIR}/devices"
+    DATABASE_CONF="#{PUPPET_CONF_DIR}/database.yaml"
     # See spec/fixtures/asm_server_m620.json for sample response
     #
     # cert_name is in format devicetype-servicetag
