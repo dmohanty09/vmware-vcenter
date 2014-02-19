@@ -1303,12 +1303,7 @@ class ASM::ServiceDeployment
 
     resource_hash = ASM::Util.build_component_configuration(component)
 
-    # Add vcenter creds to asm::cluster resources
-    deviceconf = ASM::Util.parse_device_config(cert_name)
     resource_hash['asm::cluster'].each do |title, params|
-      resource_hash['asm::cluster'][title]['vcenter_server'] = deviceconf[:host]
-      resource_hash['asm::cluster'][title]['vcenter_username'] = deviceconf[:user]
-      resource_hash['asm::cluster'][title]['vcenter_password'] = deviceconf[:password]
       resource_hash['asm::cluster'][title]['vcenter_options'] = { 'insecure' => true }
       resource_hash['asm::cluster'][title]['ensure'] = 'present'
 
