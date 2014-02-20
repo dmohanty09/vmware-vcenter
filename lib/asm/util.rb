@@ -166,12 +166,12 @@ module ASM
       # Have to use IO.popen because jruby popen3 does not accept
       # optional environment hash
       env = { 'PERL_LWP_SSL_VERIFY_HOSTNAME' => '0' }
-      cmd = 'perl'
-      args = [ '-I/usr/lib/vmware-vcli/apps',
+      cmd = 'env'
+      args = ["VI_PASSWORD=#{cluster_device[:password]}",'perl']
+      args += [ '-I/usr/lib/vmware-vcli/apps',
         '/opt/Dell/scripts/getVmInfo.pl',
         '--url', "https://#{cluster_device[:host]}/sdk/vimService",
         '--username', cluster_device[:user],
-        '--password', cluster_device[:password],
         '--vmName', vmname,
       ]
 
@@ -200,10 +200,10 @@ module ASM
       # Have to use IO.popen because jruby popen3 does not accept
       # optional environment hash
       env = { 'PERL_LWP_SSL_VERIFY_HOSTNAME' => '0' }
-      cmd = 'vicfg-route'
-      args = [ '--server', endpoint[:host],
+      cmd = 'env'
+      args = ["VI_PASSWORD=#{endpoint[:password]}",'vicfg-route']
+      args += [ '--server', endpoint[:host],
                '--username', endpoint[:user],
-               '--password', endpoint[:password],
                gateway ]
 
       if logger
@@ -346,10 +346,11 @@ module ASM
     # Management Network      vSwitch0                     1        0
     # vMotion                 vSwitch1                     1       23
     def self.esxcli(cmd_array, endpoint, logger = nil)
-      args = [ '-s', endpoint[:host], 
-               '-u', endpoint[:user],
-               '-p', endpoint[:password], ]
-      args = args + cmd_array.map { |arg| arg.to_s }
+      args = ["VI_PASSWORD=#{endpoint[:password]}","esxcli"]
+      args += [ '-s', endpoint[:host], 
+               '-u', endpoint[:user]
+      ]
+      args += cmd_array.map { |arg| arg.to_s }
 
       if logger
         tmp = args.dup
@@ -358,7 +359,7 @@ module ASM
       end
 
       result = Timeout::timeout(60) do
-        ASM::Util.run_command_with_args('esxcli', *args)
+        ASM::Util.run_command_with_args('env', *args)
       end
 
       lines = result['stdout'].split(/\n/)
