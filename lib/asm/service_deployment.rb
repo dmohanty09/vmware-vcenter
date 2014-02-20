@@ -1546,9 +1546,7 @@ class ASM::ServiceDeployment
     vm_params['cluster'] = cluster_params['cluster']
     vm_params['datacenter'] = cluster_params['datacenter']
     vm_params['datastore'] = cluster_params['datastore']
-    vm_params['vcenter_username'] = cluster_deviceconf[:user]
-    vm_params['vcenter_password'] = cluster_deviceconf[:password]
-    vm_params['vcenter_server'] = cluster_deviceconf[:host]
+    vm_params['vcenter_id'] = cluster['id']
     vm_params['vcenter_options'] = { 'insecure' => true }
     vm_params['ensure'] = 'present'
 
