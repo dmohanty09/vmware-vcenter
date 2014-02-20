@@ -511,6 +511,9 @@ module ASM
           if param['value']
             param_hash[param['id'].downcase] = param['value']
           end
+          if param['value'] and param['type'] == 'PASSWORD'
+            param_hash['decrypt'] = true
+          end
         end
       end
       title = param_hash.delete('title')
