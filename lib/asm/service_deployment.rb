@@ -1726,16 +1726,32 @@ class ASM::ServiceDeployment
     password = params['admin_password'] || raise(Exception, "resource #{title} is missing required server attribute admin_password")
     type = params['os_image_type'] || raise(Exception, "resource #{title} is missing required server attribute os_image_type")
     hostname = params['os_host_name'] || raise(Exception, "resource #{title} is missing required server attribute os_host_name")
+    hostdisplayname = "#{serial_num} (#{hostname})"
+    
+    # Need to wait a bit for host to power up and check in with razor,
+    # otherwise we may get a stale IP address out of the razor db
+    log("Waiting until #{hostdisplayname} has checked in with Razor")
+    initial_sleep_seconds = 300
+    sleep(initial_sleep_seconds)
+    timeout -= initial_sleep_seconds
 
-    log("Waiting until #{hostname} has checked in with Razor")
     ip_address = find_host_ip_blocking(serial_num, timeout)
-    log("#{hostname} has checked in with Razor with ip address #{ip_address}")
+    log("#{hostdisplayname} has checked in with Razor with ip address #{ip_address}")
 
-    log("Waiting until #{hostname} (#{serial_num}) is ready")
+    log("Waiting until #{hostdisplayname} is ready")
     ASM::Util.block_and_retry_until_ready(timeout, CommandException, 150) do
+      # Double-check that the IP from DHCP has not changed across reboots
+      curr_ip = find_host_ip(serial_num)
+      if curr_ip.nil?
+        logger.warn("Failed to find current IP address for #{hostdisplayname}")
+      elsif ip_address != curr_ip
+        logger.info("#{hostdisplayname} IP address changed from #{ip_address} to #{curr_ip}")
+        ip_address = curr_ip
+      end
+
       esx_command =  "system uuid get"
       cmd = "esxcli --server=#{ip_address} --username=root --password=#{password} #{esx_command}"
-      log("Checking for system uuid on #{ip_address}")
+      log("Checking for #{hostdisplayname} ESXi uuid on #{ip_address}")
       results = ASM::Util.run_command_simple(cmd)
       unless results['exit_status'] == 0 and results['stdout'] =~ /[1-9a-z-]+/
         raise(CommandException, results['stderr'])
