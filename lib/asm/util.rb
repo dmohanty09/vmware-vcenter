@@ -399,10 +399,11 @@ module ASM
     def self.run_command_simple(cmd)
       result = {}
       Open3.popen3(cmd) do |stdin, stdout, stderr, wait_thr|
-        result['pid']         = wait_thr[:pid]
-        result['exit_status'] = wait_thr.value.exitstatus
+        stdin.close
         result['stdout']      = stdout.read
         result['stderr']      = stderr.read
+        result['pid']         = wait_thr[:pid]
+        result['exit_status'] = wait_thr.value.exitstatus
       end
       result
     end
@@ -412,10 +413,11 @@ module ASM
       # WARNING: jruby-1.7.8 popen3 does not accept optional env argument
       # http://jira.codehaus.org/browse/JRUBY-6966
       Open3.popen3(cmd, *args) do |stdin, stdout, stderr, wait_thr|
-        result['pid']         = wait_thr[:pid]
-        result['exit_status'] = wait_thr.value.exitstatus
+        stdin.close
         result['stdout']      = stdout.read
         result['stderr']      = stderr.read
+        result['pid']         = wait_thr[:pid]
+        result['exit_status'] = wait_thr.value.exitstatus
       end
       result
     end
