@@ -953,7 +953,6 @@ class ASM::ServiceDeployment
     end
     resource_hash = {}
     server_vlan_info = {}
-    deviceconf = nil
     inventory = nil
     resource_hash = ASM::Util.build_component_configuration(component)
 
@@ -966,14 +965,9 @@ class ASM::ServiceDeployment
         # Attempt to determine this machine's IP address, which
         # should also be the NFS server. This is error-prone
         # and should be fixed later.
-        deviceconf ||= ASM::Util.parse_device_config(cert_name)
         inventory  ||= ASM::Util.fetch_server_inventory(cert_name)
         params['nfsipaddress'] = ASM::Util.first_host_ip
         params['nfssharepath'] = '/var/nfs/idrac_config_xml'
-        params['nfslocaldir'] = '/var/nfs/idrac_config_xml'
-        params['dracipaddress'] = deviceconf[:host]
-        params['dracusername'] = deviceconf[:user]
-        params['dracpassword'] = deviceconf[:enc_password]
         params['servicetag'] = inventory['serviceTag']
         params['model'] = inventory['model'].split(' ').last.downcase
         if resource_hash['asm::server']
@@ -1309,12 +1303,7 @@ class ASM::ServiceDeployment
 
     resource_hash = ASM::Util.build_component_configuration(component)
 
-    # Add vcenter creds to asm::cluster resources
-    deviceconf = ASM::Util.parse_device_config(cert_name)
     resource_hash['asm::cluster'].each do |title, params|
-      resource_hash['asm::cluster'][title]['vcenter_server'] = deviceconf[:host]
-      resource_hash['asm::cluster'][title]['vcenter_username'] = deviceconf[:user]
-      resource_hash['asm::cluster'][title]['vcenter_password'] = deviceconf[:password]
       resource_hash['asm::cluster'][title]['vcenter_options'] = { 'insecure' => true }
       resource_hash['asm::cluster'][title]['ensure'] = 'present'
 
@@ -1557,9 +1546,7 @@ class ASM::ServiceDeployment
     vm_params['cluster'] = cluster_params['cluster']
     vm_params['datacenter'] = cluster_params['datacenter']
     vm_params['datastore'] = cluster_params['datastore']
-    vm_params['vcenter_username'] = cluster_deviceconf[:user]
-    vm_params['vcenter_password'] = cluster_deviceconf[:password]
-    vm_params['vcenter_server'] = cluster_deviceconf[:host]
+    vm_params['vcenter_id'] = cluster['id']
     vm_params['vcenter_options'] = { 'insecure' => true }
     vm_params['ensure'] = 'present'
 
