@@ -12,6 +12,7 @@ require "#{module_path}/restartidrac"
 require "#{module_path}/discoverswitch"
 require "#{module_path}/rack_server_switch_information"
 require "#{module_path}/blade_server_switch_information"
+require "#{module_path}/san_switch_information"
 
 class Get_switch_information
   def initialize ()
@@ -43,12 +44,31 @@ class Get_switch_information
     return switchinfolist
   end
   
+  def get_san_info(ser_info,sw_info,wwpns, compellent_contollers, logger)
+    switchinfolist = []
+    switchinfohash = {}
+    ser_info.each do |nodename,sinfo|
+      switchinfohash = san_switch_info(nodename,sinfo,sw_info,wwpns,compellent_contollers,logger)
+      logger.debug"switchinfohash: #{switchinfohash}"
+      switchinfolist.push(switchinfohash)
+      logger.debug"switchinfolist: #{switchinfolist}"
+    end
+    return switchinfolist
+  end
+  
 
   def blade_server_switch_info(nname,server,swinfo,logger)
     bladeObj=Blade_server_switch_information.new(nname,server,swinfo)
     serverinformation=bladeObj.identify_switch_ports(swinfo,logger)
     pp serverinformation
     return serverinformation
+  end
+
+  def san_switch_info(nname,server,swinfo,wwpns,compellent_contollers, logger)
+    bladeObj=San_switch_information.new(nname,server,swinfo)
+    serverinformation=bladeObj.identify_switch_ports(compellent_contollers,logger)
+    servermacaddress=bladeObj.search_server_Macaddress(wwpns,compellent_contollers,logger)
+    return servermacaddress
   end
 
   def rack_server_switch_info(nname,sinfo,switchinfo,logger)

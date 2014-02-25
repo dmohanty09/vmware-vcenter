@@ -259,6 +259,18 @@ module ASM
       end
     end
 
+    def self.find_compellent_controller_info(cert_name)
+      output = `sudo puppet facts find #{cert_name} --terminus yaml --clientyamldir=/var/opt/lib/pe-puppet/yaml/ --color=false`
+      facts = (JSON.parse(output) || {})['values']
+      controller1 = nil
+      controller2 = nil
+      controller1 ||= facts['controller_1_ControllerIndex']
+      controller2 ||= facts['controller_2_ControllerIndex']
+      controller_info = { 'controller1' => controller1,
+        'controller2' => controller2
+      }
+    end
+
     def self.first_host_ip
       Socket.ip_address_list.detect do |intf|
         intf.ipv4? and !intf.ipv4_loopback? and !intf.ipv4_multicast?

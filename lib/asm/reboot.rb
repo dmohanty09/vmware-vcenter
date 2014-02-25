@@ -60,5 +60,23 @@ class Reboot
     logger.debug "Job Message #{jobmessage}"
     return true
   end
+  
+  def get_powerstate(logger)
+    # Create the reboot job
+    logger.debug "Getting the power state of the server with iDRAC IP: #{@ip}"
+    response=`wsman enumerate http://schemas.dmtf.org/wbem/wscim/1/cim-schema/2/DCIM_CSAssociatedPowerManagementService -h "#{@ip}" -V -v -c dummy.cert -P 443 -u "#{@username}" -p "#{@password}" -j utf-8 -y basic`
+    updated_xml=getxmls(response)
+    xmldoc = Document.new(updated_xml[1][0])
+    powerstate_node = XPath.first(xmldoc, '//n1:PowerState')
+    powerstate=powerstate_node.text
+    logger.debug "Power State: #{powerstate}"
+    return powerstate
+  end
+  
+  def getxmls(text)
+    match_array=text.scan(/(<\?xml.*?<\/s:Envelope>?)/m)
+    return match_array
+  end
+  
 end
 

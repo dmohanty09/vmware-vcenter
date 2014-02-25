@@ -12,6 +12,8 @@ require 'asm/WWPN'
 require 'fileutils'
 require 'asm/get_switch_information'
 require 'uri'
+require 'asm/discoverswitch'
+require 'asm/reboot'
 
 class ASM::ServiceDeployment
 
@@ -28,8 +30,10 @@ class ASM::ServiceDeployment
     @id = id
     @configured_rack_switches = Array.new
     @configured_blade_switches = Array.new
+    @configured_brocade_san_switches = Array.new
     @rack_server_switchhash = {}
     @blade_server_switchhash = {}
+    @brocade_san_switchhash = {}
   end
 
   def logger
@@ -180,6 +184,8 @@ class ASM::ServiceDeployment
       get_all_switches()
       @rack_server_switchhash = self.populate_rack_switch_hash()
       @blade_server_switchhash = self.populate_blade_switch_hash()
+      @brocade_san_switchhash = self.populate_brocade_san_switch_hash()
+      process_san_switches()
       process_tor_switches()
       process_components()
     rescue Exception => e
@@ -233,6 +239,83 @@ class ASM::ServiceDeployment
             logger.debug "INFO: There are no IOM Switches in the ASM Inventory"
           end
         end
+      end
+    end
+  end
+
+  # SAN Switch configuration needs to be performed
+  # only if the SAN Switch configuration flag is set to true
+  # And compellent is available in the service template
+  def process_san_switches()
+    
+    # Check if Compellent is added to the service template
+    if !compellent_in_service_template()
+      logger.debug "Compellent is not in the service template, skippnig SAN configuration"
+      return
+    end
+    
+    # Get Information from compellent component
+    san_info_hash=get_compellent_san_information()
+    logger.debug "Configure SAN Value: #{san_info_hash['configure_san_switch']}"
+    if !san_info_hash['configure_san_switch']
+      logger.debug "Service template has configure SAN switch flag to false, 
+      skipping SAN switch configuration"
+      return
+    end
+    
+    fcsupport=servers_has_fc_enabled()
+    if !fcsupport['returncode']
+      logger.error(fcsupport['returnmessage'])
+      raise(Exception,"#{fcsupport['returnmessage']}")
+    end
+    
+    # Reboot all servers to ensure that the WWPN values are accessible on the Brocade switch
+    reboot_all_servers()
+
+    # Initiating the discovery of the Brocade switches so that all the values are updated
+    initiate_discovery(@brocade_san_switchhash)
+    
+    # Get the compellent controller id's, required for mapping of information
+    compellent_contollers=compellent_controller_ids()
+      
+    # Perform the SAN configuration for each server
+    (@components_by_type['SERVER'] || []).each do |server_component|
+      server_cert_name =  server_component['id']
+      logger.debug "Server cert name: #{server_cert_name}"
+
+      if service_tag = cert_name_to_service_tag(server_cert_name)
+        # If we got service tag, it is a dell server and we get inventory
+        logger.debug("Server CERT NAME IS: #{server_cert_name}")
+        logger.debug("Service Tag: #{service_tag}")
+        inventory = ASM::Util.fetch_server_inventory(server_cert_name)
+
+        # Get Server WWPN Number
+        # If there is no WWPN number identified then, skip the SAN Switch configuration
+        wwpns = nil
+        wwpns ||= (get_specific_dell_server_wwpns(server_component) || [])
+        if wwpns.nil? or (wwpns.length == 0)
+          logger.debug "Server do not have any WWPN in the inventory, skip SAN Configuration"
+          wwpns=nil
+          next
+        else
+          logger.debug "WWPNs from the WSMAN command: #{wwpns}"
+          
+          #new_wwns = wwpns.gsub(/:/, '').split(',')
+          #logger.debug "WWPNs identified #{new_wwns}"
+        end
+      else
+        inventory = nil
+      end
+
+      if (inventory and wwpns)
+        # Putting the re-direction as per the blade type
+        # Blade and RACK server
+        blade_type = inventory['serverType'].downcase
+        logger.debug("Server Blade type: #{blade_type}")
+        logger.debug "Configuring SAN Switch"
+        configure_san_switch(server_cert_name, wwpns, compellent_contollers)
+      else
+        logger.debug "Not able to identify server inventory or wwpn information for server #{server_cert_name}"
       end
     end
   end
@@ -449,6 +532,23 @@ class ASM::ServiceDeployment
     end
   end
 
+  def get_specific_dell_server_wwpns(comp)
+    wwpninfo=nil
+    cert_name   = comp['id']
+    dell_service_tag = cert_name_to_service_tag(cert_name)
+    # service_tag is only set for Dell servers
+    if dell_service_tag
+      deviceconf = ASM::Util.parse_device_config(cert_name)
+      wwpninfo=ASM::WWPN.get(
+      deviceconf[:host],
+      deviceconf[:user],
+      deviceconf[:password]
+      )
+    end
+    logger.debug"wwpns from WSMAN: #{wwpninfo}"
+    wwpninfo.compact.flatten.uniq
+  end
+
   def process_test(component)
     config = ASM::Util.build_component_configuration(component)
     process_generic(component['id'], config, 'apply', true)
@@ -467,8 +567,11 @@ class ASM::ServiceDeployment
       wwpns ||= (get_dell_server_wwpns || [])
 
       new_wwns = params['wwn'].split(',') + wwpns
-
+      # Replace all the ":" from the WWPN
+      # Compellent command-set do not like ":" in the value
+      new_wwns = new_wwns.compact.map {|s| s.gsub(/:/, '')}
       resource_hash['compellent::createvol'][title]['wwn'] = new_wwns
+      resource_hash['compellent::createvol'][title].delete('configuresan')
     end
 
     process_generic(
@@ -679,6 +782,67 @@ class ASM::ServiceDeployment
 
   end
 
+  def configure_san_switch(server_cert_name, wwpns, compellent_contollers)
+    device_conf = nil
+    inv = nil
+    switchhash = {}
+    serverhash = {}
+    deviceConfDir ='/etc/puppetlabs/puppet/devices'
+    serverhash = get_server_inventory(server_cert_name)
+    switchinfoobj = Get_switch_information.new()
+    switchportdetail = switchinfoobj.get_san_info(serverhash,@brocade_san_switchhash,wwpns,compellent_contollers, logger)
+
+    logger.debug "Start configuring the Brocade SAN Switch for #{server_cert_name}"
+    # If there is no information, skip the further configuration
+    if switchportdetail.empty?
+      logger.debug "No switch details identified"
+      return false
+    end
+
+    switchportdetail[0].each do |server_wwpn,sw_info|
+      if sw_info.empty?
+        logger.debug "There is no switch information for WWPN #{server_wwpn}"
+        next
+      end
+
+      switch_info=sw_info[0]
+      switchcertname=switch_info[0]
+      switch_port_location=switch_info[1]
+      logger.debug"server_wwpn:#{server_wwpn}"
+      logger.debug"switch_info: #{switch_info.inspect}"
+      logger.debug"switchcertname: #{switchcertname}"
+      logger.debug"switch_port_location: #{switch_port_location}"
+
+      if switch_info[2].nil?
+        switch_active_zoneset="ASM-Zoneset"
+      else
+        switch_active_zoneset=switch_info[2]
+      end
+      
+      switch_storage_alias=switch_info[3]
+      logger.debug"switch_active_zoneset: #{switch_active_zoneset}"
+      logger.debug"switch_storage_alias:#{switch_storage_alias}"
+      
+      service_tag=self.cert_name_to_service_tag(server_cert_name)
+      zone_name="ASM_#{service_tag}"
+
+      resource_hash = Hash.new
+      resource_hash["brocade::createzone"] = {
+        "#{zone_name}" => {
+        'storage_alias' => switch_storage_alias,
+        'server_wwn' => server_wwpn,
+        'zoneset' => switch_active_zoneset
+        }
+      }
+      logger.debug("*** resource_hash is #{resource_hash} ******")
+      process_generic(switchcertname, resource_hash, 'device', true, server_cert_name)
+
+    end
+  end
+
+
+
+
   def get_interfaces(interfaceList)
     logger.debug "Entering get_interfaces #{interfaceList}"
     interfacelist = ""
@@ -798,11 +962,21 @@ class ASM::ServiceDeployment
         puts "Powerconnect switch certificate is #{switchCert}"
         @configured_blade_switches.push(switchCert)
       end
+      if line =~ /brocade_/
+        logger.debug "Found brocade switch certificate"
+        res = line.to_s.strip.split(' ')
+        switchCert = res[1]
+        switchCert = switchCert.gsub(/\"/, "")
+        puts "Brocade SAN switch certificate is #{switchCert}"
+        @configured_brocade_san_switches.push(switchCert)
+      end
     end
     @configured_rack_switches.uniq
     @configured_blade_switches.uniq
+    @configured_brocade_san_switches.uniq()
     logger.debug "Rack ToR Switch certificate name list is #{@configured_rack_switches}"
     logger.debug "Blade IOM Switch certificate name list is #{@configured_blade_switches}"
+    logger.debug "Brocade SAN Switches certificate name list is #{@configured_brocade_san_switches}"
   end
 
   def sanitize(device_conf)
@@ -840,6 +1014,40 @@ class ASM::ServiceDeployment
       logger.debug "********* switch property hash is #{switchpropertyhash} *************\n"
       switchhash["#{certname}"] = switchpropertyhash
       logger.debug "********* switch hash is #{switchhash} *************\n"
+    end
+    switchhash
+  end
+
+  def populate_brocade_san_switch_hash
+    deviceConfDir ='/etc/puppetlabs/puppet/devices'
+    switchhash = {}
+    @configured_brocade_san_switches.each do |certname|
+      logger.debug "****************** certname :: #{certname} ********************"
+      conf_file = File.join(deviceConfDir, "#{certname}.conf")
+      if !File.exist?(conf_file)
+        next
+      end
+      device_conf = nil
+      switchpropertyhash = {}
+      switchpropertyhash = Hash.new
+      device_conf ||= ASM::Util.parse_device_config(certname)
+      logger.debug "******* In process_tor device_conf is #{sanitize(device_conf)} ***********\n"
+      torip = device_conf[:host]
+      torusername = device_conf[:user]
+      torpassword = device_conf['password']
+      torurl = device_conf['url']
+      logger.debug "****** #{sanitize(device_conf)} ******"
+      logger.debug "tor url :: #{torurl}\n"
+      switchpropertyhash['connection_url'] = torurl
+      if certname =~ /brocade_fos/
+        switchpropertyhash['device_type'] = "brocade_fos"
+      else
+        logger.debug "non-supported switch type #{certname}"
+        next
+      end
+      logger.debug "********* switch property hash is #{switchpropertyhash} *************\n"
+      switchhash["#{certname}"] = switchpropertyhash
+      logger.debug "********* Brocade switch hash is #{switchhash} *************\n"
     end
     switchhash
   end
@@ -953,6 +1161,7 @@ class ASM::ServiceDeployment
     end
     resource_hash = {}
     server_vlan_info = {}
+    deviceconf = nil
     inventory = nil
     resource_hash = ASM::Util.build_component_configuration(component)
 
@@ -965,6 +1174,7 @@ class ASM::ServiceDeployment
         # Attempt to determine this machine's IP address, which
         # should also be the NFS server. This is error-prone
         # and should be fixed later.
+        deviceconf ||= ASM::Util.parse_device_config(cert_name)
         inventory  ||= ASM::Util.fetch_server_inventory(cert_name)
         params['nfsipaddress'] = ASM::Util.first_host_ip
         params['nfssharepath'] = '/var/nfs/idrac_config_xml'
@@ -1899,4 +2109,111 @@ class ASM::ServiceDeployment
     end
     return server_vlan_info
   end
+  
+  def initiate_discovery(device_hash)
+    if !device_hash.empty?
+      discovery_obj = Discoverswitch.new(device_hash)
+      discovery_obj.discoverswitch(logger)  
+    end
+  end
+  
+  def compellent_in_service_template()
+    found=false
+    (@components_by_type['STORAGE'] || []).each do |storage_component|
+      storage_cert_name = storage_component['id']
+      if storage_cert_name.downcase.match(/compellent/)
+        found=true
+        break
+      end
+    end
+    found
+  end
+  
+  def compellent_controller_ids()
+    controller_info={}
+    
+    (@components_by_type['STORAGE'] || []).each do |storage_component|
+      storage_cert_name = storage_component['id']
+      if (storage_cert_name.downcase.match(/compellent/) != nil)
+        asm_guid=storage_component['asmGUID']
+        logger.debug"Getting the compellent facts"
+        controller_info=ASM::Util.find_compellent_controller_info(asm_guid)
+        break
+      end
+    end
+    controller_info
+  end
+  
+  def get_compellent_san_information()
+    #    saninformation={
+    #      'configure_san_switch' => true,
+    #    }
+    configure_san_switch=true
+    (@components_by_type['STORAGE'] || []).each do |storage_component|
+      logger.debug"Storage component: #{storage_component.inspect}"
+      storage_cert_name = storage_component['id']
+      logger.debug"Storage cert name: #{storage_cert_name}"
+      if (storage_cert_name.downcase.match(/compellent/) != nil)
+        resources = ASM::Util.asm_json_array(storage_component['resources']) || []
+        resources.each do |resource|
+          parameters=ASM::Util.asm_json_array(resource['parameters']) || []
+          logger.debug"Resource info #{resource.inspect}"
+          parameters.each do |param|
+            if param['id'] == "configuresan"
+              logger.debug "Setting configure_san_switch to #{param['id']}"
+              configure_san_switch=param['value']
+              break
+            end
+          end
+        end
+      end
+    end
+    saninformation={
+      'configure_san_switch' => configure_san_switch,
+    }
+  end
+  
+  def reboot_all_servers()
+    reboot_count=0
+    (@components_by_type['SERVER'] || []).each do |server_component|
+      server_cert_name = server_component['id']
+      deviceconf ||= ASM::Util.parse_device_config(server_cert_name)
+      reboot_obj=Reboot.new(deviceconf[:host],deviceconf[:user],deviceconf[:enc_password])
+      # Get the powerstate, if the powerstate is 13, the reboot the server
+      #reboot_obj.reboot(logger) unless reboot_obj.get_powerstate(logger) != 13
+      powerstate = reboot_obj.get_powerstate(logger)
+      logger.debug "Current power state of server #{server_cert_name} is #{powerstate}"
+      if powerstate.to_s == "13"
+        logger.debug "Rebooting the server"
+        reboot_obj.reboot(logger)
+        reboot_count +=1
+      end
+    end
+    if reboot_count > 0
+      logger.debug "Some servers are rebooted, need to sleep for a minute"
+      sleep(60)
+    else
+      logger.debug "No server is rebooted, no need to sleep"
+    end
+  end
+  
+  def servers_has_fc_enabled()
+    returncode=true
+    returnmessage=""
+    (@components_by_type['SERVER'] || []).each do |server_component|
+      server_cert_name = server_component['id']
+      wwpns ||= (get_specific_dell_server_wwpns(server_component) || [])
+      if wwpns.nil? or (wwpns.length == 0)
+        returnmessage += "\n Server #{server_cert_name} do not have any WWPN in the inventory"
+        logger.debug "Server #{server_cert_name} do not have any WWPN in the inventory"
+        returncode=false
+      else
+        logger.debug "WWPNs from the WSMAN command: #{wwpns}"
+      end
+    end
+    response={'returncode' => returncode,
+      'returnmessage' => returnmessage
+    }
+  end
+  
 end
