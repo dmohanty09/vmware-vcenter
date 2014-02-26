@@ -1573,8 +1573,9 @@ class ASM::ServiceDeployment
               'hostname' => hostip,
               'username' => ESXI_ADMIN_USER,
               'password' => server_params['admin_password'],
+              'decrypt'  => true,
               'require' => "Asm::Cluster[#{title}]"
-            }
+             }
 
             if network_params
               # Add vswitch config to esx host
@@ -1652,7 +1653,7 @@ class ASM::ServiceDeployment
                   end
 
                   (storage_hash['equallogic::create_vol_chap_user_access'] || {}).each do |storage_title, storage_params|
-                    resource_hash['asm::datastore'] = (resource_hash['asm::datastore'] || {})
+                    resource_hash['asm::datastore'] ||= {}
                     resource_hash['asm::datastore']["#{hostip}:#{storage_title}"] = {
                       'data_center' => params['datacenter'],
                       'datastore' => params['datastore'],
@@ -1668,6 +1669,7 @@ class ASM::ServiceDeployment
                       'chapsecret' => storage_params['passwd'],
                       'vmknics' => "vmk#{storage_network_vmk_index}",
                       'vmknics1' => "vmk#{storage_network_vmk_index + 1}",
+                      'decrypt' => true,
                       'require' => storage_network_require,
                     }
                   end
