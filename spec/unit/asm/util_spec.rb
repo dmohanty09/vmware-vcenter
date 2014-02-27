@@ -91,7 +91,7 @@ END
       config = {}
       resources = ASM::Util.asm_json_array(component['resources'])
       resources.each do |resource|
-        config = ASM::Util.append_resource_configuration!(resource, config, title, nil)
+        config = ASM::Util.append_resource_configuration!(resource, config, :title => title)
       end
       
       config.keys.size.should == 2
@@ -108,7 +108,7 @@ END
       resources = ASM::Util.asm_json_array(component['resources'])
       title = component['id']
       resources.each do |resource|
-        config = ASM::Util.append_resource_configuration!(resource, {}, title, nil)
+        config = ASM::Util.append_resource_configuration!(resource, {}, :title => title)
       end
       
       config.keys.size.should == 1
