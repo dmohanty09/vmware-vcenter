@@ -563,6 +563,22 @@ module ASM
       resource_hash
     end
 
+    def self.sanitize(device_conf)
+      ret = device_conf.dup
+      sanitize_hash(ret)
+    end
+
+    def self.sanitize_hash(ret)
+      ret.each do |key, value|
+        if value.is_a? (Hash)
+          sanitize_hash(value)
+        elsif key.to_s.downcase.include? ('password')
+          ret[key] = '******'
+        end
+      end
+      ret
+    end
+
     def self.get_logs(id)
       logs = []
       log_file = File.join(ASM.base_dir, id.to_s, 'deployment.log')
