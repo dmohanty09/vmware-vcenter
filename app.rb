@@ -3,6 +3,7 @@ require 'json'
 require 'logger'
 require 'asm'
 require 'asm/service_deployment'
+require 'asm/puppet_cert_manager'
 
 class ASM::App < Sinatra::Base
 
@@ -45,6 +46,10 @@ class ASM::App < Sinatra::Base
   get '/status/:id' do |id|
     content_type :json
     ASM::Util.get_status(id).to_json
+  end
+
+  get '/remove_agent_certs/:id' do |id|
+    certs = ASM::PuppetCertManager.clean_deployment_certs(id)
   end
 
 end
