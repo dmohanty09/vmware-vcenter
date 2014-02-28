@@ -277,6 +277,33 @@ module ASM
       end.ip_address
     end
 
+    
+    # In case of dual NIC appliance with access to non-routable network
+    # method will get the IP address of the appliance which has the access to a particular network
+    # ping the destination IP with specific NIC interface to confirm the access
+    def self.get_preferred_ip (ipaddress)
+      prefered_ip=ipaddress
+      ifconfig=`/sbin/ifconfig`
+      match=ifconfig.scan(/^(\S+)/)
+      match.each do |nic1|
+        nic=nic1[0]
+        if (nic.to_s.match(/lo\d*/) != nil )
+          #Skiping loopback interface
+          next
+        end
+
+        pingout=`ping -W 1 -c 1 -I "#{nic}" "#{ipaddress}"`
+        if (pingout.match(/\s+1\s+received,/) != nil)
+          # Get preferent IP
+          ifconfig=`/sbin/ifconfig "#{nic}"`
+          match_array=ifconfig.scan(/inet addr:(\S+)\s+/m)
+          prefered_ip=match_array[0][0]
+        end
+      end
+      prefered_ip
+    end
+
+
     def self.get_plain_password(encoded_password)
       plain_password = `/opt/puppet/bin/ruby /opt/asm-deployer/lib/asm/encode_asm.rb #{encoded_password}`
       plain_password = plain_password.strip

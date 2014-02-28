@@ -1176,7 +1176,7 @@ class ASM::ServiceDeployment
         # and should be fixed later.
         deviceconf ||= ASM::Util.parse_device_config(cert_name)
         inventory  ||= ASM::Util.fetch_server_inventory(cert_name)
-        params['nfsipaddress'] = ASM::Util.first_host_ip
+        params['nfsipaddress'] = ASM::Util.get_preferred_ip(deviceconf[:host])
         params['nfssharepath'] = '/var/nfs/idrac_config_xml'
         params['servicetag'] = inventory['serviceTag']
         params['model'] = inventory['model'].split(' ').last.downcase
