@@ -63,7 +63,7 @@ Deployments can be tested by POSTing deployment json data to the
 deployment service. This example uses curl to POST the
 spec/fixtures/test_data.json file to the service:
 
-    curl -X POST -H "Content-Type: application/json" -d @spec/fixtures/test_data.json http://localhost:8080/asm/process_service_profile
+    curl -X POST -H "Content-Type: application/json" -d @spec/fixtures/test_data.json http://localhost:8081/asm/process_service_profile
 
 It may be necessary to clean up files out of /opt/Dell/ASM/deployments
 and/or /etc/puppetlabs/puppet/node_data after running a test in order
