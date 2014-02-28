@@ -209,7 +209,7 @@ describe ASM::ServiceDeployment do
     it 'should warn when no serviceTemplate is defined' do
       @mock_log = mock('foo')
       @sd.expects(:logger).at_least_once.returns(@mock_log)
-      @mock_log.expects(:debug).with('Found 0 components')
+      @mock_log.stubs(:debug)
       @mock_log.expects(:info).with('Status: Started')
       @mock_log.expects(:info).with('Starting deployment ')
       @mock_log.expects(:warn).with('Service deployment data has no serviceTemplate defined')
@@ -220,7 +220,7 @@ describe ASM::ServiceDeployment do
     it 'should warn when there are no components' do
       @mock_log = mock('foo')
       @sd.expects(:logger).at_least_once.returns(@mock_log)
-      @mock_log.expects(:debug).with('Found 0 components')
+      @mock_log.stubs(:debug)
       @mock_log.expects(:info).with('Status: Started')
       @mock_log.expects(:info).with('Starting deployment ')
       @mock_log.expects(:warn).with('service deployment data has no components')
