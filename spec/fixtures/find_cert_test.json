@@ -1,0 +1,1066 @@
+{
+  "Deployment": {
+    "deploymentDescription": "",
+    "deploymentName": "Demo",
+    "id": "ff808081446f9463014476543ff4097b",
+    "jobStatus": "SUCCESSFUL",
+    "serviceTemplate": {
+      "id": "ff808081446f946301446fbaa7d00837",
+      "templateName": "Demo",
+      "templateDescription": "",
+      "draft": false,
+      "createdDate": "2014-02-26T19:45:07.536Z",
+      "createdBy": "admin",
+      "components": [
+        {
+          "id": "bladeserver-hh870w1",
+          "componentID": "b6f986fd-c7c9-4b05-9dc8-a54edee0a439",
+          "name": "ESXi 1",
+          "type": "SERVER",
+          "asmGUID": "ff808081446f946301446f9bd0b9067e",
+          "relatedComponents": {
+            "entry": [
+              {
+                "key": "vcenter-vcenter-as800r.aidev.com",
+                "value": "Cluster 1"
+              },
+              {
+                "key": "equallogic-as800-eql-1510",
+                "value": "EqualLogic Chap 1"
+              }
+            ]
+          },
+          "resources": [
+            {
+              "id": "asm::idrac",
+              "displayName": "Hardware Settings",
+              "parameters": [
+                {
+                  "id": "target_boot_device",
+                  "value": "SD",
+                  "type": "ENUMERATED",
+                  "displayName": "Target Boot Device",
+                  "required": true,
+                  "requiredAtDeployment": false,
+                  "hideFromTemplate": false,
+                  "min": 0,
+                  "max": 0
+                },
+                {
+                  "id": "title",
+                  "value": "bladeserver-hh870w1",
+                  "type": "STRING",
+                  "required": true,
+                  "requiredAtDeployment": false,
+                  "hideFromTemplate": false
+                }
+              ]
+            },
+            {
+              "id": "asm::server",
+              "displayName": "OS Settings",
+              "parameters": [
+                {
+                  "id": "os_host_name",
+                  "value": "winbaremetal",
+                  "type": "STRING",
+                  "displayName": "Host Name",
+                  "required": true,
+                  "requiredAtDeployment": true,
+                  "hideFromTemplate": true,
+                  "min": 0,
+                  "max": 0
+                },
+                {
+                  "id": "admin_password",
+                  "value": "ff808081446f946301447654358d096f",
+                  "type": "PASSWORD",
+                  "displayName": "Administrator password",
+                  "required": true,
+                  "requiredAtDeployment": false,
+                  "hideFromTemplate": false,
+                  "min": 0,
+                  "max": 0
+                },
+                {
+                  "id": "razor_image",
+                  "value": "esxi-5.1",
+                  "type": "ENUMERATED",
+                  "displayName": "OS Image",
+                  "required": true,
+                  "requiredAtDeployment": false,
+                  "hideFromTemplate": false,
+                  "min": 0,
+                  "max": 0
+                },
+                {
+                  "id": "os_image_type",
+                  "value": "windows",
+                  "type": "ENUMERATED",
+                  "displayName": "OS Image Type",
+                  "required": true,
+                  "requiredAtDeployment": false,
+                  "hideFromTemplate": false,
+                  "min": 0,
+                  "max": 0
+                },
+                {
+                  "id": "custom_script",
+                  "type": "TEXT",
+                  "displayName": "Custom OS Installation script",
+                  "required": false,
+                  "requiredAtDeployment": false,
+                  "hideFromTemplate": false,
+                  "min": 0,
+                  "max": 0
+                },
+                {
+                  "id": "title",
+                  "value": "bladeserver-hh870w1",
+                  "type": "STRING",
+                  "required": true,
+                  "requiredAtDeployment": false,
+                  "hideFromTemplate": false
+                }
+              ]
+            },
+            {
+              "id": "asm::esxiscsiconfig",
+              "displayName": "Network Settings",
+              "parameters": [
+                {
+                  "id": "identity_pool",
+                  "value": -1,
+                  "type": "ENUMERATED",
+                  "displayName": "Identity Pool",
+                  "required": true,
+                  "requiredAtDeployment": false,
+                  "hideFromTemplate": false,
+                  "min": 0,
+                  "max": 0
+                },
+                {
+                  "id": "hypervisor_network",
+                  "value": "ff808081446f946301446f9755dc002c",
+                  "type": "ENUMERATED",
+                  "displayName": "Hypervisor Management Network",
+                  "required": true,
+                  "requiredAtDeployment": false,
+                  "hideFromTemplate": false,
+                  "min": 0,
+                  "max": 0,
+                  "dependencyTarget": "os_image_type",
+                  "dependencyValue": "vmware_esxi"
+                },
+                {
+                  "id": "vmotion_network",
+                  "value": "ff808081446f946301446f97b1d90089",
+                  "type": "ENUMERATED",
+                  "displayName": "Hypervisor vMotion Network",
+                  "required": true,
+                  "requiredAtDeployment": false,
+                  "hideFromTemplate": false,
+                  "min": 0,
+                  "max": 0,
+                  "dependencyTarget": "os_image_type",
+                  "dependencyValue": "vmware_esxi"
+                },
+                {
+                  "id": "storage_network",
+                  "value": "ff808081446f946301446f9836f700e6",
+                  "type": "ENUMERATED",
+                  "displayName": "Storage Network",
+                  "required": true,
+                  "requiredAtDeployment": false,
+                  "hideFromTemplate": false,
+                  "min": 0,
+                  "max": 0
+                },
+                {
+                  "id": "pxe_network",
+                  "value": "ff808081446f946301446f985b2e0143",
+                  "type": "ENUMERATED",
+                  "displayName": "PXE Network",
+                  "required": true,
+                  "requiredAtDeployment": false,
+                  "hideFromTemplate": false,
+                  "min": 0,
+                  "max": 0
+                },
+                {
+                  "id": "workload_network",
+                  "type": "LIST",
+                  "displayName": "Workload Networks",
+                  "required": true,
+                  "requiredAtDeployment": false,
+                  "hideFromTemplate": false,
+                  "min": 0,
+                  "max": 0
+                },
+                {
+                  "id": "title",
+                  "value": "bladeserver-hh870w1",
+                  "type": "STRING",
+                  "required": true,
+                  "requiredAtDeployment": false,
+                  "hideFromTemplate": false
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "id": "bladeserver-ch870w1",
+          "componentID": "516d8861-0304-4b00-9f7f-e513cb0d91db",
+          "name": "ESXi 1 - Copy 1",
+          "type": "SERVER",
+          "asmGUID": "ff808081446f946301446f9bcc740558",
+          "relatedComponents": {
+            "entry": [
+              {
+                "key": "vcenter-vcenter-as800r.aidev.com",
+                "value": "Cluster 1"
+              },
+              {
+                "key": "equallogic-as800-eql-1510",
+                "value": "EqualLogic Chap 1"
+              }
+            ]
+          },
+          "resources": [
+            {
+              "id": "asm::idrac",
+              "displayName": "Hardware Settings",
+              "parameters": [
+                {
+                  "id": "target_boot_device",
+                  "value": "SD",
+                  "type": "ENUMERATED",
+                  "displayName": "Target Boot Device",
+                  "required": true,
+                  "requiredAtDeployment": false,
+                  "hideFromTemplate": false,
+                  "min": 0,
+                  "max": 0
+                },
+                {
+                  "id": "title",
+                  "value": "bladeserver-ch870w1",
+                  "type": "STRING",
+                  "required": true,
+                  "requiredAtDeployment": false,
+                  "hideFromTemplate": false
+                }
+              ]
+            },
+            {
+              "id": "asm::server",
+              "displayName": "OS Settings",
+              "parameters": [
+                {
+                  "id": "os_host_name",
+                  "value": "gs1esx2",
+                  "type": "STRING",
+                  "displayName": "Host Name",
+                  "required": true,
+                  "requiredAtDeployment": true,
+                  "hideFromTemplate": true,
+                  "min": 0,
+                  "max": 0
+                },
+                {
+                  "id": "admin_password",
+                  "value": "ff808081446f946301447654359a0971",
+                  "type": "PASSWORD",
+                  "displayName": "Administrator password",
+                  "required": true,
+                  "requiredAtDeployment": false,
+                  "hideFromTemplate": false,
+                  "min": 0,
+                  "max": 0
+                },
+                {
+                  "id": "razor_image",
+                  "value": "esxi-5.1",
+                  "type": "ENUMERATED",
+                  "displayName": "OS Image",
+                  "required": true,
+                  "requiredAtDeployment": false,
+                  "hideFromTemplate": false,
+                  "min": 0,
+                  "max": 0
+                },
+                {
+                  "id": "os_image_type",
+                  "value": "vmware_esxi",
+                  "type": "ENUMERATED",
+                  "displayName": "OS Image Type",
+                  "required": true,
+                  "requiredAtDeployment": false,
+                  "hideFromTemplate": false,
+                  "min": 0,
+                  "max": 0
+                },
+                {
+                  "id": "custom_script",
+                  "type": "TEXT",
+                  "displayName": "Custom OS Installation script",
+                  "required": false,
+                  "requiredAtDeployment": false,
+                  "hideFromTemplate": false,
+                  "min": 0,
+                  "max": 0
+                },
+                {
+                  "id": "title",
+                  "value": "bladeserver-ch870w1",
+                  "type": "STRING",
+                  "required": true,
+                  "requiredAtDeployment": false,
+                  "hideFromTemplate": false
+                }
+              ]
+            },
+            {
+              "id": "asm::esxiscsiconfig",
+              "displayName": "Network Settings",
+              "parameters": [
+                {
+                  "id": "identity_pool",
+                  "value": -1,
+                  "type": "ENUMERATED",
+                  "displayName": "Identity Pool",
+                  "required": true,
+                  "requiredAtDeployment": false,
+                  "hideFromTemplate": false,
+                  "min": 0,
+                  "max": 0
+                },
+                {
+                  "id": "hypervisor_network",
+                  "value": "ff808081446f946301446f9755dc002c",
+                  "type": "ENUMERATED",
+                  "displayName": "Hypervisor Management Network",
+                  "required": true,
+                  "requiredAtDeployment": false,
+                  "hideFromTemplate": false,
+                  "min": 0,
+                  "max": 0,
+                  "dependencyTarget": "os_image_type",
+                  "dependencyValue": "vmware_esxi"
+                },
+                {
+                  "id": "vmotion_network",
+                  "value": "ff808081446f946301446f97b1d90089",
+                  "type": "ENUMERATED",
+                  "displayName": "Hypervisor vMotion Network",
+                  "required": true,
+                  "requiredAtDeployment": false,
+                  "hideFromTemplate": false,
+                  "min": 0,
+                  "max": 0,
+                  "dependencyTarget": "os_image_type",
+                  "dependencyValue": "vmware_esxi"
+                },
+                {
+                  "id": "storage_network",
+                  "value": "ff808081446f946301446f9836f700e6",
+                  "type": "ENUMERATED",
+                  "displayName": "Storage Network",
+                  "required": true,
+                  "requiredAtDeployment": false,
+                  "hideFromTemplate": false,
+                  "min": 0,
+                  "max": 0
+                },
+                {
+                  "id": "pxe_network",
+                  "value": "ff808081446f946301446f985b2e0143",
+                  "type": "ENUMERATED",
+                  "displayName": "PXE Network",
+                  "required": true,
+                  "requiredAtDeployment": false,
+                  "hideFromTemplate": false,
+                  "min": 0,
+                  "max": 0
+                },
+                {
+                  "id": "workload_network",
+                  "type": "LIST",
+                  "displayName": "Workload Networks",
+                  "required": true,
+                  "requiredAtDeployment": false,
+                  "hideFromTemplate": false,
+                  "min": 0,
+                  "max": 0
+                },
+                {
+                  "id": "title",
+                  "value": "bladeserver-ch870w1",
+                  "type": "STRING",
+                  "required": true,
+                  "requiredAtDeployment": false,
+                  "hideFromTemplate": false
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "id": "vcenter-vcenter-as800r.aidev.com",
+          "componentID": "4d78c891-4cbb-4c1e-87c7-fb3462de7d6c",
+          "name": "Cluster 1",
+          "type": "CLUSTER",
+          "asmGUID": "ff808081446f946301446f960b4d000b",
+          "relatedComponents": {
+            "entry": [
+              {
+                "key": "316ea60f-e59f-41af-9dc9-b02ed7393cd0",
+                "value": "Windows VM 1 - Copy 1"
+              },
+              {
+                "key": "bladeserver-ch870w1",
+                "value": "ESXi 1 - Copy 1"
+              },
+              {
+                "key": "07c1e8d6-bd80-4cb7-8a77-dbcb610ecc1e",
+                "value": "Linux VM 3"
+              },
+              {
+                "key": "9972d058-450d-48e5-b86d-be1a7250ccb7",
+                "value": "Windows VM 1"
+              },
+              {
+                "key": "bladeserver-hh870w1",
+                "value": "ESXi 1"
+              },
+              {
+                "key": "863d1789-4df3-4889-9c38-0753a32e4860",
+                "value": "Linux VM 3 - Copy 1"
+              }
+            ]
+          },
+          "resources": {
+            "id": "asm::cluster",
+            "displayName": "Cluster Settings",
+            "parameters": [
+              {
+                "id": "datacenter",
+                "value": "gs1dc2",
+                "type": "STRING",
+                "displayName": "Data Center Name",
+                "required": true,
+                "requiredAtDeployment": false,
+                "hideFromTemplate": false,
+                "min": 0,
+                "max": 0
+              },
+              {
+                "id": "cluster",
+                "value": "gs1cluster1",
+                "type": "STRING",
+                "displayName": "Cluster Name",
+                "required": true,
+                "requiredAtDeployment": false,
+                "hideFromTemplate": false,
+                "min": 0,
+                "max": 0
+              },
+              {
+                "id": "datastore",
+                "value": "gs1datastore1",
+                "type": "STRING",
+                "displayName": "Cluster Data Store",
+                "required": true,
+                "requiredAtDeployment": false,
+                "hideFromTemplate": false,
+                "min": 0,
+                "max": 0
+              },
+              {
+                "id": "title",
+                "value": "vcenter-vcenter-as800r.aidev.com",
+                "type": "STRING",
+                "required": true,
+                "requiredAtDeployment": false,
+                "hideFromTemplate": false
+              }
+            ]
+          }
+        },
+        {
+          "id": "9972d058-450d-48e5-b86d-be1a7250ccb7",
+          "componentID": "9972d058-450d-48e5-b86d-be1a7250ccb7",
+          "name": "Windows VM 1",
+          "type": "VIRTUALMACHINE",
+          "relatedComponents": {
+            "entry": [
+              {
+                "key": "vcenter-vcenter-as800r.aidev.com",
+                "value": "Cluster 1"
+              },
+              {
+                "key": "c2ba3f9c-8eb0-476f-965e-45f6a6cce4e3",
+                "value": "citrix_xd7 1"
+              }
+            ]
+          },
+          "resources": [
+            {
+              "id": "asm::vm",
+              "displayName": "Virtual Machine Settings",
+              "parameters": [
+                {
+                  "id": "cpu_count",
+                  "value": 1,
+                  "type": "INTEGER",
+                  "displayName": "Number of CPUs",
+                  "required": true,
+                  "requiredAtDeployment": false,
+                  "hideFromTemplate": false,
+                  "min": 1,
+                  "max": 8
+                },
+                {
+                  "id": "disksize_in_gb",
+                  "value": 32,
+                  "type": "INTEGER",
+                  "displayName": "VM Size in GB",
+                  "required": true,
+                  "requiredAtDeployment": false,
+                  "hideFromTemplate": false,
+                  "min": 1,
+                  "max": 2048
+                },
+                {
+                  "id": "memory_in_mb",
+                  "value": 8192,
+                  "type": "INTEGER",
+                  "displayName": "Memory in MB",
+                  "required": true,
+                  "requiredAtDeployment": false,
+                  "hideFromTemplate": false,
+                  "min": 1024,
+                  "max": 262144
+                },
+                {
+                  "id": "vnic_count",
+                  "value": 1,
+                  "type": "INTEGER",
+                  "displayName": "Number of NICs",
+                  "required": true,
+                  "requiredAtDeployment": false,
+                  "hideFromTemplate": false,
+                  "min": 1,
+                  "max": 16
+                },
+                {
+                  "id": "title",
+                  "value": "9972d058-450d-48e5-b86d-be1a7250ccb7",
+                  "type": "STRING",
+                  "required": true,
+                  "requiredAtDeployment": false,
+                  "hideFromTemplate": false
+                }
+              ]
+            },
+            {
+              "id": "asm::server",
+              "displayName": "Virtual Machine OS Settings",
+              "parameters": [
+                {
+                  "id": "os_host_name",
+                  "value": "gs1vmwin1",
+                  "type": "STRING",
+                  "displayName": "Host Name",
+                  "required": true,
+                  "requiredAtDeployment": true,
+                  "hideFromTemplate": true,
+                  "min": 0,
+                  "max": 0
+                },
+                {
+                  "id": "admin_password",
+                  "value": "ff808081446f94630144765435a70973",
+                  "type": "PASSWORD",
+                  "displayName": "Administrator password",
+                  "required": true,
+                  "requiredAtDeployment": false,
+                  "hideFromTemplate": false,
+                  "min": 0,
+                  "max": 0
+                },
+                {
+                  "id": "razor_image",
+                  "value": "win2012",
+                  "type": "ENUMERATED",
+                  "displayName": "OS Image",
+                  "required": true,
+                  "requiredAtDeployment": false,
+                  "hideFromTemplate": false,
+                  "min": 0,
+                  "max": 0
+                },
+                {
+                  "id": "os_image_type",
+                  "value": "windows",
+                  "type": "ENUMERATED",
+                  "displayName": "OS Image Type",
+                  "required": true,
+                  "requiredAtDeployment": false,
+                  "hideFromTemplate": false,
+                  "min": 0,
+                  "max": 0
+                },
+                {
+                  "id": "custom_script",
+                  "type": "TEXT",
+                  "displayName": "Custom OS Installation script",
+                  "required": false,
+                  "requiredAtDeployment": false,
+                  "hideFromTemplate": false,
+                  "min": 0,
+                  "max": 0
+                },
+                {
+                  "id": "title",
+                  "value": "9972d058-450d-48e5-b86d-be1a7250ccb7",
+                  "type": "STRING",
+                  "required": true,
+                  "requiredAtDeployment": false,
+                  "hideFromTemplate": false
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "id": "316ea60f-e59f-41af-9dc9-b02ed7393cd0",
+          "componentID": "316ea60f-e59f-41af-9dc9-b02ed7393cd0",
+          "name": "Windows VM 1 - Copy 1",
+          "type": "VIRTUALMACHINE",
+          "relatedComponents": {
+            "entry": [
+              {
+                "key": "vcenter-vcenter-as800r.aidev.com",
+                "value": "Cluster 1"
+              },
+              {
+                "key": "c2ba3f9c-8eb0-476f-965e-45f6a6cce4e3",
+                "value": "citrix_xd7 1"
+              }
+            ]
+          },
+          "resources": [
+            {
+              "id": "asm::vm",
+              "displayName": "Virtual Machine Settings",
+              "parameters": [
+                {
+                  "id": "cpu_count",
+                  "value": 1,
+                  "type": "INTEGER",
+                  "displayName": "Number of CPUs",
+                  "required": true,
+                  "requiredAtDeployment": false,
+                  "hideFromTemplate": false,
+                  "min": 1,
+                  "max": 8
+                },
+                {
+                  "id": "disksize_in_gb",
+                  "value": 32,
+                  "type": "INTEGER",
+                  "displayName": "VM Size in GB",
+                  "required": true,
+                  "requiredAtDeployment": false,
+                  "hideFromTemplate": false,
+                  "min": 1,
+                  "max": 2048
+                },
+                {
+                  "id": "memory_in_mb",
+                  "value": 8192,
+                  "type": "INTEGER",
+                  "displayName": "Memory in MB",
+                  "required": true,
+                  "requiredAtDeployment": false,
+                  "hideFromTemplate": false,
+                  "min": 1024,
+                  "max": 262144
+                },
+                {
+                  "id": "vnic_count",
+                  "value": 1,
+                  "type": "INTEGER",
+                  "displayName": "Number of NICs",
+                  "required": true,
+                  "requiredAtDeployment": false,
+                  "hideFromTemplate": false,
+                  "min": 1,
+                  "max": 16
+                },
+                {
+                  "id": "title",
+                  "value": "316ea60f-e59f-41af-9dc9-b02ed7393cd0",
+                  "type": "STRING",
+                  "required": true,
+                  "requiredAtDeployment": false,
+                  "hideFromTemplate": false
+                }
+              ]
+            },
+            {
+              "id": "asm::server",
+              "displayName": "Virtual Machine OS Settings",
+              "parameters": [
+                {
+                  "id": "os_host_name",
+                  "value": "gs1vmwin2",
+                  "type": "STRING",
+                  "displayName": "Host Name",
+                  "required": true,
+                  "requiredAtDeployment": true,
+                  "hideFromTemplate": true,
+                  "min": 0,
+                  "max": 0
+                },
+                {
+                  "id": "admin_password",
+                  "value": "ff808081446f94630144765435b40975",
+                  "type": "PASSWORD",
+                  "displayName": "Administrator password",
+                  "required": true,
+                  "requiredAtDeployment": false,
+                  "hideFromTemplate": false,
+                  "min": 0,
+                  "max": 0
+                },
+                {
+                  "id": "razor_image",
+                  "value": "win2012",
+                  "type": "ENUMERATED",
+                  "displayName": "OS Image",
+                  "required": true,
+                  "requiredAtDeployment": false,
+                  "hideFromTemplate": false,
+                  "min": 0,
+                  "max": 0
+                },
+                {
+                  "id": "os_image_type",
+                  "value": "windows",
+                  "type": "ENUMERATED",
+                  "displayName": "OS Image Type",
+                  "required": true,
+                  "requiredAtDeployment": false,
+                  "hideFromTemplate": false,
+                  "min": 0,
+                  "max": 0
+                },
+                {
+                  "id": "custom_script",
+                  "type": "TEXT",
+                  "displayName": "Custom OS Installation script",
+                  "required": false,
+                  "requiredAtDeployment": false,
+                  "hideFromTemplate": false,
+                  "min": 0,
+                  "max": 0
+                },
+                {
+                  "id": "title",
+                  "value": "316ea60f-e59f-41af-9dc9-b02ed7393cd0",
+                  "type": "STRING",
+                  "required": true,
+                  "requiredAtDeployment": false,
+                  "hideFromTemplate": false
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "id": "07c1e8d6-bd80-4cb7-8a77-dbcb610ecc1e",
+          "componentID": "07c1e8d6-bd80-4cb7-8a77-dbcb610ecc1e",
+          "name": "Linux VM 3",
+          "type": "VIRTUALMACHINE",
+          "relatedComponents": {
+            "entry": {
+              "key": "vcenter-vcenter-as800r.aidev.com",
+              "value": "Cluster 1"
+            }
+          },
+          "resources": [
+            {
+              "id": "asm::vm",
+              "displayName": "Virtual Machine Settings",
+              "parameters": [
+                {
+                  "id": "cpu_count",
+                  "value": 1,
+                  "type": "INTEGER",
+                  "displayName": "Number of CPUs",
+                  "required": true,
+                  "requiredAtDeployment": false,
+                  "hideFromTemplate": false,
+                  "min": 1,
+                  "max": 8
+                },
+                {
+                  "id": "disksize_in_gb",
+                  "value": 16,
+                  "type": "INTEGER",
+                  "displayName": "VM Size in GB",
+                  "required": true,
+                  "requiredAtDeployment": false,
+                  "hideFromTemplate": false,
+                  "min": 1,
+                  "max": 2048
+                },
+                {
+                  "id": "memory_in_mb",
+                  "value": 4096,
+                  "type": "INTEGER",
+                  "displayName": "Memory in MB",
+                  "required": true,
+                  "requiredAtDeployment": false,
+                  "hideFromTemplate": false,
+                  "min": 1024,
+                  "max": 262144
+                },
+                {
+                  "id": "vnic_count",
+                  "value": 1,
+                  "type": "INTEGER",
+                  "displayName": "Number of NICs",
+                  "required": true,
+                  "requiredAtDeployment": false,
+                  "hideFromTemplate": false,
+                  "min": 1,
+                  "max": 16
+                },
+                {
+                  "id": "title",
+                  "value": "07c1e8d6-bd80-4cb7-8a77-dbcb610ecc1e",
+                  "type": "STRING",
+                  "required": true,
+                  "requiredAtDeployment": false,
+                  "hideFromTemplate": false
+                }
+              ]
+            },
+            {
+              "id": "asm::server",
+              "displayName": "Virtual Machine OS Settings",
+              "parameters": [
+                {
+                  "id": "os_host_name",
+                  "value": "gs1vmlin1",
+                  "type": "STRING",
+                  "displayName": "Host Name",
+                  "required": true,
+                  "requiredAtDeployment": true,
+                  "hideFromTemplate": true,
+                  "min": 0,
+                  "max": 0
+                },
+                {
+                  "id": "admin_password",
+                  "value": "ff808081446f94630144765435c10977",
+                  "type": "PASSWORD",
+                  "displayName": "Administrator password",
+                  "required": true,
+                  "requiredAtDeployment": false,
+                  "hideFromTemplate": false,
+                  "min": 0,
+                  "max": 0
+                },
+                {
+                  "id": "razor_image",
+                  "value": "rhel6",
+                  "type": "ENUMERATED",
+                  "displayName": "OS Image",
+                  "required": true,
+                  "requiredAtDeployment": false,
+                  "hideFromTemplate": false,
+                  "min": 0,
+                  "max": 0
+                },
+                {
+                  "id": "os_image_type",
+                  "value": "redhat",
+                  "type": "ENUMERATED",
+                  "displayName": "OS Image Type",
+                  "required": true,
+                  "requiredAtDeployment": false,
+                  "hideFromTemplate": false,
+                  "min": 0,
+                  "max": 0
+                },
+                {
+                  "id": "custom_script",
+                  "type": "TEXT",
+                  "displayName": "Custom OS Installation script",
+                  "required": false,
+                  "requiredAtDeployment": false,
+                  "hideFromTemplate": false,
+                  "min": 0,
+                  "max": 0
+                },
+                {
+                  "id": "title",
+                  "value": "07c1e8d6-bd80-4cb7-8a77-dbcb610ecc1e",
+                  "type": "STRING",
+                  "required": true,
+                  "requiredAtDeployment": false,
+                  "hideFromTemplate": false
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "id": "863d1789-4df3-4889-9c38-0753a32e4860",
+          "componentID": "863d1789-4df3-4889-9c38-0753a32e4860",
+          "name": "Linux VM 3 - Copy 1",
+          "type": "VIRTUALMACHINE",
+          "relatedComponents": {
+            "entry": {
+              "key": "vcenter-vcenter-as800r.aidev.com",
+              "value": "Cluster 1"
+            }
+          },
+          "resources": [
+            {
+              "id": "asm::vm",
+              "displayName": "Virtual Machine Settings",
+              "parameters": [
+                {
+                  "id": "cpu_count",
+                  "value": 1,
+                  "type": "INTEGER",
+                  "displayName": "Number of CPUs",
+                  "required": true,
+                  "requiredAtDeployment": false,
+                  "hideFromTemplate": false,
+                  "min": 1,
+                  "max": 8
+                },
+                {
+                  "id": "disksize_in_gb",
+                  "value": 16,
+                  "type": "INTEGER",
+                  "displayName": "VM Size in GB",
+                  "required": true,
+                  "requiredAtDeployment": false,
+                  "hideFromTemplate": false,
+                  "min": 1,
+                  "max": 2048
+                },
+                {
+                  "id": "memory_in_mb",
+                  "value": 4096,
+                  "type": "INTEGER",
+                  "displayName": "Memory in MB",
+                  "required": true,
+                  "requiredAtDeployment": false,
+                  "hideFromTemplate": false,
+                  "min": 1024,
+                  "max": 262144
+                },
+                {
+                  "id": "vnic_count",
+                  "value": 1,
+                  "type": "INTEGER",
+                  "displayName": "Number of NICs",
+                  "required": true,
+                  "requiredAtDeployment": false,
+                  "hideFromTemplate": false,
+                  "min": 1,
+                  "max": 16
+                },
+                {
+                  "id": "title",
+                  "value": "863d1789-4df3-4889-9c38-0753a32e4860",
+                  "type": "STRING",
+                  "required": true,
+                  "requiredAtDeployment": false,
+                  "hideFromTemplate": false
+                }
+              ]
+            },
+            {
+              "id": "asm::server",
+              "displayName": "Virtual Machine OS Settings",
+              "parameters": [
+                {
+                  "id": "os_host_name",
+                  "value": "gs1vmlin2",
+                  "type": "STRING",
+                  "displayName": "Host Name",
+                  "required": true,
+                  "requiredAtDeployment": true,
+                  "hideFromTemplate": true,
+                  "min": 0,
+                  "max": 0
+                },
+                {
+                  "id": "admin_password",
+                  "value": "ff808081446f94630144765435ce0979",
+                  "type": "PASSWORD",
+                  "displayName": "Administrator password",
+                  "required": true,
+                  "requiredAtDeployment": false,
+                  "hideFromTemplate": false,
+                  "min": 0,
+                  "max": 0
+                },
+                {
+                  "id": "razor_image",
+                  "value": "rhel6",
+                  "type": "ENUMERATED",
+                  "displayName": "OS Image",
+                  "required": true,
+                  "requiredAtDeployment": false,
+                  "hideFromTemplate": false,
+                  "min": 0,
+                  "max": 0
+                },
+                {
+                  "id": "os_image_type",
+                  "value": "redhat",
+                  "type": "ENUMERATED",
+                  "displayName": "OS Image Type",
+                  "required": true,
+                  "requiredAtDeployment": false,
+                  "hideFromTemplate": false,
+                  "min": 0,
+                  "max": 0
+                },
+                {
+                  "id": "custom_script",
+                  "type": "TEXT",
+                  "displayName": "Custom OS Installation script",
+                  "required": false,
+                  "requiredAtDeployment": false,
+                  "hideFromTemplate": false,
+                  "min": 0,
+                  "max": 0
+                },
+                {
+                  "id": "title",
+                  "value": "863d1789-4df3-4889-9c38-0753a32e4860",
+                  "type": "STRING",
+                  "required": true,
+                  "requiredAtDeployment": false,
+                  "hideFromTemplate": false
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    }
+  }
+}
