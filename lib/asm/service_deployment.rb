@@ -388,7 +388,7 @@ class ASM::ServiceDeployment
     end
 
     if @debug
-      logger.info("[DEBUG MODE] execution skipped for '#{cmd}'")
+      logger.info("[DEBUG MODE] execution skipped for ")
       return nil
     else
       begin
@@ -596,7 +596,7 @@ class ASM::ServiceDeployment
     serverhash =  {}
 
     serverhash = get_server_inventory(server_cert_name)
-    logger.debug "******** In process_tor after getServerInventory serverhash is #{serverhash} **********\n"
+    logger.debug "******** In process_tor after getServerInventory serverhash is  #{ASM::Util.sanitize(serverhash)} **********\n"
     switchinfoobj = Get_switch_information.new()
     switchportdetail = switchinfoobj.get_info(serverhash,@rack_server_switchhash,logger)
     logger.debug "******** In process_tor switchportdetail :: #{switchportdetail} *********\n"
@@ -685,7 +685,7 @@ class ASM::ServiceDeployment
     serverhash = {}
     deviceConfDir ='/etc/puppetlabs/puppet/devices'
     serverhash = get_server_inventory(server_cert_name)
-    logger.debug "******** In process_tor after getServerInventory serverhash is #{serverhash} **********\n"
+    logger.debug "******** In process_tor after getServerInventory serverhash is #{ASM::Util.sanitize(serverhash)} **********\n"
     switchinfoobj = Get_switch_information.new()
     switchportdetail = switchinfoobj.get_info(serverhash,@blade_server_switchhash,logger)
     logger.debug "******** In process_tor switchportdetail :: #{switchportdetail} *********\n"
@@ -895,7 +895,7 @@ class ASM::ServiceDeployment
     inv = nil
     device_conf ||= ASM::Util.parse_device_config(certname)
     inv  ||= ASM::Util.fetch_server_inventory(certname)
-    logger.debug "******** In getServerInventory device_conf is #{sanitize(device_conf)}************\n"
+    logger.debug "******** In getServerInventory device_conf is #{ASM::Util.sanitize(device_conf)}************\n"
     logger.debug "******** In getServerInventory inv is #{inv} **************\n"
     dracipaddress = device_conf[:host]
     dracusername = device_conf[:user]
@@ -908,7 +908,7 @@ class ASM::ServiceDeployment
     else
       serverpropertyhash['bladetype'] = "blade"
       chassis_conf ||= ASM::Util.chassis_inventory(servicetag, logger)
-      logger.debug "*********chassis_conf :#{chassis_conf}"
+      logger.debug "*********chassis_conf :#{ASM::Util.sanitize(chassis_conf)}"
       serverpropertyhash['chassis_ip'] = chassis_conf['chassis_ip']
       serverpropertyhash['chassis_username'] = chassis_conf['chassis_username']
       serverpropertyhash['chassis_password'] = chassis_conf['chassis_password']
@@ -922,9 +922,9 @@ class ASM::ServiceDeployment
     serverpropertyhash['idrac_password'] = dracpassword
 
     serverpropertyhash['mac_addresses'] = get_server_macaddress(dracipaddress,dracusername,dracpassword,certname,model)
-    logger.debug "******* In getServerInventory server property hash is #{serverpropertyhash} ***********\n"
+    logger.debug "******* In getServerInventory server property hash is #{ASM::Util.sanitize(serverpropertyhash)} ***********\n"
     serverhash["#{servicetag}"] = serverpropertyhash
-    logger.debug "********* In getServerInventory server Hash is #{serverhash} **************\n"
+    logger.debug "********* In getServerInventory server Hash is #{ASM::Util.sanitize(serverhash)}**************\n"
     return serverhash
   end
 
@@ -979,12 +979,6 @@ class ASM::ServiceDeployment
     logger.debug "Brocade SAN Switches certificate name list is #{@configured_brocade_san_switches}"
   end
 
-  def sanitize(device_conf)
-    ret = device_conf.dup
-    ret[:password] = '******'
-    ret
-  end
-
   def populate_rack_switch_hash
     deviceConfDir ='/etc/puppetlabs/puppet/devices'
     switchhash = {}
@@ -998,12 +992,12 @@ class ASM::ServiceDeployment
       switchpropertyhash = {}
       switchpropertyhash = Hash.new
       device_conf ||= ASM::Util.parse_device_config(certname)
-      logger.debug "******* In process_tor device_conf is #{sanitize(device_conf)} ***********\n"
+      logger.debug "******* In process_tor device_conf is #{ASM::Util.sanitize(device_conf)}***********\n"
       torip = device_conf[:host]
       torusername = device_conf[:user]
       torpassword = device_conf['password']
       torurl = device_conf['url']
-      logger.debug "****** #{sanitize(device_conf)} ******"
+      logger.debug "******  #{ASM::Util.sanitize(device_conf)} ******"
       logger.debug "tor url :: #{torurl}\n"
       switchpropertyhash['connection_url'] = torurl
       if certname =~ /dell_ftos/
@@ -1031,12 +1025,12 @@ class ASM::ServiceDeployment
       switchpropertyhash = {}
       switchpropertyhash = Hash.new
       device_conf ||= ASM::Util.parse_device_config(certname)
-      logger.debug "******* In process_tor device_conf is #{sanitize(device_conf)} ***********\n"
+      logger.debug "******* In process_tor device_conf is  #{ASM::Util.sanitize(device_conf)}***********\n"
       torip = device_conf[:host]
       torusername = device_conf[:user]
       torpassword = device_conf['password']
       torurl = device_conf['url']
-      logger.debug "****** #{sanitize(device_conf)} ******"
+      logger.debug "******  #{ASM::Util.sanitize(device_conf)} ******"
       logger.debug "tor url :: #{torurl}\n"
       switchpropertyhash['connection_url'] = torurl
       if certname =~ /brocade_fos/
@@ -1065,12 +1059,12 @@ class ASM::ServiceDeployment
       switchpropertyhash = {}
       switchpropertyhash = Hash.new
       device_conf ||= ASM::Util.parse_device_config(certname)
-      logger.debug "******* In process_tor device_conf is #{sanitize(device_conf)} ***********\n"
+      logger.debug "******* In process_tor device_conf is  #{ASM::Util.sanitize(device_conf)} ***********\n"
       torip = device_conf[:host]
       torusername = device_conf[:user]
       torpassword = device_conf['password']
       torurl = device_conf['url']
-      logger.debug "****** #{sanitize(device_conf)} ******"
+      logger.debug "******  #{ASM::Util.sanitize(device_conf)} ******"
       logger.debug "tor url :: #{torurl}\n"
       switchpropertyhash['connection_url'] = torurl
       if certname =~ /dell_ftos/
@@ -2198,7 +2192,7 @@ class ASM::ServiceDeployment
       logger.debug "No server is rebooted, no need to sleep"
     end
   end
-  
+   
   def servers_has_fc_enabled()
     returncode=true
     returnmessage=""
