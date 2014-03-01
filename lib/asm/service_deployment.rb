@@ -14,6 +14,7 @@ require 'asm/get_switch_information'
 require 'uri'
 require 'asm/discoverswitch'
 require 'asm/reboot'
+require 'asm/cipher'
 
 class ASM::ServiceDeployment
 
@@ -50,6 +51,10 @@ class ASM::ServiceDeployment
 
   def noop=(noop)
     @noop = noop
+  end
+
+  def decrypt?
+    true
   end
 
   # Network values come from the GUI as a list of ASM network guids.
@@ -550,14 +555,14 @@ class ASM::ServiceDeployment
   end
 
   def process_test(component)
-    config = ASM::Util.build_component_configuration(component)
+    config = ASM::Util.build_component_configuration(component, :decrypt => decrypt?)
     process_generic(component['id'], config, 'apply', true)
   end
 
   def process_storage(component)
     log("Processing storage component: #{component['id']}")
 
-    resource_hash = ASM::Util.build_component_configuration(component)
+    resource_hash = ASM::Util.build_component_configuration(component, :decrypt => decrypt?)
 
     wwpns = nil
     (resource_hash['compellent::createvol'] || {}).each do |title, params|
@@ -586,7 +591,7 @@ class ASM::ServiceDeployment
 
   def process_tor(component)
     log("Processing tor component: #{component['id']}")
-    config = ASM::Util.build_component_configuration(component)
+    config = ASM::Util.build_component_configuration(component, :decrypt => decrypt?)
     process_generic(component['id'], config, 'device')
   end
 
@@ -1157,7 +1162,7 @@ class ASM::ServiceDeployment
     server_vlan_info = {}
     deviceconf = nil
     inventory = nil
-    resource_hash = ASM::Util.build_component_configuration(component)
+    resource_hash = ASM::Util.build_component_configuration(component, :decrypt => decrypt?)
 
     (resource_hash['asm::server'] || {}).each do |title, params|
       massage_asm_server_params(serial_number, params)
@@ -1505,7 +1510,7 @@ class ASM::ServiceDeployment
     raise(Exception, 'Component has no certname') unless cert_name
     log("Processing cluster component: #{cert_name}")
 
-    resource_hash = ASM::Util.build_component_configuration(component)
+    resource_hash = ASM::Util.build_component_configuration(component, :decrypt => decrypt?)
 
     resource_hash['asm::cluster'].each do |title, params|
       resource_hash['asm::cluster'][title]['vcenter_options'] = { 'insecure' => true }
@@ -1513,7 +1518,7 @@ class ASM::ServiceDeployment
 
       # Add ESXi hosts and creds as separte resources
       (find_related_components('SERVER', component) || []).each do |server_component|
-        server_conf = ASM::Util.build_component_configuration(server_component)
+        server_conf = ASM::Util.build_component_configuration(server_component, :decrypt => decrypt?)
 
         (server_conf['asm::server'] || []).each do |server_cert, server_params|
           if server_params['os_image_type'] == 'vmware_esxi'
@@ -1547,8 +1552,11 @@ class ASM::ServiceDeployment
               endpoint = { 
                 :host => hostip, 
                 :user => ESXI_ADMIN_USER,
-                :password => server_params['admin_password'] 
+                :password => server_params['admin_password']
               }
+              if decrypt?
+                endpoint[:password] = ASM::Cipher.decrypt_string(endpoint[:password])
+              end
               log("Setting static management IP #{static['ip_address']} on ESXi host with serial number #{serial_number}")
               hostip = static['ip_address']
               unless @debug
@@ -1567,9 +1575,9 @@ class ASM::ServiceDeployment
               'hostname' => hostip,
               'username' => ESXI_ADMIN_USER,
               'password' => server_params['admin_password'],
-              'decrypt'  => true,
+              'decrypt'  => decrypt?,
               'require' => "Asm::Cluster[#{title}]"
-             }
+            }
 
             if network_params
               # Add vswitch config to esx host
@@ -1639,11 +1647,15 @@ class ASM::ServiceDeployment
                 (find_related_components('STORAGE', server_component) || []).each do |storage_component|
                   storage_cert = storage_component['id']
                   storage_creds = ASM::Util.parse_device_config(storage_cert)
-                  storage_hash = ASM::Util.build_component_configuration(storage_component)
+                  storage_hash = ASM::Util.build_component_configuration(storage_component, :decrypt => decrypt?)
                   if @debug
                     hba_list = [ 'vmhba33', 'vmhba34' ]
                   else
-                    hba_list = parse_hbas(hostip, ESXI_ADMIN_USER, server_params['admin_password'])
+                    esx_password = server_params['admin_password']
+                    if decrypt?
+                      esx_password = ASM::Cipher.decrypt_string(esx_password)
+                    end
+                    hba_list = parse_hbas(hostip, ESXI_ADMIN_USER, esx_password)
                   end
 
                   (storage_hash['equallogic::create_vol_chap_user_access'] || {}).each do |storage_title, storage_params|
@@ -1663,7 +1675,7 @@ class ASM::ServiceDeployment
                       'chapsecret' => storage_params['passwd'],
                       'vmknics' => "vmk#{storage_network_vmk_index}",
                       'vmknics1' => "vmk#{storage_network_vmk_index + 1}",
-                      'decrypt' => true,
+                      'decrypt' => decrypt?,
                       'require' => storage_network_require,
                     }
                   end
@@ -1706,7 +1718,7 @@ class ASM::ServiceDeployment
  
   def process_virtualmachine(component)
     log("Processing virtualmachine component: #{component['id']}")
-    resource_hash = ASM::Util.build_component_configuration(component)
+    resource_hash = ASM::Util.build_component_configuration(component, :decrypt => decrypt?)
 
     # For simplicity we require that there is exactly one asm::vm
     # and optionally one asm::server resource
@@ -1729,7 +1741,7 @@ class ASM::ServiceDeployment
     raise(Exception, "Expected one cluster for #{component['id']} but found #{clusters.size}") unless clusters.size == 1
     cluster = clusters[0]
     cluster_deviceconf = ASM::Util.parse_device_config(cluster['id'])
-    cluster_resource_hash = ASM::Util.build_component_configuration(cluster)
+    cluster_resource_hash = ASM::Util.build_component_configuration(cluster, :decrypt => decrypt?)
     cluster_hash = cluster_resource_hash['asm::cluster'] || {}
     raise(Exception, "Expected one asm::cluster resource but found #{cluster_hash.size}") unless cluster_hash.size == 1
     cluster_params = nil
@@ -1806,7 +1818,7 @@ class ASM::ServiceDeployment
 
   def process_service(component)
     log("Processing service component: #{component['id']}")
-    config = ASM::Util.build_component_configuration(component, 'class')
+    config = ASM::Util.build_component_configuration(component, :type => 'class', :decrypt => decrypt?)
 
     certificates = find_related_components('SERVER', component).map do |server_component|
       server_id = server_component['id']
@@ -1824,7 +1836,7 @@ class ASM::ServiceDeployment
       cluster = clusters[0]
       cluster_deviceconf = ASM::Util.parse_device_config(cluster['id'])
 
-      resource_hash = ASM::Util.build_component_configuration(vm_component)
+      resource_hash = ASM::Util.build_component_configuration(vm_component, :decrypt => decrypt?)
 
       if resource_hash['asm::server']
         # O/S install was started
@@ -1930,6 +1942,9 @@ class ASM::ServiceDeployment
   def block_until_esxi_ready(title, params, timeout=3600)
     serial_num = params['serial_number'] || raise(Exception, "resource #{title} is missing required server attribute admin_password")
     password = params['admin_password'] || raise(Exception, "resource #{title} is missing required server attribute admin_password")
+    if decrypt?
+      password = ASM::Cipher.decrypt_string(password)
+    end
     type = params['os_image_type'] || raise(Exception, "resource #{title} is missing required server attribute os_image_type")
     hostname = params['os_host_name'] || raise(Exception, "resource #{title} is missing required server attribute os_host_name")
     hostdisplayname = "#{serial_num} (#{hostname})"
@@ -2043,7 +2058,7 @@ class ASM::ServiceDeployment
     tagged_vlaninfo = Array.new
     tagged_workloadvlaninfo = Array.new
     untagged_vlaninfo = Array.new
-    server_conf = ASM::Util.build_component_configuration(server_component)
+    server_conf = ASM::Util.build_component_configuration(server_component, :decrypt => decrypt?)
     network_params = (server_conf['asm::esxiscsiconfig'] || {})[server_cert]
     if network_params
       if network_params['hypervisor_network']

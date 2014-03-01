@@ -534,58 +534,61 @@ module ASM
       end
     end
 
-    def self.append_resource_configuration!(resource, resources={}, generate_title=nil, type='class')
-      resource_type = nil
-      if type == 'class'
-        resource_type = 'class'
-      else
-        resource_type = resource['id'] || raise(Exception, 'resource found with no type')
-      end
+    def self.append_resource_configuration!(resource, resources={}, options = {})
+      options = { 
+        :title => nil, 
+        :type => resource['id'],
+        :decrypt => false
+      }.merge(options)
 
-      resource_type.downcase!
-      resources[resource_type] ||= {}
+      raise(Exception, 'resource found with no type') unless options[:type]
+
+      options[:type] = options[:type].downcase
+      resources[options[:type]] ||= {}
 
       param_hash = {}
       if resource['parameters'].nil?
-        raise(Exception, "resource of type #{resource_type} has no parameters")
+        raise(Exception, "resource of type #{options[:type]} has no parameters")
       else
         resource['parameters'].each do |param|
           if param['value']
             param_hash[param['id'].downcase] = param['value']
           end
           if param['value'] and param['type'] == 'PASSWORD'
-            param_hash['decrypt'] = true
+            param_hash['decrypt'] = options[:decrypt]
           end
         end
       end
       title = param_hash.delete('title')
-      if type == 'class'
+      if options[:type] == 'class'
         title = resource['id']
       end
       if title
-        if generate_title
-          raise(Exception, "Generated title (#{generate_title}) passed for resource with title #{title}")
+        if options[:title]
+          raise(Exception, "Generated title (#{options[:title]}) passed for resource with title #{title}")
         end
       else
-        title = generate_title
+        title = options[:title]
       end
 
-      raise(Exception, "Component has resource #{resource_type} with no title") unless title
+      raise(Exception, "Component has resource #{options[:type]} with no title") unless title
 
-      if resources[resource_type][title]
-        raise(Exception, "Resource #{resource_type}/#{title} already existed in resources hash")
+      if resources[options[:type]][title]
+        raise(Exception, "Resource #{options[:type]}/#{title} already existed in resources hash")
       end
-      resources[resource_type][title] = param_hash
+      resources[options[:type]][title] = param_hash
       resources
     end
 
     # Build data appropriate for serializing to YAML and using for component
     # configuration via the puppet asm command.
-    def self.build_component_configuration(component, type='resource')
+    #
+    # Valid +options+ are :type and :decrypt
+    def self.build_component_configuration(component, options = {})
       resource_hash = {}
       resources = ASM::Util.asm_json_array(component['resources'])
       resources.each do |resource|
-        resource_hash = append_resource_configuration!(resource, resource_hash, nil, type)
+        resource_hash = append_resource_configuration!(resource, resource_hash, options)
       end
       resource_hash
     end
