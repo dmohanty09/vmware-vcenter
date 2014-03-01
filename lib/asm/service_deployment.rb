@@ -1696,7 +1696,7 @@ class ASM::ServiceDeployment
       :password => password,
     }
     cmd = 'iscsi adapter list'.split
-    hba_list = ASM::Util.esxcli(cmd, endpoint, logger).select do |hba|
+    hba_list = ASM::Util.esxcli(cmd, endpoint, logger).sort_by{|hba| hba['Adapter'][/[0-9]+/].to_i }.select do |hba|
       hba['Description'].end_with?('iSCSI Adapter')
     end.map { |hba| hba['Adapter'] }
     
