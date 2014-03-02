@@ -8,12 +8,11 @@ require 'rest_client'
 require 'timeout'
 require 'securerandom'
 require 'yaml'
-require 'asm/WWPN'
+require 'asm/wsman'
 require 'fileutils'
 require 'asm/get_switch_information'
 require 'uri'
 require 'asm/discoverswitch'
-require 'asm/reboot'
 require 'asm/cipher'
 
 class ASM::ServiceDeployment
@@ -527,7 +526,7 @@ class ASM::ServiceDeployment
         # service_tag is only set for Dell servers
         if dell_service_tag
           deviceconf = ASM::Util.parse_device_config(cert_name)
-          ASM::WWPN.get(
+          ASM::WsMan.get_wwpns(
             deviceconf[:host],
             deviceconf[:user],
             deviceconf[:password]
@@ -926,7 +925,7 @@ class ASM::ServiceDeployment
     serverpropertyhash['idrac_username'] =  dracusername
     serverpropertyhash['idrac_password'] = dracpassword
 
-    serverpropertyhash['mac_addresses'] = get_server_macaddress(dracipaddress,dracusername,dracpassword,certname,model)
+    serverpropertyhash['mac_addresses'] = ASM::WsMan.get_mac_addresses(device_conf, model, logger)
     logger.debug "******* In getServerInventory server property hash is #{ASM::Util.sanitize(serverpropertyhash)} ***********\n"
     serverhash["#{servicetag}"] = serverpropertyhash
     logger.debug "********* In getServerInventory server Hash is #{ASM::Util.sanitize(serverhash)}**************\n"
@@ -1082,65 +1081,6 @@ class ASM::ServiceDeployment
       logger.debug "********* switch hash is #{switchhash} *************\n"
     end
     switchhash
-  end
-
-  def get_server_macaddress(dracipaddress,dracusername,dracpassword,certname,servermodel)
-    macAddressList = Array.new
-    cmd = "wsman enumerate http://schemas.dmtf.org/wbem/wscim/1/cim-schema/2/root/dcim/DCIM_NICView -h  #{dracipaddress}  -V -v -c dummy.cert -P 443 -u #{dracusername} -p #{dracpassword} -j utf-8 -y basic"
-    puppet_out = File.join(deployment_dir, "servermac-#{certname}.out")
-    if File.exists?(puppet_out)
-      File.delete(puppet_out)
-    end
-    ASM::Util.run_command(cmd, puppet_out)
-    resp = File.read(puppet_out)
-    if servermodel.downcase =~ /r720/
-      macAddress = ""
-      resp.split("\n").each do |line|
-        line = line.to_s
-        if line =~ /\<n1:CurrentMACAddress\>(\S+)\<\/n1:CurrentMACAddress\>/
-          macAddress = $1
-        end
-        if line =~ /\<n1:FQDD\>(\S+)\<\/n1:FQDD\>/
-          nicName = $1
-          if (nicName == "NIC.Slot.2-1-1" || nicName == "NIC.Slot.2-2-1")
-            logger.debug "MAC to be pushed #{macAddress}"
-            macAddressList.push(macAddress)
-          end
-        end
-      end
-    elsif servermodel.downcase == "m620" || servermodel.downcase == "m420" || servermodel.downcase == "m820"
-      macAddress = ""
-      resp.split("\n").each do |line|
-        line = line.to_s
-        if line =~ /\<n1:CurrentMACAddress\>(\S+)\<\/n1:CurrentMACAddress\>/
-          macAddress = $1
-        end
-        if line =~ /\<n1:FQDD\>(\S+)\<\/n1:FQDD\>/
-          nicName = $1
-          if (nicName == "NIC.Integrated.1-1-1" || nicName == "NIC.Integrated.1-2-1")
-            macAddressList.push(macAddress)
-          end
-        end
-      end
-    elsif servermodel.downcase == "r620"
-      macAddress = ""
-      resp.split("\n").each do |line|
-        line = line.to_s
-        if line =~ /\<n1:CurrentMACAddress\>(\S+)\<\/n1:CurrentMACAddress\>/
-          macAddress = $1
-        end
-        if line =~ /\<n1:FQDD\>(\S+)\<\/n1:FQDD\>/
-          nicName = $1
-          if (nicName == "NIC.Integrated.1-1-1" || nicName == "NIC.Integrated.1-2-1")
-            macAddressList.push(macAddress)
-          end
-        end
-      end
-    else
-      logger.debug "Unsupported server model #{servermodel}"
-    end
-    logger.debug "********* MAC Address List is #{macAddressList} **************\n"
-    return macAddressList
   end
 
   def process_server(component)
@@ -2184,19 +2124,17 @@ class ASM::ServiceDeployment
     }
   end
   
-  def reboot_all_servers()
-    reboot_count=0
+  def reboot_all_servers
+    reboot_count = 0
     (@components_by_type['SERVER'] || []).each do |server_component|
       server_cert_name = server_component['id']
       deviceconf ||= ASM::Util.parse_device_config(server_cert_name)
-      reboot_obj=Reboot.new(deviceconf[:host],deviceconf[:user],deviceconf[:enc_password])
       # Get the powerstate, if the powerstate is 13, the reboot the server
-      #reboot_obj.reboot(logger) unless reboot_obj.get_powerstate(logger) != 13
-      powerstate = reboot_obj.get_powerstate(logger)
-      logger.debug "Current power state of server #{server_cert_name} is #{powerstate}"
-      if powerstate.to_s == "13"
-        logger.debug "Rebooting the server"
-        reboot_obj.reboot(logger)
+      power_state = ASM::WsMan.get_power_state(deviceconf, logger)
+      logger.debug "Current power state of server #{server_cert_name} is #{power_state}"
+      if power_state == "13"
+        logger.debug("Rebooting the server #{server_cert_name}")
+        ASM::WsMan.reboot(deviceconf, logger)
         reboot_count +=1
       end
     end

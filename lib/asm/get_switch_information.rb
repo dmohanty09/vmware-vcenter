@@ -4,15 +4,13 @@
 
      TODO: Need to extend the support for the SAN server (Brocade)
 =end
-require 'pathname'
-require 'pp'
 
-module_path = Pathname.new(__FILE__).parent
-require "#{module_path}/restartidrac"
-require "#{module_path}/discoverswitch"
-require "#{module_path}/rack_server_switch_information"
-require "#{module_path}/blade_server_switch_information"
-require "#{module_path}/san_switch_information"
+require 'pp'
+require 'asm/discoverswitch'
+require 'asm/rack_server_switch_information'
+require 'asm/blade_server_switch_information'
+require 'asm/san_switch_information'
+require 'asm/wsman'
 
 class Get_switch_information
   def initialize ()
@@ -80,7 +78,12 @@ class Get_switch_information
     if servermacaddress.keys.count != server_mac_address_count
       logger.debug "Server #{nname} is not updated, need to run the discovery for these"
       # Reboot the server
-      RestartIDRAC.new(sinfo,switchinfo).restartidrac(logger)
+      endpoint = { 
+        :host => sinfo['idrac_ip'],
+        :user => sinfo['idrac_username'],
+        :password => sinfo['idrac_password']
+      }
+      ASM::WsMan.reboot(endpoint, logger)
       sleep(60)
       # Initiate the discovery of the switches
       discoverallswitch = Discoverswitch.new(switchinfo)
