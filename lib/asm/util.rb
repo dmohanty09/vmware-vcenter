@@ -614,8 +614,9 @@ module ASM
       log_file = File.join(ASM.base_dir, id.to_s, 'deployment.log')
       return nil unless File.exists?(log_file)
       File.open(log_file, 'r').each_line do |line|
-        if line =~ /^\w, \[(.*?)\]  \w+ -- : (.*)/
-          logs.push({'msg' => $2, 'datetime' => $1})
+        if line =~ /^\w, \[(.*?)\]\s+(\w+) -- : (.*)/
+          log = {'msg' => $3, 'datetime' => $1, 'severity' => $2}
+          logs.push(log) unless log['severity'] == 'DEBUG'
         else
           ASM.logger.warn("Unexpected log line: #{line}")
         end
