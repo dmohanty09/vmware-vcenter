@@ -243,14 +243,20 @@ module ASM
       "VMware-#{first_half.join(' ')}-#{last_half.join(' ')}"
     end
 
+    def self.facts_find(cert_name, logger = nil)
+      cmd = "sudo puppet facts find '#{cert_name}' --terminus puppetdb --color=false"
+      logger.debug("Executing #{cmd}") if logger
+      result = run_command_simple(cmd)
+      unless result['exit_status'] == 0
+        msg = "Failed to find puppet facts for certificate name #{cert_name}"
+        logger.error(msg) if logger
+        raise(Exception, "#{msg}: #{cmd}: returned #{result.inspect}")
+      end
+      (JSON.parse(result['stdout']) || {})['values']
+    end
+
     def self.find_equallogic_iscsi_ip(cert_name)
-      cmd = 'sudo'
-      args = [ 'puppet', 'facts', 'find', cert_name,
-        '--terminus', 'yaml',
-        '--clientyamldir=/var/opt/lib/pe-puppet/yaml', ]
-      result = self.run_command_with_args(cmd, *args)
-      raise(Exception, "Failed to fetch puppet facts for #{cert_name}") unless result['exit_status'] == 0
-      facts = (JSON.parse(result['stdout']) || {})['values']
+      facts = facts_find(cert_name)
       general = JSON.parse(facts['General Settings'])
       unless general['IP Address']
         raise(Exception, "Could not find iSCSI IP address for #{cert_name}")
@@ -260,15 +266,33 @@ module ASM
     end
 
     def self.find_compellent_controller_info(cert_name)
-      output = `sudo puppet facts find #{cert_name} --terminus yaml --clientyamldir=/var/opt/lib/pe-puppet/yaml/ --color=false`
-      facts = (JSON.parse(output) || {})['values']
-      controller1 = nil
-      controller2 = nil
-      controller1 ||= facts['controller_1_ControllerIndex']
-      controller2 ||= facts['controller_2_ControllerIndex']
-      controller_info = { 'controller1' => controller1,
-        'controller2' => controller2
-      }
+      facts = facts_find(cert_name)
+      { 'controller1' => facts['controller_1_ControllerIndex'],
+        'controller2' => facts['controller_2_ControllerIndex'] }
+    end
+    
+    def self.find_compellent_volume_info(cert_name, compellent_vol_name, compellent_vol_folder, logger)
+      logger.debug("Input compellent volume: #{compellent_vol_name}")
+      logger.debug("Input compellent folder: #{compellent_vol_folder}")
+      facts = facts_find(cert_name, logger)
+      volume_data_json = facts['volume_data']
+      unless volume_data_json
+        msg = "Facts for compellent array #{cert_name} did not contain volume data"
+        logger.error(msg) if logger
+        raise(Exception, msg)
+      end
+      volume_data = JSON.parse(volume_data_json)
+      volume_data.each do |volume_info|
+        volume = volume_info[1]
+        volume.each do |data|
+          if (data['Name'][0] == compellent_vol_name)
+            volume_device_id = data['DeviceID'][0]
+            logger.debug("Compellent volume device id found : #{volume_device_id}")
+            return volume_device_id
+            break
+          end
+        end
+      end
     end
 
     def self.first_host_ip
@@ -302,7 +326,6 @@ module ASM
       end
       prefered_ip
     end
-
 
     def self.get_plain_password(encoded_password)
       plain_password = `/opt/puppet/bin/ruby /opt/asm-deployer/lib/asm/encode_asm.rb #{encoded_password}`
@@ -384,7 +407,7 @@ module ASM
     # ----------------------  --------------  --------------  -------
     # Management Network      vSwitch0                     1        0
     # vMotion                 vSwitch1                     1       23
-    def self.esxcli(cmd_array, endpoint, logger = nil)
+    def self.esxcli(cmd_array, endpoint, logger = nil, skip_parsing = false)
       args = ["VI_PASSWORD=#{endpoint[:password]}","esxcli"]
       args += [ '-s', endpoint[:host], 
                '-u', endpoint[:user]
@@ -401,37 +424,45 @@ module ASM
         ASM::Util.run_command_with_args('env', *args)
       end
 
-      lines = result['stdout'].split(/\n/)
       unless result['exit_status'] == 0
         msg = "Failed to execute esxcli command on host #{endpoint[:host]}"
         logger.error(msg) if logger
         raise(Exception, "#{msg}: esxcli #{args.join(' ')}: #{result.inspect}")
-      end
+      end      
       
-      if lines.size > 2
-        header_line = lines.shift
-        seps = lines.shift.split
-        headers = []
-        pos = 0
-        seps.each do |sep|
-          header = header_line.slice(pos, sep.length).strip
-          headers.push(header)
-          pos = pos + sep.length + 2
-        end
-        
-        ret = []
-        lines.each do |line|
-          record = {}
+      if skip_parsing
+        result['stdout']
+      else
+        lines = result['stdout'].split(/\n/)
+        unless lines.size > 2
+          msg = "Invalid esxcli data returned from host #{endpoint[:host]}"
+          logger.error(msg) if logger
+          raise(Exception, "#{msg}: esxcli #{args.join(' ')}: #{result.inspect}")
+        else
+          header_line = lines.shift
+          seps = lines.shift.split
+          headers = []
           pos = 0
-          seps.each_with_index do |sep, index|
-            value = line.slice(pos, sep.length).strip
-            record[headers[index]] = value
+          seps.each do |sep|
+            header = header_line.slice(pos, sep.length).strip
+            headers.push(header)
             pos = pos + sep.length + 2
           end
-          ret.push(record)
+          
+          ret = []
+          lines.each do |line|
+            record = {}
+            pos = 0
+            seps.each_with_index do |sep, index|
+              value = line.slice(pos, sep.length).strip
+              record[headers[index]] = value
+              pos = pos + sep.length + 2
+            end
+            ret.push(record)
+          end
+          
+          ret
         end
-        
-        ret
       end
     end
 

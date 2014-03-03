@@ -1525,6 +1525,7 @@ class ASM::ServiceDeployment
               resource_hash['asm::vswitch'] ||= {}
 
               next_require = "Asm::Host[#{server_cert}]"
+              host_require = next_require
               storage_network_require = nil
               storage_network_vmk_index = nil
 
@@ -1583,23 +1584,26 @@ class ASM::ServiceDeployment
                 end
               end
 
-              # Connect datastore if we have both storage and a storage network
-              if storage_network_require
-                (find_related_components('STORAGE', server_component) || []).each do |storage_component|
-                  storage_cert = storage_component['id']
-                  storage_creds = ASM::Util.parse_device_config(storage_cert)
-                  storage_hash = ASM::Util.build_component_configuration(storage_component, :decrypt => decrypt?)
+              logger.debug('Configuring the storage manifest')
+              (find_related_components('STORAGE', server_component) || []).each do |storage_component|
+                storage_cert = storage_component['id']
+                storage_creds = ASM::Util.parse_device_config(storage_cert)
+                storage_hash = ASM::Util.build_component_configuration(storage_component, :decrypt => decrypt?)
+                
+                esx_password = server_params['admin_password']
+                if decrypt?
+                  esx_password = ASM::Cipher.decrypt_string(esx_password)
+                end
+                
+                if storage_hash['equallogic::create_vol_chap_user_access']
+                  # Configure iscsi datastore
                   if @debug
                     hba_list = [ 'vmhba33', 'vmhba34' ]
                   else
-                    esx_password = server_params['admin_password']
-                    if decrypt?
-                      esx_password = ASM::Cipher.decrypt_string(esx_password)
-                    end
                     hba_list = parse_hbas(hostip, ESXI_ADMIN_USER, esx_password)
                   end
-
-                  (storage_hash['equallogic::create_vol_chap_user_access'] || {}).each do |storage_title, storage_params|
+                  
+                  storage_hash['equallogic::create_vol_chap_user_access'].each do |storage_title, storage_params|
                     resource_hash['asm::datastore'] ||= {}
                     resource_hash['asm::datastore']["#{hostip}:#{storage_title}"] = {
                       'data_center' => params['datacenter'],
@@ -1621,8 +1625,40 @@ class ASM::ServiceDeployment
                     }
                   end
                 end
+                
+                if storage_hash['compellent::createvol']
+                  # Configure fiber channel datastore
+                  
+                  storage_hash['compellent::createvol'].each do |volume, storage_params|
+                    folder = storage_params['volumefolder']
+                    asm_guid = storage_component['asmGUID']
+                    
+                    if @debug
+                      lun_id = 0
+                    else
+                      device_id = ASM::Util.find_compellent_volume_info(asm_guid, volume, folder, logger)
+                      logger.debug("Compellent Volume info: #{device_id}")
+                      lun_id = get_compellent_lunid(hostip, 'root', server_params['admin_password'], device_id)
+                    end
+                    
+                    logger.debug("Volume's LUN ID: #{lun_id}")
+                    
+                    resource_hash['asm::fcdatastore'] ||= {}
+                    resource_hash['asm::fcdatastore']["#{hostip}:#{volume}"] = {
+                      'data_center' => params['datacenter'],
+                      'datastore' => params['datastore'],
+                      'cluster' => params['cluster'],
+                      'ensure' => 'present',
+                      'esxhost' => hostip,
+                      'esxusername' => 'root',
+                      'esxpassword' => server_params['admin_password'],
+                      'lun' => lun_id,
+                      'decrypt' => decrypt?,
+                      'require' => host_require                     
+                    }
+                  end
+                end
               end
-
             end
           end
         end
@@ -2166,4 +2202,19 @@ class ASM::ServiceDeployment
     }
   end
   
+  def get_compellent_lunid(hostip, username, password, compellent_deviceid)
+    log("getting storage core path information for #{hostip}")
+    endpoint = {
+      :host => hostip,
+      :user => username,
+      :password => password,
+    }
+    cmd = 'storage core path list'.split
+    storage_path = ASM::Util.esxcli(cmd, endpoint, logger, true)
+    storage_info = storage_path.scan(/Device:\s+naa.#{compellent_deviceid}.*?LUN:\s+(\d+)/m)
+    if !storage_info.empty?
+      storage_info[0][0]
+    end
+  end
+
 end
