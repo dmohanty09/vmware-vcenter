@@ -392,74 +392,75 @@ class ASM::ServiceDeployment
       resource_file = File.join(resources_dir, "#{cert_name}.yaml")
     end
 
-    if @debug
-      logger.info("[DEBUG MODE] execution skipped for ")
-      return nil
-    else
-      begin
-        # The timeout to obtain the device lock was originally 5
-        # minutes.  However, the equallogic module currently takes >
-        # 5 minutes to provision a single volume which seems
-        # unreasonable. An issue was raised for that here:
-        #
-        # https://github.com/dell-asm/dell-equallogic/issues/6
-        #
-        # As a short-term workaround to allow at least a few
-        # deployments involving the same equallogic to be started
-        # simultaneously, the timeout has been raised to 30
-        # minutes. When the equallogic issue above has been resolved
-        # it should be reduced back down to about 5 minutes.
-        timeout = 30 * 60
-        start = Time.now
-        yet_to_run_command = true
-        while(yet_to_run_command)
-          if ASM.block_certname(cert_name)
-            yet_to_run_command = false
-            puppet_out = File.join(deployment_dir, "#{cert_name}.out")
-            # synchronize creation of file counter
-            resource_file = iterate_resource_file(resource_file)
-            File.open(resource_file, 'w') do |fh|
-              fh.write(config.to_yaml)
-            end
-            override_opt = override ? "--always-override " : ""
-            noop_opt     = @noop ? '--noop' : ''
-            cmd = "sudo puppet asm process_node --debug --trace --filename #{resource_file} --run_type #{puppet_run_type} --statedir #{resources_dir} #{noop_opt} #{override_opt}#{cert_name}"
-            logger.debug "Executing the command"
-            ASM::Util.run_command(cmd, puppet_out)
-            if puppet_run_type == 'device'
-              update_inventory_through_controller(asm_guid)
-            end
+    begin
+      # The timeout to obtain the device lock was originally 5
+      # minutes.  However, the equallogic module currently takes >
+      # 5 minutes to provision a single volume which seems
+      # unreasonable. An issue was raised for that here:
+      #
+      # https://github.com/dell-asm/dell-equallogic/issues/6
+      #
+      # As a short-term workaround to allow at least a few
+      # deployments involving the same equallogic to be started
+      # simultaneously, the timeout has been raised to 30
+      # minutes. When the equallogic issue above has been resolved
+      # it should be reduced back down to about 5 minutes.
+      timeout = 30 * 60
+      start = Time.now
+      yet_to_run_command = true
+      while(yet_to_run_command)
+        if ASM.block_certname(cert_name)
+          yet_to_run_command = false
+          puppet_out = File.join(deployment_dir, "#{cert_name}.out")
+          # synchronize creation of file counter
+          resource_file = iterate_resource_file(resource_file)
+          File.open(resource_file, 'w') do |fh|
+            fh.write(config.to_yaml)
+          end
+          override_opt = override ? "--always-override " : ""
+          noop_opt     = @noop ? '--noop' : ''
+          cmd = "sudo puppet asm process_node --debug --trace --filename #{resource_file} --run_type #{puppet_run_type} --statedir #{resources_dir} #{noop_opt} #{override_opt}#{cert_name}"
+          logger.debug "Executing the command #{cmd}"
+          
+          if @debug
+            logger.info("[DEBUG MODE] puppet execution skipped")
           else
-            sleep 2
-            if Time.now - start > timeout
-              raise(SyncException, "Timed out waiting for a lock for device cert #{cert_name}")
-            end
+            ASM::Util.run_command(cmd, puppet_out)
           end
-        end
-      rescue Exception => e
-        unless e.class == SyncException
-          ASM.unblock_certname(cert_name)
-        end
-        raise(e)
-      end
-      ASM.unblock_certname(cert_name)
-      results = {}
-      found_result_line = false
-      File.readlines(puppet_out).each do |line|
-        if line =~ /Results: For (\d+) resources\. (\d+) from our run failed\. (\d+) not from our run failed\. (\d+) updated successfully\./
-          results = {'num_resources' => $1, 'num_failures' => $2, 'other_failures' => $3, 'num_updates' => $4}
-          found_result_line = true
-          break
-          if line =~ /Puppet catalog compile failed/
-            raise("Could not compile catalog")
+          
+          if puppet_run_type == 'device'
+            update_inventory_through_controller(asm_guid)
+          end
+        else
+          sleep 2
+          if Time.now - start > timeout
+            raise(SyncException, "Timed out waiting for a lock for device cert #{cert_name}")
           end
         end
       end
-      unless puppet_run_type == 'agent'
-        raise(Exception, "Did not find result line in file #{puppet_out}") unless found_result_line
+    rescue Exception => e
+      unless e.class == SyncException
+        ASM.unblock_certname(cert_name)
       end
-      results
+      raise(e)
     end
+    ASM.unblock_certname(cert_name)
+    results = {}
+    found_result_line = false
+    File.readlines(puppet_out).each do |line|
+      if line =~ /Results: For (\d+) resources\. (\d+) from our run failed\. (\d+) not from our run failed\. (\d+) updated successfully\./
+        results = {'num_resources' => $1, 'num_failures' => $2, 'other_failures' => $3, 'num_updates' => $4}
+        found_result_line = true
+        break
+        if line =~ /Puppet catalog compile failed/
+          raise("Could not compile catalog")
+        end
+      end
+    end
+    unless @debug || puppet_run_type == 'agent'
+      raise(Exception, "Did not find result line in file #{puppet_out}") unless found_result_line
+    end
+    results
   end
 
   # 
