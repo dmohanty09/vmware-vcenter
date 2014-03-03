@@ -1703,7 +1703,7 @@ class ASM::ServiceDeployment
                     logger.debug("Volume's LUN ID: #{lun_id}")
                     
                     resource_hash['asm::fcdatastore'] ||= {}
-                    resource_hash['asm::fcdatastore']["#{hostip}:#{storage_title}"] = {
+                    resource_hash['asm::fcdatastore']["#{hostip}:#{volume}"] = {
                       'data_center' => params['datacenter'],
                       'datastore' => params['datastore'],
                       'cluster' => params['cluster'],
