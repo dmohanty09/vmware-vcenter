@@ -409,8 +409,8 @@ module ASM
     # vMotion                 vSwitch1                     1       23
     def self.esxcli(cmd_array, endpoint, logger = nil, skip_parsing = false)
       args = ["VI_PASSWORD=#{endpoint[:password]}","esxcli"]
-      args += [ '-s', endpoint[:host], 
-               '-u', endpoint[:user]
+      args += [ '-s', endpoint[:host],
+        '-u', endpoint[:user]
       ]
       args += cmd_array.map { |arg| arg.to_s }
 
@@ -428,17 +428,13 @@ module ASM
         msg = "Failed to execute esxcli command on host #{endpoint[:host]}"
         logger.error(msg) if logger
         raise(Exception, "#{msg}: esxcli #{args.join(' ')}: #{result.inspect}")
-      end      
-      
+      end
+
       if skip_parsing
         result['stdout']
       else
         lines = result['stdout'].split(/\n/)
-        unless lines.size > 2
-          msg = "Invalid esxcli data returned from host #{endpoint[:host]}"
-          logger.error(msg) if logger
-          raise(Exception, "#{msg}: esxcli #{args.join(' ')}: #{result.inspect}")
-        else
+        if lines.size >= 2
           header_line = lines.shift
           seps = lines.shift.split
           headers = []
@@ -448,7 +444,7 @@ module ASM
             headers.push(header)
             pos = pos + sep.length + 2
           end
-          
+
           ret = []
           lines.each do |line|
             record = {}
@@ -460,7 +456,6 @@ module ASM
             end
             ret.push(record)
           end
-          
           ret
         end
       end

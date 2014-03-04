@@ -527,11 +527,7 @@ class ASM::ServiceDeployment
         # service_tag is only set for Dell servers
         if dell_service_tag
           deviceconf = ASM::Util.parse_device_config(cert_name)
-          ASM::WsMan.get_wwpns(
-            deviceconf[:host],
-            deviceconf[:user],
-            deviceconf[:password]
-          )
+          ASM::WsMan.get_wwpns(deviceconf,logger)
         end
       end.compact.flatten.uniq
     end
@@ -544,14 +540,8 @@ class ASM::ServiceDeployment
     # service_tag is only set for Dell servers
     if dell_service_tag
       deviceconf = ASM::Util.parse_device_config(cert_name)
-      wwpninfo=ASM::WWPN.get(
-      deviceconf[:host],
-      deviceconf[:user],
-      deviceconf[:password]
-      )
+      ASM::WsMan.get_wwpns(deviceconf,logger)
     end
-    logger.debug"wwpns from WSMAN: #{wwpninfo}"
-    wwpninfo.compact.flatten.uniq
   end
 
   def process_test(component)
@@ -1638,7 +1628,11 @@ class ASM::ServiceDeployment
                     else
                       device_id = ASM::Util.find_compellent_volume_info(asm_guid, volume, folder, logger)
                       logger.debug("Compellent Volume info: #{device_id}")
-                      lun_id = get_compellent_lunid(hostip, 'root', server_params['admin_password'], device_id)
+                      decrypt_password=server_params['admin_password'] 
+                      if decrypt?
+                        decrypt_password = ASM::Cipher.decrypt_string(password)
+                      end
+                      lun_id = get_compellent_lunid(hostip, 'root', decrypt_password, device_id)
                     end
                     
                     logger.debug("Volume's LUN ID: #{lun_id}")
@@ -2206,6 +2200,7 @@ class ASM::ServiceDeployment
       :user => username,
       :password => password,
     }
+    
     cmd = 'storage core path list'.split
     storage_path = ASM::Util.esxcli(cmd, endpoint, logger, true)
     storage_info = storage_path.scan(/Device:\s+naa.#{compellent_deviceid}.*?LUN:\s+(\d+)/m)
