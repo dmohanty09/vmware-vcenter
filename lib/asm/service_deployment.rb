@@ -1650,11 +1650,8 @@ class ASM::ServiceDeployment
                       'cluster' => params['cluster'],
                       'ensure' => 'present',
                       'esxhost' => hostip,
-                      'esxusername' => 'root',
-                      'esxpassword' => server_params['admin_password'],
                       'lun' => lun_id,
-                      'decrypt' => decrypt?,
-                      'require' => host_require                     
+                      'require' => host_require
                     }
                   end
                 end
