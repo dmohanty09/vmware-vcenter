@@ -445,19 +445,22 @@ class ASM::ServiceDeployment
     end
     ASM.unblock_certname(cert_name)
     results = {}
-    found_result_line = false
-    File.readlines(puppet_out).each do |line|
-      if line =~ /Results: For (\d+) resources\. (\d+) from our run failed\. (\d+) not from our run failed\. (\d+) updated successfully\./
-        results = {'num_resources' => $1, 'num_failures' => $2, 'other_failures' => $3, 'num_updates' => $4}
-        found_result_line = true
-        break
-        if line =~ /Puppet catalog compile failed/
-          raise("Could not compile catalog")
+    unless @debug
+      # Check results from output of puppet run
+      found_result_line = false
+      File.readlines(puppet_out).each do |line|
+        if line =~ /Results: For (\d+) resources\. (\d+) from our run failed\. (\d+) not from our run failed\. (\d+) updated successfully\./
+          results = {'num_resources' => $1, 'num_failures' => $2, 'other_failures' => $3, 'num_updates' => $4}
+          found_result_line = true
+          break
+          if line =~ /Puppet catalog compile failed/
+            raise("Could not compile catalog")
+          end
         end
       end
-    end
-    unless @debug || puppet_run_type == 'agent'
-      raise(Exception, "Did not find result line in file #{puppet_out}") unless found_result_line
+      unless puppet_run_type == 'agent'
+        raise(Exception, "Did not find result line in file #{puppet_out}") unless found_result_line
+      end
     end
     results
   end
