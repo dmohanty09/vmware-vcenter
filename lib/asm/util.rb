@@ -196,35 +196,6 @@ module ASM
       result_hash['VM uuid']
     end
 
-    def self.set_esxi_default_gateway(gateway, endpoint, logger = nil)
-      # Have to use IO.popen because jruby popen3 does not accept
-      # optional environment hash
-      env = { 'PERL_LWP_SSL_VERIFY_HOSTNAME' => '0' }
-      cmd = 'env'
-      args = ["VI_PASSWORD=#{endpoint[:password]}",'vicfg-route']
-      args += [ '--server', endpoint[:host],
-               '--username', endpoint[:user],
-               gateway ]
-
-      if logger
-        tmp = args.dup
-        tmp[0] = 'VI_PASSWORD=******' # mask password
-        logger.debug("Executing #{cmd} #{tmp.join(' ')}")
-      end
-
-      stdout = Timeout::timeout(120) do
-        IO.popen([ env, cmd, *args]) do |io|
-          stdout = io.read
-        end
-      end
-
-      unless stdout
-        msg = "Failed to set default gateway for host #{endpoint[:host]}"
-        logger.error(msg)
-        raise(Exception, msg)
-      end
-    end
-
     # Hack to figure out cert name from uuid.
     #
     # For UUID 4223-c288-0e73-104e-e6c0-31f5f65ad063
