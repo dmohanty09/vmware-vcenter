@@ -1556,6 +1556,7 @@ class ASM::ServiceDeployment
                   else
                     hba_list = parse_hbas(hostip, ESXI_ADMIN_USER, esx_password)
                   end
+                  raise(Exception, "Network not setup for #{server_cert}") unless storage_network_vmk_index
                   
                   storage_hash['equallogic::create_vol_chap_user_access'].each do |storage_title, storage_params|
                     resource_hash['asm::datastore'] ||= {}
