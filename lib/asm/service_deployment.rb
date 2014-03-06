@@ -1633,7 +1633,7 @@ class ASM::ServiceDeployment
                       logger.debug("Compellent Volume info: #{device_id}")
                       decrypt_password=server_params['admin_password'] 
                       if decrypt?
-                        decrypt_password = ASM::Cipher.decrypt_string(password)
+                        decrypt_password = ASM::Cipher.decrypt_string(server_params['admin_password'])
                       end
                       lun_id = get_compellent_lunid(hostip, 'root', decrypt_password, device_id)
                     end
