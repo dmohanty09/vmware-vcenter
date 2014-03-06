@@ -12,20 +12,20 @@ describe ASM::PuppetCertManager do
 
   it 'should be able to find certs' do
     certs = ASM::PuppetCertManager.get_deployment_certs(@id)
-    certs.should == ["winbaremetal", "gs1vmwin1", "gs1vmwin2", "gs1vmlin1", "gs1vmlin2"]
+    certs.should == ["agent-winbaremetal", "agent-gs1vmwin1", "agent-gs1vmwin2", "agent-gs1vmlin1", "agent-gs1vmlin2"]
   end
 
   it 'should be able to clean certs' do
 
     ASM::Util.expects(:run_command_simple)\
-      .with('sudo puppet cert clean winbaremetal gs1vmwin1 gs1vmwin2 gs1vmlin1 gs1vmlin2')\
+      .with('sudo puppet cert clean agent-winbaremetal agent-gs1vmwin1 agent-gs1vmwin2 agent-gs1vmlin1 agent-gs1vmlin2')\
         .returns({'exit_status' => 0})
     ASM::PuppetCertManager.clean_deployment_certs(@id)
   end
 
   it 'should raise an exception when cert clean fails' do
     ASM::Util.expects(:run_command_simple)\
-      .with('sudo puppet cert clean winbaremetal gs1vmwin1 gs1vmwin2 gs1vmlin1 gs1vmlin2')\
+      .with('sudo puppet cert clean agent-winbaremetal agent-gs1vmwin1 agent-gs1vmwin2 agent-gs1vmlin1 agent-gs1vmlin2')\
         .returns({'exit_status' => 1, 'stderr' => 'err', 'stdout' => 'out'})
     expect do
       ASM::PuppetCertManager.clean_deployment_certs(@id)

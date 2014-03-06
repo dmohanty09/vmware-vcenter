@@ -37,7 +37,7 @@ module ASM
                   end
                 end
               end
-              cert_list.push(os_host_name) if os_host_name and agent
+              cert_list.push('agent-'+os_host_name) if os_host_name and agent
             end
           end
         end
