@@ -1098,44 +1098,121 @@ class ASM::ServiceDeployment
     inventory = nil
     resource_hash = ASM::Util.build_component_configuration(component, :decrypt => decrypt?)
 
-    (resource_hash['asm::server'] || {}).each do |title, params|
+    if resource_hash['asm::server']
+      if resource_hash['asm::server'].size != 1
+        msg = "Only one O/S configuration allowed per server; found #{resource_hash['asm::server'].size} for #{serial_number}"
+        logger.error(msg)
+        raise(Exception, msg)
+      end
+      
+      title = resource_hash['asm::server'].keys[0]
+      params = resource_hash['asm::server'][title]
       massage_asm_server_params(serial_number, params)
     end
     
-    if is_dell_server
-      (resource_hash['asm::idrac'] || {}).each do |title, params|
-        # Attempt to determine this machine's IP address, which
-        # should also be the NFS server. This is error-prone
-        # and should be fixed later.
-        deviceconf ||= ASM::Util.parse_device_config(cert_name)
-        inventory  ||= ASM::Util.fetch_server_inventory(cert_name)
-        params['nfsipaddress'] = ASM::Util.get_preferred_ip(deviceconf[:host])
-        params['nfssharepath'] = '/var/nfs/idrac_config_xml'
-        params['servicetag'] = inventory['serviceTag']
-        params['model'] = inventory['model'].split(' ').last.downcase
-        if resource_hash['asm::server']
-          params['before'] = "Asm::Server[#{title}]"
+    # Create a vmware ks.cfg include file containing esxcli command line
+    # calls to create a static management network that will be executed
+    # from the vmware ks.cfg
+    static_ip = nil
+    if resource_hash['asm::esxiscsiconfig']
+      if resource_hash['asm::esxiscsiconfig'].size != 1
+        msg = "Only one ESXi networking configuration allowed per server; found #{resource_hash['asm::esxiscsiconfig'].size} for #{serial_number}"
+        logger.error(msg)
+        raise(Exception, msg)
+      end
+
+      title = resource_hash['asm::esxiscsiconfig'].keys[0]
+      network_params = resource_hash['asm::esxiscsiconfig'][title]
+      mgmt_networks = network_params['hypervisor_network']
+      if mgmt_networks
+        if mgmt_networks.size != 1
+          msg = "Only one hypervisor network allowed, found #{mgmt_networks.size}"
+          logger.error(msg)
+          raise(Exception, msg)
         end
+        mgmt_network = mgmt_networks[0]
+        static = mgmt_network['staticNetworkConfiguration']
+        unless static
+          # This should have already been checked previously
+          msg = "Static network is required for hypervisor network"
+          logger.error(msg)
+          raise(Exception, msg)
+        end
+
+        static_ip = static['ip_address']
+        content = "network --bootproto=static --device-vmnic0 --ip=#{static_ip}  --netmask=#{static['subnet']} --gateway=#{static['gateway']}"
+        # NOTE: vlanId is a FixNum
+        if mgmt_network['vlanId']
+          content += " --vlanid=#{mgmt_network['vlanId']}"
+        end
+        nameservers = [ static['dns1'], static['dns2'] ].select { |x| !x.nil? && !x.empty? }
+        if nameservers.size > 0
+          content += " --nameserver=#{nameservers.join(',')}"
+        end
+        content += "\n"
+        
+        resource_hash['file'] = {}
+        resource_hash['file'][cert_name] = {
+          'path' => "/opt/razor-server/installers/vmware_esxi/bootproto_#{serial_number}.inc.erb",
+          'content' => content,
+          'owner' => 'razor',
+          'group' => 'razor',
+          'mode' => '0644',
+        }
       end
     end
 
-    # Network settings (vswitch config) is done in cluster swim lane
+    # The rest of the asm::esxiscsiconfig is used to configure vswitches
+    # and portgroups on the esxi host and is done in the cluster swimlane
     resource_hash.delete('asm::esxiscsiconfig')
 
-    skip_deployment = nil
-    begin
-      node = (find_node(serial_number) || {})
-      if node['policy'] && node['policy']['name']
-        policy = get('policies', node['policy']['name'])
-        razor_params = resource_hash['asm::server'][cert_name]
-        if policy &&
-        (policy['repo'] || {})['name'] == razor_params['razor_image'] &&
-        (policy['installer'] || {})['name'] == razor_params['os_image_type']
-          skip_deployment = true
-        end
+    if is_dell_server && resource_hash['asm::idrac']
+      if resource_hash['asm::idrac'].size != 1
+        msg = "Only one iDrac configuration allowed per server; found #{resource_hash['asm::idrac'].size} for #{serial_number}"
+        logger.error(msg)
+        raise(Exception, msg)
       end
-    rescue Timeout::Error
-      skip_deployment = nil
+      
+      title = resource_hash['asm::idrac'].keys[0]
+      params = resource_hash['asm::idrac'][title]
+      deviceconf = ASM::Util.parse_device_config(cert_name)
+      inventory = ASM::Util.fetch_server_inventory(cert_name)
+      params['nfsipaddress'] = ASM::Util.get_preferred_ip(deviceconf[:host])
+      params['nfssharepath'] = '/var/nfs/idrac_config_xml'
+      params['servicetag'] = inventory['serviceTag']
+      params['model'] = inventory['model'].split(' ').last.downcase
+      params['before'] = []
+      if resource_hash['asm::server']
+        params['before'].push("Asm::Server[#{cert_name}]")
+      end
+      if resource_hash['file']
+        params['before'].push("File[#{cert_name}]")
+      end
+      if resource_hash['file']
+        params['']
+      end
+    end
+
+    # Check whether we should skip calling process_generic based on
+    # whether the server already seems to be installed with the correct
+    # O/S. Don't bother doing this if we are @debug since we do not 
+    # actually execute any puppet commands in that case any way.
+    skip_deployment = nil
+    unless @debug
+      begin
+        node = (find_node(serial_number) || {})
+        if node['policy'] && node['policy']['name']
+          policy = get('policies', node['policy']['name'])
+          razor_params = resource_hash['asm::server'][cert_name]
+          if policy &&
+              (policy['repo'] || {})['name'] == razor_params['razor_image'] &&
+              (policy['installer'] || {})['name'] == razor_params['os_image_type']
+            skip_deployment = true
+          end
+        end
+      rescue Timeout::Error
+        skip_deployment = nil
+      end
     end
 
     if skip_deployment
@@ -1150,7 +1227,8 @@ class ASM::ServiceDeployment
         (resource_hash['asm::server'] || []).each do |title, params|
           type = params['os_image_type']
           if type == 'vmware_esxi'
-            block_until_esxi_ready(title, params, timeout=3600)
+            raise(Exception, "Static management IP address was not specified for #{serial_number}") unless static_ip
+            block_until_esxi_ready(title, params, static_ip, timeout=3600)
           else
             await_agent_checkin(serial_number, timeout = 3600)
           end
@@ -1287,6 +1365,14 @@ class ASM::ServiceDeployment
         portgrouptype = 'VirtualMachine'
       end
       portgroup_names = networks.map { |network| network['name'] }
+      if index == 0
+        # Hypervisor network. Currently the static management ip is
+        # set in the esxi kickstart and has a name of "Management
+        # Network". We have to match that name in order to be able to
+        # change the settings for that portgroup since they are
+        # configured by name.
+        portgroup_names[0] = 'Management Network'
+      end
     end
 
     portgroup_names.each_with_index do |portgroup_name, index|
@@ -1320,123 +1406,10 @@ class ASM::ServiceDeployment
     ret
   end
 
-  # See if specified management network exists by running esxcli command:
-  #
-  # [root@dellasm asm-deployer]# esxcli -s 172.25.15.174 -u root -p linux network vswitch standard portgroup list
-  # Name                    Virtual Switch  Active Clients  VLAN ID
-  # ----------------------  --------------  --------------  -------
-  # Management Network      vSwitch0                     1        0
-  # vMotion                 vSwitch1                     1       23
-  def portgroup_exists?(vswitch, name, endpoint)
-    cmd = 'network vswitch standard portgroup list'.split
-    portgroups = ASM::Util.esxcli(cmd, endpoint, logger)
-    portgroups.select do |portgroup|
-      (portgroup['Virtual Switch'] == vswitch &&
-       portgroup['Name'] == name)
-    end.size > 0
-  end
-
-  def create_portgroup(vswitch, vmk, network, endpoint)
-    ASM::Util.esxcli([ 'network', 'vswitch', 'standard', 'portgroup', 'add',
-                     '-p', network['name'], '-v', vswitch ],
-                     endpoint, logger)
-    ASM::Util.esxcli([ 'network', 'vswitch', 'standard', 'portgroup', 'set',
-                     '-p', network['name'], '-v', network['vlanId'] ],
-                     endpoint, logger)
-    ASM::Util.esxcli([ 'network', 'ip', 'interface', 'add', 
-                       '-i', vmk, '-p', network['name'] ],
-                     endpoint, logger)
-    ASM::Util.esxcli([ 'network', 'ip', 'interface', 'ipv4', 'set',
-                       '-i', vmk, '-t', 'static', 
-                       '-I', network['staticNetworkConfiguration']['ip_address'],
-                       '-N', network['staticNetworkConfiguration']['subnet'], ],
-                     endpoint, logger)
-  end
-
-  def remove_portgroup(vswitch, vmk, name, endpoint)
-    ASM::Util.esxcli([ 'network', 'ip', 'interface', 'remove', '-i', vmk],
-                     endpoint, logger)
-    ASM::Util.esxcli([ 'network', 'vswitch', 'standard', 'portgroup', 'remove',
-                       '-p', name, '-v', vswitch],
-                     endpoint, logger)
-  end
-
-  def create_temp_network(vswitch, vmk, network, endpoint)
-    # Create a temporary management network
-    tmp_network = network.dup
-    tmp_guid = SecureRandom.uuid
-    tmp_network['name'] = tmp_guid
-    tmp_network['staticNetworkConfiguration'] = network['staticNetworkConfiguration'].dup
-    ips = ASM::Util.reserve_network_ips(network['id'], 1, tmp_guid)
-    unless ips && ips.size == 1
-      msg = "Failed to retrieve temporary management IP from #{network['name']}"
-      logger.error(msg)
-      raise(Exception, msg)
-    end
-    tmp_network['staticNetworkConfiguration']['ip_address'] = ips[0]
-    
-    # Create a temporary management network on vmk1
-    create_portgroup(vswitch, 'vmk1', tmp_network, endpoint)
-
-    tmp_endpoint = endpoint.dup
-    tmp_endpoint[:host] = tmp_network['staticNetworkConfiguration']['ip_address']
-    
-    unless portgroup_exists?(vswitch, tmp_network['name'], tmp_endpoint)
-      msg = "Failed to create temporary management network for ESXi host #{endpoint[:host]}"
-      logger.error(msg)
-      raise(Exception, msg)
-    end
-    
-    tmp_network
-  end
-
   def copy_endpoint(endpoint, ip)
     ret = endpoint.dup
     ret[:host] = ip
     ret
-  end
-
-  # ESXi hosts installed by razor by default have a Management Network on
-  # vSwitch0 and vmk0. This method replaces it with the user-defined static
-  # network in the following convoluted manner:
-  #
-  # - create a temporary management network on vmk1
-  # - set the default gateway to user-defined gateway
-  # - remove the original Management Network
-  # - create the user-defined Management Network on vmk0
-  # - remove the temporary management network
-  def set_mgmt_network(network, endpoint)
-    vswitch = 'vSwitch0'
-    if portgroup_exists?(vswitch, 'Management Network', endpoint)
-      # Create a temporary management network on vmk1
-      tmp_network = create_temp_network(vswitch, 'vmk1', network, endpoint)
-      tmp_endpoint = copy_endpoint(endpoint, tmp_network['staticNetworkConfiguration']['ip_address'])
-
-      # Set default gateway. Note tmp_endpoint and new_endpoint are from the
-      # same static network so they have the same gateway
-      gateway = network['staticNetworkConfiguration']['gateway']
-      ASM::Util.set_esxi_default_gateway(gateway, tmp_endpoint, logger)
-
-      # Remove original DHCP management network
-      remove_portgroup(vswitch, 'vmk0', 'Management Network', tmp_endpoint)
-
-      # Create new user-specified management network
-      create_portgroup(vswitch, 'vmk0', network, tmp_endpoint)
-      new_endpoint = copy_endpoint(endpoint, network['staticNetworkConfiguration']['ip_address'])
-      
-      # Verify access via new management network
-      unless portgroup_exists?(vswitch, network['name'], new_endpoint)
-        msg = "Failed to create management network for ESXi host #{endpoint[:host]}"
-        logger.error(msg)
-        raise(Exception, msg)
-      end
-
-      # Remove temporary management network
-      remove_portgroup(vswitch, 'vmk1', tmp_network['name'], new_endpoint)
-
-      # Release temporary IP back to pool (reserved by create_temp_network)
-      ASM::Util.release_network_ips(tmp_network['name'])
-    end
   end
 
   def process_cluster(component)
@@ -1483,19 +1456,7 @@ class ASM::ServiceDeployment
                 logger.error(msg)
                 raise(Exception, msg)
               end
-              endpoint = { 
-                :host => hostip, 
-                :user => ESXI_ADMIN_USER,
-                :password => server_params['admin_password']
-              }
-              if decrypt?
-                endpoint[:password] = ASM::Cipher.decrypt_string(endpoint[:password])
-              end
-              log("Setting static management IP #{static['ip_address']} on ESXi host with serial number #{serial_number}")
               hostip = static['ip_address']
-              unless @debug
-                set_mgmt_network(mgmt_network, endpoint)
-              end
             end
 
             raise(Exception, "Could not find host ip for #{server_cert}") unless hostip
@@ -1910,7 +1871,7 @@ class ASM::ServiceDeployment
 
   # converts from an ASM style server resource into
   # a method call to check if the esx host is up
-  def block_until_esxi_ready(title, params, timeout=3600)
+  def block_until_esxi_ready(title, params, static_ip, timeout=3600)
     serial_num = params['serial_number'] || raise(Exception, "resource #{title} is missing required server attribute admin_password")
     password = params['admin_password'] || raise(Exception, "resource #{title} is missing required server attribute admin_password")
     if decrypt?
@@ -1920,30 +1881,15 @@ class ASM::ServiceDeployment
     hostname = params['os_host_name'] || raise(Exception, "resource #{title} is missing required server attribute os_host_name")
     hostdisplayname = "#{serial_num} (#{hostname})"
     
-    # Need to wait a bit for host to power up and check in with razor,
-    # otherwise we may get a stale IP address out of the razor db
     log("Waiting until #{hostdisplayname} has checked in with Razor")
-    initial_sleep_seconds = 300
-    sleep(initial_sleep_seconds)
-    timeout -= initial_sleep_seconds
-
-    ip_address = find_host_ip_blocking(serial_num, timeout)
-    log("#{hostdisplayname} has checked in with Razor with ip address #{ip_address}")
+    dhcp_ip = find_host_ip_blocking(serial_num, timeout)
+    log("#{hostdisplayname} has checked in with Razor with ip address #{dhcp_ip}")
 
     log("Waiting until #{hostdisplayname} is ready")
     ASM::Util.block_and_retry_until_ready(timeout, CommandException, 150) do
-      # Double-check that the IP from DHCP has not changed across reboots
-      curr_ip = find_host_ip(serial_num)
-      if curr_ip.nil?
-        logger.warn("Failed to find current IP address for #{hostdisplayname}")
-      elsif ip_address != curr_ip
-        logger.info("#{hostdisplayname} IP address changed from #{ip_address} to #{curr_ip}")
-        ip_address = curr_ip
-      end
-
       esx_command =  "system uuid get"
-      cmd = "esxcli --server=#{ip_address} --username=root --password=#{password} #{esx_command}"
-      log("Checking for #{hostdisplayname} ESXi uuid on #{ip_address}")
+      cmd = "esxcli --server=#{static_ip} --username=root --password=#{password} #{esx_command}"
+      log("Checking for #{hostdisplayname} ESXi uuid on #{static_ip}")
       results = ASM::Util.run_command_simple(cmd)
       unless results['exit_status'] == 0 and results['stdout'] =~ /[1-9a-z-]+/
         raise(CommandException, results['stderr'])
