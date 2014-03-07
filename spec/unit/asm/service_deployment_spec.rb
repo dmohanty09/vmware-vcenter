@@ -34,6 +34,7 @@ describe ASM::ServiceDeployment do
   describe 'when data is valid' do
 
     before do
+      FileUtils.mkdir_p("#{@tmp_dir}/8000/resources")
       @r_file = "#{@tmp_dir}/8000/resources/cert.yaml"
       @o_file = "#{@tmp_dir}/8000/cert.out"
       @data = {'serviceTemplate' => {'components' => [
@@ -42,12 +43,11 @@ describe ASM::ServiceDeployment do
     end
 
     it 'should be able to process data for a single resource' do
-      ASM::Util.expects(:run_command).with(
-        "sudo -i puppet asm process_node --filename #{@r_file} --run_type apply --always-override cert", "#{@o_file}") do |cmd|
-        File.open(@o_file, 'w') do |fh|
-          fh.write('Results: For 0 resources. 0 from our run failed. 0 not from our run failed. 0 updated successfully.')
-        end
+      File.open( "#{@tmp_dir}/8000/cert.out", 'w') do |fh|
+        fh.write('Results: For 0 resources. 0 from our run failed. 0 not from our run failed. 0 updated successfully.')
       end
+      ASM::Util.expects(:run_command).with(
+        "sudo puppet asm process_node --debug --trace --filename #{@r_file} --run_type apply --statedir #{@tmp_dir}/8000/resources  --always-override cert", "#{@o_file}")
       @data['serviceTemplate']['components'][0]['type'] = 'TEST'
       @data['serviceTemplate']['components'][0]['resources'].push(
         {'id' => 'user', 'parameters' => [
