@@ -614,8 +614,6 @@ module ASM
         if line =~ /^\w, \[(.*?)\]\s+(\w+) -- : (.*)/
           log = {'msg' => $3, 'datetime' => $1, 'severity' => $2}
           logs.push(log) unless log['severity'] == 'DEBUG'
-        else
-          ASM.logger.warn("Unexpected log line: #{line}")
         end
       end
       logs
