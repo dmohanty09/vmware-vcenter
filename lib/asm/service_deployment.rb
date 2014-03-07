@@ -1296,17 +1296,16 @@ class ASM::ServiceDeployment
   end
 
   def build_portgroup(vswitch, path, hostip, portgroup_name, network,
-    portgrouptype, active_nics)
+    portgrouptype, active_nics, network_type)
     ret = {
       'name' => "#{hostip}:#{portgroup_name}",
       'ensure' => 'present',
       'portgrouptype' => portgrouptype,
       'overridefailoverorder' => 'disabled',
       'failback' => true,
-      'mtu' => 9000,
+      'mtu' => network_type == 'storage_network' ? 9000 : 1500,
       'overridefailoverorder' => 'enabled',
       'nicorderpolicy' => {
-      # TODO: for iSCSI they cannot both be active
       'activenic' => active_nics,
       'standbynic' => [],
       },
@@ -1317,15 +1316,16 @@ class ASM::ServiceDeployment
       'peakbandwidth' => 1000,
       'burstsize' => 1024,
       'vswitch' => vswitch,
+      'vmotion' => network_type == 'vmotion_network' ? 'enabled' : 'disabled',
       'path' => path,
       'host' => hostip,
       'vlanid' => network['vlanId'],
-      'transport' => 'Transport[vcenter]',
+      'transport' => 'Transport[vcenter]'
     }
   end
 
   def build_vswitch(server_cert, index, networks, hostip,
-    params, server_params)
+    params, server_params, network_type)
     vswitch_name = "vSwitch#{index}"
     vmnic1 = "vmnic#{index * 2}"
     vmnic2 = "vmnic#{(index * 2) + 1}"
@@ -1343,7 +1343,7 @@ class ASM::ServiceDeployment
       'standbynic' => [],
       },
       'path' => path,
-      'mtu' => 9000,
+      'mtu' => index == 3 ? 9000 : 1500,
       'checkbeacon' => true,
       'transport' => 'Transport[vcenter]',
     }
@@ -1352,7 +1352,7 @@ class ASM::ServiceDeployment
     next_require = "Esx_vswitch[#{hostip}:#{vswitch_name}]"
 
     portgroup_names = nil
-    if index == 3
+    if network_type == 'storage_network'
       # iSCSI network
       # NOTE: We have to make sure the ISCSI1 requires ISCSI0 so that
       # they are created in the "right" order -- the order that will
@@ -1361,7 +1361,7 @@ class ASM::ServiceDeployment
       portgroup_names = [ 'ISCSI0', 'ISCSI1' ]
       raise(Exception, "Exactly two networks expected for storage network") unless networks.size == 2
     else
-      if index == 2
+      if network_type == 'workload_network'
         portgrouptype = 'VirtualMachine'
       end
       portgroup_names = networks.map { |network| network['name'] }
@@ -1378,8 +1378,9 @@ class ASM::ServiceDeployment
     portgroup_names.each_with_index do |portgroup_name, index|
       network = networks[index]
       portgroup_title = "#{hostip}:#{portgroup_name}"
+      active_nics = network_type == 'storage_network' ? [nics[index]] : nics
       portgroup = build_portgroup(vswitch_name, path, hostip, portgroup_name,
-      network, portgrouptype, [ nics[index] ])
+      network, portgrouptype, active_nics, network_type)
 
       static = network['staticNetworkConfiguration']
 
@@ -1502,7 +1503,7 @@ class ASM::ServiceDeployment
                   end
                   vswitch_resources = build_vswitch(server_cert, index,
                   networks, hostip,
-                  params, server_params)
+                  params, server_params, type)
                   # Should be exactly one vswitch in response
                   vswitch_title = vswitch_resources['esx_vswitch'].keys[0]
                   vswitch = vswitch_resources['esx_vswitch'][vswitch_title]
