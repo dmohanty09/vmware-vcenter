@@ -1,5 +1,6 @@
 require 'asm'
 require 'asm/util'
+require 'asm/processor/server'
 require 'fileutils'
 require 'json'
 require 'logger'
@@ -81,7 +82,8 @@ class ASM::ServiceDeployment
 
     # Build guid_to_params map of network guid to list of matching parameters
     networks = [ 'hypervisor_network', 'vmotion_network',
-                 'workload_network', 'storage_network', 'pxe_network' ]
+                 'workload_network', 'storage_network', 'pxe_network',
+                 'private_cluster_network', 'live_migration_network' ]
     server_components.each do |component|
       resources = ASM::Util.asm_json_array(component['resources']) || []
       resources.each do |resource|
@@ -99,6 +101,7 @@ class ASM::ServiceDeployment
               if param['id'] == 'storage_network' && guids.size == 1
                 guids.push(guids[0])
               end
+
 
               guids.each do |guid|
                 guid_to_params[guid] ||= []
@@ -1098,6 +1101,9 @@ class ASM::ServiceDeployment
     inventory = nil
     resource_hash = ASM::Util.build_component_configuration(component, :decrypt => decrypt?)
 
+    os_image_type = nil
+    os_hostname   = nil
+
     if resource_hash['asm::server']
       if resource_hash['asm::server'].size != 1
         msg = "Only one O/S configuration allowed per server; found #{resource_hash['asm::server'].size} for #{serial_number}"
@@ -1107,6 +1113,8 @@ class ASM::ServiceDeployment
       
       title = resource_hash['asm::server'].keys[0]
       params = resource_hash['asm::server'][title]
+      os_image_type = params['os_image_type']
+      os_host_name  = params['os_host_name']
       massage_asm_server_params(serial_number, params)
     end
     
@@ -1162,10 +1170,6 @@ class ASM::ServiceDeployment
       end
     end
 
-    # The rest of the asm::esxiscsiconfig is used to configure vswitches
-    # and portgroups on the esxi host and is done in the cluster swimlane
-    resource_hash.delete('asm::esxiscsiconfig')
-
     if is_dell_server && resource_hash['asm::idrac']
       if resource_hash['asm::idrac'].size != 1
         msg = "Only one iDrac configuration allowed per server; found #{resource_hash['asm::idrac'].size} for #{serial_number}"
@@ -1192,6 +1196,17 @@ class ASM::ServiceDeployment
         params['']
       end
     end
+
+    if os_image_type == 'hyperv'
+      resource_hash = ASM::Processor::Server.munge_hyperv_server(
+                        title,
+                        resource_hash
+                      )
+    end
+
+    # The rest of the asm::esxiscsiconfig is used to configure vswitches
+    # and portgroups on the esxi host and is done in the cluster swimlane
+    resource_hash.delete('asm::esxiscsiconfig')
 
     # Check whether we should skip calling process_generic based on
     # whether the server already seems to be installed with the correct
@@ -1230,7 +1245,7 @@ class ASM::ServiceDeployment
             raise(Exception, "Static management IP address was not specified for #{serial_number}") unless static_ip
             block_until_esxi_ready(title, params, static_ip, timeout=3600)
           else
-            await_agent_checkin(serial_number, timeout = 3600)
+            await_agent_run_completion(os_host_name, timeout = 3600)
           end
         end
       end
@@ -1844,6 +1859,30 @@ class ASM::ServiceDeployment
     ipaddress
   end
 
+  def await_agent_run_completion(certname, timeout = 3600)
+    query_str = "[\"=\", \"certname\", \"#{certname}\"]"
+    report_url = "http://localhost:7080/v3/reports?query=#{URI.escape(query_str)}"
+    ASM::Util.block_and_retry_until_ready(timeout, CommandException, 60) do
+      #
+      # This assumes that reports=store,puppetdb has been configured in
+      # the master section of your puppet.conf file
+      #
+      resp  = JSON.parse(RestClient.get(report_url,
+                                        :content_type => :json,
+                                        :accept       => :json
+                                        ))
+      logger.debug("Resp from puppetdb query: #{resp.inspect}")
+      if resp.size == 0
+        raise(CommandException, "No reports ready, retrying")
+      end
+    end
+    log("Agent #{certname} has completed a puppet run")
+    #
+    #  TODO make sure that the puppet run actually passed
+    #
+    true
+  end
+
   def await_agent_checkin(serial_number, timeout = 3600)
     cert_name = nil
     cmd = "sudo puppet query nodes 'serialnumber=\"#{serial_number}\"'"
@@ -2035,6 +2074,8 @@ class ASM::ServiceDeployment
       server_vlan_info["#{server_cert}_taggedworkloadvlanlist"] = tagged_workloadvlaninfo
       server_vlan_info["#{server_cert}_untaggedvlanlist"] = untagged_vlaninfo
       logger.debug "Server vlan hash is #{server_vlan_info}"
+    else
+      log("Did not find expected class asm::iscsiconfig")
     end
     return server_vlan_info
   end

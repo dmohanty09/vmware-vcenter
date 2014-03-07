@@ -79,6 +79,7 @@ describe ASM::ServiceDeployment do
             fh.write('Results: For 0 resources. 0 from our run failed. 0 not from our run failed. 0 updated successfully.')
           end
         end
+        RestClient.stubs(:get).returns('["resp"]')
         @data['serviceTemplate']['components'][0]['type'] = 'SERVER'
         @data['serviceTemplate']['components'][0]['resources'].push(
           {'id' => 'asm::server', 'parameters' => [
@@ -109,6 +110,63 @@ describe ASM::ServiceDeployment do
         resource = { 'id' => 'asm::server', 'parameters' => parameters }
         @data['serviceTemplate']['components'][0]['resources'].push(resource)
         @sd.process(@data)
+      end
+
+      describe 'idrac with hyperV' do
+        before do
+          @hyper_data = {'serviceTemplate' => {'components' => [
+            {'id' => 'cert', 'resources' => []}
+          ]}}
+          node = {'policy' => { 'name' => 'policy_test' } }
+          @sd.stubs(:find_node).returns(node)
+          policy = { 
+            'repo' => {'name' => 'esxi-5.1'},
+            'installer' => {'name' => 'vmware_esxi'} 
+          }
+          @sd.stubs(:get).returns(policy)
+          ASM::Util.expects(:parse_device_config).with('bladeserver-serialno').returns({
+            :host => 'foo'
+          })
+          ASM::Util.expects(:get_preferred_ip).with('foo')
+          ASM::Util.expects(:fetch_server_inventory).with('bladeserver-serialno').returns({
+            'model' => '1 2'
+          })
+          @hyper_data['serviceTemplate']['components'][0]['id'] = 'bladeserver-serialno'
+          @hyper_data['serviceTemplate']['components'][0]['type'] = 'SERVER'
+          parameters = [ {'id' => 'title', 'value' => 'bladeserver-serialno'},
+                         {'id' => 'razor_image', 'value' => 'esxi-5.1'},
+                         {'id' => 'os_image_type', 'value' => 'hyperv'}, ]
+          resource1 = { 'id' => 'asm::server', 'parameters' => parameters }
+          @sd.debug = true
+          @hyper_data['serviceTemplate']['components'][0]['resources'].push(resource1)
+        end
+
+        it 'should fail if hyperv is deployed with SD' do
+          resource2 = { 'id' => 'asm::idrac', 'parameters' => [
+            {'id' => 'title', 'value' => 'bladeserver_serialno'},
+            {'id' => 'target_boot_device', 'value' => 'SD'},
+          ]}
+          @hyper_data['serviceTemplate']['components'][0]['resources'].push(resource2)
+          expect do
+            @sd.process_server(@hyper_data['serviceTemplate']['components'][0])
+          end.to raise_error(Exception, /HyperV does not work with target boot device SD/)
+        end
+
+        it 'should work if hyperv is deployed with HD' do
+          @sd.expects(:process_generic).with do |name, resources, apply, override|
+            !! resources['asm::idrac']['enable_npar'] == false
+          end
+          resource2 = { 'id' => 'asm::idrac', 'parameters' => [
+            {'id' => 'title', 'value' => 'bladeserver_serialno'},
+            {'id' => 'target_boot_device', 'value' => 'HD'},
+          ]}
+          @hyper_data['serviceTemplate']['components'][0]['resources'].push(resource2)
+          @sd.process_server(@hyper_data['serviceTemplate']['components'][0])
+        end
+
+        after do
+          @sd.debug = false
+        end
       end
       
     end
@@ -298,5 +356,15 @@ describe ASM::ServiceDeployment do
     it 'should return passed in file when no file exists' do
       @sd.iterate_resource_file(@counter_files.first).should == File.join(@tmp_dir, 'existing_file.yaml')
     end
+  end
+
+  describe 'when checking agent status' do
+    it 'should be able to detect when a node has a report' do
+      RestClient.stubs(:get).with(
+        'http://localhost:7080/v3/reports?query=[%22=%22,%20%22certname%22,%20%22host%22]',
+        {:content_type => :json, :accept => :json}
+      ).returns("[1]")
+      ASM::ServiceDeployment.new('123').await_agent_run_completion('host', 10).should be_true
+    end 
   end
 end
