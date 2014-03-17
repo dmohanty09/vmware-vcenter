@@ -49,7 +49,7 @@ class ASM::App < Sinatra::Base
   end
 
   get '/remove_agent_certs/:id' do |id|
-    certs = ASM::PuppetCertManager.clean_deployment_certs(id).to_json
+    certs = ASM::PuppetCertManager.clean_deployment_certs(id)
   end
 
 end
