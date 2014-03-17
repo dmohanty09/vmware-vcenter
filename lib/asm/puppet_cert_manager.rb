@@ -12,6 +12,7 @@ module ASM
         unless results['exit_status'] == 0
           raise(Exception, "Call to puppet cert clean failed: \nstdout:#{results['stdout']}\nstderr:#{results['stderr']}\n")
         end
+        certs_string
       end
     end
 
