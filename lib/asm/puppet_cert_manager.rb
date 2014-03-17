@@ -12,26 +12,21 @@ module ASM
         unless results['exit_status'] == 0
           raise(Exception, "Call to puppet cert clean failed: \nstdout:#{results['stdout']}\nstderr:#{results['stderr']}\n")
         end
-        certs_string
       end
     end
 
-     def self.get_deployment_certs(id)
+    def self.get_deployment_certs(id)
       agentless_image_types = ['vmware_esxi']
       cert_list = []
       data = JSON.parse(File.read(deployment_json_file(id)))
       comps = ((data['Deployment'] || {})['serviceTemplate'] || {})['components']
       raise(Exception, "deployment json for #{id} has no components") unless comps
       ASM::Util.asm_json_array(comps).each do |c|
-        if c['type'] == 'STORAGE' and c['name'].to_s.downcase.include? 'equallogic'
-          cert_list.push(c['id'])
-          next
-        end
-        if c['type'] == 'SERVER' or c['type'] == "VIRTUALMACHINE" 
+        if c['type'] == 'SERVER' or c['type'] == "VIRTUALMACHINE"
           (c['resources'] || {}).each do |r|
             if r['id'] == 'asm::server'
               os_host_name = nil
-              agent = true
+              agent        = true
               r['parameters'].each do |param|
                 if param['id'] == 'os_host_name'               
                   os_host_name = param['value'] if param['id'] == 'os_host_name'
@@ -49,7 +44,6 @@ module ASM
       end
       cert_list
     end
-
 
     def self.deployment_json_file(id)
       deployment_dir = File.join(ASM.base_dir, id.to_s, 'deployment.json')
