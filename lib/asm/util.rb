@@ -638,6 +638,12 @@ module ASM
       end
     end
 
+    def self.hostname_to_certname(hostname)
+      hostname.downcase!
+      hostname.gsub!(/[*'_\/!~`@#%^&()$]/,'')
+      hostname = 'agent-'+hostname
+    end
+
     def self.get_report(id, certname)
       report_dir = File.join(ASM.base_dir,
                              id.to_s,
