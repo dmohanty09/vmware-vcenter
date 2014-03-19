@@ -7,7 +7,7 @@ module ASM
       # and converts them into the expected asm::server
       # resource hash
       #
-      def self.munge_hyperv_server(title, old_resources)
+      def self.munge_hyperv_server(title, old_resources, target_ip, vol_names)
 
         resources = old_resources.dup 
 
@@ -57,6 +57,9 @@ module ASM
           puppet_classification_data['hyperv::config'][param] = server_params.delete(param)
         end
 
+        puppet_classification_data['hyperv::config']['iscsi_target_ip_address'] = target_ip
+        puppet_classification_data['hyperv::config']['iscsi_volumes'] = vol_names
+
         # now merge in network parameters
         net_params   = (resources['asm::esxiscsiconfig'] || {})[title]
 
@@ -72,7 +75,8 @@ module ASM
           if ['private_cluster_network', 'live_migration_network', 'hypervisor_network'].include?(name)
 
             first_net = net_array.first
-            param_prefix = name == 'hypervisor_network' ? 'converged_net' : name.sub(/_network$/, '')
+
+            param_prefix = name.sub(/_network$/, '')
 
             puppet_classification_data['hyperv::config'][ "#{param_prefix}_vlan_id"] = first_net['vlanId']
 
