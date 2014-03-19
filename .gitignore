@@ -2,5 +2,6 @@ tests/test_conf_dir/ssl
 tests/test_conf_dir/master_ssl
 .vendor
 Gemfile.lock
+*.gem
 *.log
 *~
