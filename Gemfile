@@ -2,7 +2,6 @@ source 'https://rubygems.org'
 
 gem 'crack'
 gem 'rest-client'
-gem 'securerandom'
 gem 'sequel'
 gem 'sinatra'
 

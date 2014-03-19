@@ -10,7 +10,6 @@ Gem::Specification.new do |s|
 
   s.add_dependency('crack')
   s.add_dependency('rest-client')
-  s.add_dependency('securerandom')
   s.add_dependency('sequel')
   s.add_dependency('sinatra')
 
