@@ -1245,7 +1245,7 @@ class ASM::ServiceDeployment
             raise(Exception, "Static management IP address was not specified for #{serial_number}") unless static_ip
             block_until_esxi_ready(title, params, static_ip, timeout=3600)
           else
-            await_agent_run_completion(os_host_name, timeout = 3600)
+            await_agent_run_completion(ASM::Util.hostname_to_certname(os_host_name), timeout = 3600)
           end
         end
       end
