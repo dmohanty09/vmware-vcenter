@@ -25,6 +25,8 @@ module ASM
         # now munge some params!
         server_params = ((resources['asm::server'] || {})[title] || {}).dup
 
+        server_params['cert_name'] = ASM::Util.hostname_to_certname(server_params['os_host_name'].split('.').first)
+
         # munge data that needs to go to unattended file
         installer_options = {}
 
