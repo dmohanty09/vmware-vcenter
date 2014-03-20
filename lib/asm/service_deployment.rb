@@ -1101,9 +1101,6 @@ class ASM::ServiceDeployment
     inventory = nil
     resource_hash = ASM::Util.build_component_configuration(component, :decrypt => decrypt?)
 
-    os_image_type = nil
-    os_hostname   = nil
-
     if resource_hash['asm::server']
       if resource_hash['asm::server'].size != 1
         msg = "Only one O/S configuration allowed per server; found #{resource_hash['asm::server'].size} for #{serial_number}"
@@ -1198,9 +1195,34 @@ class ASM::ServiceDeployment
     end
 
     if os_image_type == 'hyperv'
+      storage = ASM::Util.asm_json_array(
+                  find_related_components('STORAGE', component)
+                )
+      target_ips = []
+      vol_names  = []
+      storage.each do |c|
+        target_ips.push(ASM::Util.parse_device_config(c['id'])[:host])
+        ASM::Util.asm_json_array(c['resources']).each do |r|
+          if r['id'] == 'equallogic::create_vol_iqnorip_access'
+            r['parameters'].each do |param|
+              if param['id'] == 'title'
+                vol_names.push(param['value'])
+              end
+            end
+          end
+        end
+      end
+      unless target_ips.uniq.size == 1
+        raise(Exception, "Expected to find only one target ip, found #{target_ips.uniq.size}")
+      end
+      unless vol_names.size == 2
+        raise(Exception, "Expected to find two volumes, found #{vol_names.size}")
+      end
       resource_hash = ASM::Processor::Server.munge_hyperv_server(
                         title,
-                        resource_hash
+                        resource_hash,
+                        target_ips.first,
+                        vol_names
                       )
     end
 
