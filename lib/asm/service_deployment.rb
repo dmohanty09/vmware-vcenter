@@ -1101,9 +1101,6 @@ class ASM::ServiceDeployment
     inventory = nil
     resource_hash = ASM::Util.build_component_configuration(component, :decrypt => decrypt?)
 
-    os_image_type = nil
-    os_hostname   = nil
-
     if resource_hash['asm::server']
       if resource_hash['asm::server'].size != 1
         msg = "Only one O/S configuration allowed per server; found #{resource_hash['asm::server'].size} for #{serial_number}"
