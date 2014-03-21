@@ -590,20 +590,15 @@ module ASM
       resource_hash
     end
 
-    def self.sanitize(device_conf)
-      ret = device_conf.dup
-      sanitize_hash(ret)
-    end
-
-    def self.sanitize_hash(ret)
+    def self.sanitize(hash)
+      ret = hash.dup
       ret.each do |key, value|
         if value.is_a? (Hash)
-          sanitize_hash(value)
+          ret[key] = sanitize(value)
         elsif key.to_s.downcase.include? ('password')
           ret[key] = '******'
         end
       end
-      ret
     end
 
     def self.get_logs(id)

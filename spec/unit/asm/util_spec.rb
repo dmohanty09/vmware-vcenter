@@ -159,5 +159,19 @@ vMotion                 vSwitch1                     1       23
     ret[3]['Active Clients'].should == '1'
     ret[3]['VLAN ID'].should == '28'
   end
+
+  describe 'when hash is deep' do
+    it 'should sanitize password value' do
+      raw = {'foo' => {'password' => 'secret'}}
+      ASM::Util.sanitize(raw).should == {'foo' => {'password' => '******'}}
+    end
+
+    it 'should maintain password value' do
+      raw = {'foo' => {'password' => 'secret'}}
+      ASM::Util.sanitize(raw)
+      raw.should == {'foo' => {'password' => 'secret'}} 
+    end
+  end
+  
   
 end
