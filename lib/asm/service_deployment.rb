@@ -192,8 +192,10 @@ class ASM::ServiceDeployment
       @rack_server_switchhash = self.populate_rack_switch_hash()
       @blade_server_switchhash = self.populate_blade_switch_hash()
       @brocade_san_switchhash = self.populate_brocade_san_switch_hash()
-      process_san_switches()
+      # Changing the ordering of SAN and LAN configuration
+      # To ensure that the server boots with razor image
       process_tor_switches()
+      process_san_switches()
       process_components()
     rescue Exception => e
       File.open(File.join(deployment_dir, "exception.log"), 'w') do |fh|
@@ -2182,7 +2184,8 @@ class ASM::ServiceDeployment
     end
     if reboot_count > 0
       logger.debug "Some servers are rebooted, need to sleep for a minute"
-      sleep(60)
+      # Adding additional delay to take care of Brocade 5424 SAN IOM module
+      sleep(300)
     else
       logger.debug "No server is rebooted, no need to sleep"
     end
