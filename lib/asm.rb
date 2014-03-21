@@ -1,6 +1,7 @@
 require 'logger'
 require 'fileutils'
 require 'asm/service_deployment'
+require 'asm/deployment_teardown'
 
 module ASM
 
@@ -113,6 +114,10 @@ module ASM
       @counter ||= 0
       @counter = @counter +1
     end
+  end
+
+  def self.clean_deployment(id)
+    ASM::DeploymentTeardown.clean_deployment(id, logger)
   end
 
   private
