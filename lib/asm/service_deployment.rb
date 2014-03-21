@@ -81,7 +81,7 @@ class ASM::ServiceDeployment
     guid_to_params = {}
 
     # Build guid_to_params map of network guid to list of matching parameters
-    networks = [ 'hypervisor_network', 'vmotion_network',
+    networks = [ 'hypervisor_network', 'converged_network', 'vmotion_network',
                  'workload_network', 'storage_network', 'pxe_network',
                  'private_cluster_network', 'live_migration_network' ]
     server_components.each do |component|

@@ -74,11 +74,16 @@ module ASM
 
         (net_params || {}).each do |name, net_array|
 
-          if ['private_cluster_network', 'live_migration_network', 'hypervisor_network'].include?(name)
+          if ['private_cluster_network', 'live_migration_network', 'converged_network'].include?(name)
 
+File.open('/tmp/OUT.txt', 'a') do |fh|
+  fh.puts("#{name}:#{net_array.inspect}")
+end
             first_net = net_array.first
 
             param_prefix = name.sub(/_network$/, '')
+
+            param_prefix = "#{param_prefix}_net" if name == 'converged_network'
 
             puppet_classification_data['hyperv::config'][ "#{param_prefix}_vlan_id"] = first_net['vlanId']
 
