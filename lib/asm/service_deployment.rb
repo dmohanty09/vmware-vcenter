@@ -1200,10 +1200,10 @@ class ASM::ServiceDeployment
       storage = ASM::Util.asm_json_array(
                   find_related_components('STORAGE', component)
                 )
-      target_ips = []
-      vol_names  = []
+      target_devices = []
+      vol_names      = []
       storage.each do |c|
-        target_ips.push(ASM::Util.parse_device_config(c['id'])[:host])
+        target_devices.push(c['id'])
         ASM::Util.asm_json_array(c['resources']).each do |r|
           if r['id'] == 'equallogic::create_vol_iqnorip_access'
             r['parameters'].each do |param|
@@ -1214,16 +1214,17 @@ class ASM::ServiceDeployment
           end
         end
       end
-      unless target_ips.uniq.size == 1
-        raise(Exception, "Expected to find only one target ip, found #{target_ips.uniq.size}")
+      unless target_devices.uniq.size == 1
+        raise(Exception, "Expected to find only one target ip, found #{target_devices.uniq.size}")
       end
       unless vol_names.size == 2
         raise(Exception, "Expected to find two volumes, found #{vol_names.size}")
       end
+      target_ip = ASM::Util.find_equallogic_iscsi_ip(target_devices.first)
       resource_hash = ASM::Processor::Server.munge_hyperv_server(
                         title,
                         resource_hash,
-                        target_ips.first,
+                        target_ip,
                         vol_names
                       )
     end
