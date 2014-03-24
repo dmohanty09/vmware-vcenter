@@ -1,3 +1,4 @@
+require 'asm/util'
 module ASM
   module Processor
     module Server
