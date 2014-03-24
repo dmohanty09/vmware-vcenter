@@ -79,7 +79,26 @@ describe ASM::ServiceDeployment do
             fh.write('Results: For 0 resources. 0 from our run failed. 0 not from our run failed. 0 updated successfully.')
           end
         end
-        RestClient.stubs(:get).returns('["resp"]')
+
+        RestClient.stubs(:get)
+        .with(URI.escape("http://localhost:7080/v3/nodes?query=[\"and\", [\"=\", [\"node\", \"active\"], true], [\"=\", \"name\", \"agent-foo\"]]]"),
+        {:content_type => :json, :accept => :json})
+        .returns('[{"name":"agent-foo"}]')
+
+        RestClient.stubs(:get)
+        .with(URI.escape("http://localhost:7080/v3/reports?query=[\"=\", \"certname\", \"agent-foo\"]&order-by=[{\"field\": \"end-time\", \"order\": \"desc\"}]&limit=1"),
+        {:content_type => :json, :accept => :json})
+        .returns('[{"end-time":"1969-01-01 01:00:00 -0600", "hash":"fooreport"}]')
+
+        RestClient.stubs(:get)
+        .with(URI.escape("http://localhost:7080/v3/events?query=[\"=\", \"report\", \"fooreport\"]"),
+        {:content_type => :json, :accept => :json})
+        .returns('[{"name":"agent-foo"}]')
+
+        Time.stubs(:now).returns(Time.new("1969-01-01 00:00:00 -0600"))
+        #1388534400 is time at Jan 1, 2014.  Used in the rule_number function.
+        @sd.stubs(:rule_number).returns(1388534400)
+
         @data['serviceTemplate']['components'][0]['type'] = 'SERVER'
         @data['serviceTemplate']['components'][0]['resources'].push(
           {'id' => 'asm::server', 'parameters' => [
@@ -358,12 +377,38 @@ describe ASM::ServiceDeployment do
   end
 
   describe 'when checking agent status' do
-    it 'should be able to detect when a node has a report' do
-      RestClient.stubs(:get).with(
-        'http://localhost:7080/v3/reports?query=[%22=%22,%20%22certname%22,%20%22host%22]',
-        {:content_type => :json, :accept => :json}
-      ).returns("[1]")
+
+    before do
+      Time.stubs(:now).returns(Time.new("1969-01-01 00:00:00 -0600"))
+      
+      RestClient.stubs(:get)
+        .with(URI.escape("http://localhost:7080/v3/nodes?query=[\"and\", [\"=\", [\"node\", \"active\"], true], [\"=\", \"name\", \"host\"]]]"),
+        {:content_type => :json, :accept => :json})
+          .returns('[{"name":"host"}]')
+
+      RestClient.stubs(:get)
+        .with(URI.escape("http://localhost:7080/v3/reports?query=[\"=\", \"certname\", \"host\"]&order-by=[{\"field\": \"end-time\", \"order\": \"desc\"}]&limit=1"),
+        {:content_type => :json, :accept => :json})
+          .returns('[{"end-time":"1969-01-01 01:00:00 -0600", "hash":"fooreport"}]')
+    end
+
+    it 'should be able to detect when a node has checked in' do
+      RestClient.stubs(:get)
+        .with(URI.encode("http://localhost:7080/v3/events?query=[\"=\", \"report\", \"fooreport\"]"),
+        {:content_type => :json, :accept => :json})
+         .returns('[{"name":"host"}]')
+
       ASM::ServiceDeployment.new('123').await_agent_run_completion('host', 10).should be_true
+    end
+
+    it 'should raise PuppetEventException if a node has a recent failed event' do
+      RestClient.stubs(:get)
+        .with(URI.encode("http://localhost:7080/v3/events?query=[\"=\", \"report\", \"fooreport\"]"),
+        {:content_type => :json, :accept => :json})
+         .returns('[{"name":"host", "status":"failure"}]')
+
+
+      expect{ASM::ServiceDeployment.new('123').await_agent_run_completion('host', 10)}.to raise_exception(ASM::ServiceDeployment::PuppetEventException)
     end 
   end
 end
