@@ -1656,6 +1656,15 @@ class ASM::ServiceDeployment
                   end
                 end
               end
+              logger.debug('Configuring persistent storage for logs')
+              if params['datastore']
+                resource_hash['esx_syslog'] ||= {}
+                resource_hash['esx_syslog'][hostip] = {
+                  'log_dir_unique' => true,
+                  'transport' => 'Transport[vcenter]',
+                  'log_dir' => "[#{params['datastore']}] logs"
+                }
+              end
             end
           end
         end
