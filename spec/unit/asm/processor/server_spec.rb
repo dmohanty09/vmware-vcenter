@@ -34,7 +34,9 @@ describe ASM::Processor::Server do
       # make sure that all old values were munged out of server params
       server_data.size.should == 6
       server_data['os_image_type'].should == 'windows'
-      server_data['razor_image'].should    == 'win_hyper_v'
+      server_data['cert_name'].should == 'agent-foo'
+
+      server_data['razor_image'].should    == 'hyperV2'
       idrac_data['enable_npar'].should == false
       idrac_data['sysprofile'].should  == 'PerfOptimized'
       

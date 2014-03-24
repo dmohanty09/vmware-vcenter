@@ -113,8 +113,6 @@ end
 
         server_params.delete('domain_admin_password_confirm')
         server_params['os_image_type']  = 'windows'
-        server_params['razor_image']    = 'win_hyper_v'
-
 
         (resources['asm::server'] || {})[title] = server_params
         (resources['asm::idrac'] || {})[title]  = idrac_params
