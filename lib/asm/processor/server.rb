@@ -36,7 +36,6 @@ module ASM
           'keyboard',
           'product_key',
           'timezone',
-          'ntp',
         ].each do |param|
           installer_options[param] = server_params.delete(param)
         end
@@ -56,6 +55,7 @@ module ASM
 	  'fqdn',
 	  'domain_admin_user',
 	  'domain_admin_password',
+	  'ntp'
 	].each do |param|
           puppet_classification_data['hyperv::config'][param] = server_params.delete(param)
         end
