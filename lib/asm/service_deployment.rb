@@ -24,6 +24,8 @@ class ASM::ServiceDeployment
 
   class SyncException < Exception; end
 
+  class PuppetEventException < Exception; end
+
   def initialize(id)
     unless id
       raise(Exception, "Service deployment must have an id")
@@ -1895,27 +1897,51 @@ class ASM::ServiceDeployment
   end
 
   def await_agent_run_completion(certname, timeout = 3600)
-    query_str = "[\"=\", \"certname\", \"#{certname}\"]"
-    report_url = "http://localhost:7080/v3/reports?query=#{URI.escape(query_str)}"
-    ASM::Util.block_and_retry_until_ready(timeout, CommandException, 60) do
-      #
-      # This assumes that reports=store,puppetdb has been configured in
-      # the master section of your puppet.conf file
-      #
-      resp  = JSON.parse(RestClient.get(report_url,
-                                        :content_type => :json,
-                                        :accept       => :json
-                                        ))
-      logger.debug("Resp from puppetdb query: #{resp.inspect}")
+    #get the time that this method starts so can check for reports that happen afterwards
+    function_start = Time.now
+
+
+    ASM::Util.block_and_retry_until_ready(timeout, CommandException, 60) do\
+      # check if cert is in list of active nodes
+      log("Waiting for puppet agent to check in for #{certname}")
+      query_str = "[\"and\", [\"=\", [\"node\", \"active\"], true], [\"=\", \"name\", \"#{certname}\"]]]"
+      node_url = "http://localhost:7080/v3/nodes?query=#{URI.escape(query_str)}"
+      resp = JSON.parse(RestClient.get(node_url, :content_type=> :json, :accept => :json))
       if resp.size == 0
-        raise(CommandException, "No reports ready, retrying")
+        raise(CommandException, "Node #{certname} has not checked in.  Retrying...")
       end
+
+      #get the latest report
+      query_str = "[\"=\", \"certname\", \"#{certname}\"]"
+      order_str = "[{\"field\": \"end-time\", \"order\": \"desc\"}]"
+      report_url = "http://localhost:7080/v3/reports?query=#{URI.escape(query_str)}&order-by=#{URI.escape(order_str)}&limit=1"
+      resp = JSON.parse(RestClient.get(report_url, :content_type=> :json, :accept => :json))
+      if resp.size == 0
+        raise(CommandException, "No reports for #{certname}.  Retrying...")
+      end
+      
+      #Check if report ended after the await_agent_run_completion function started
+      #The agent shouldn't check in so fast that it checks in before this function has been called.  Takes many minutes to provision/insall OS
+      report_end_time = Time.parse(resp.first["end-time"])
+      if(report_end_time < function_start)
+        raise(CommandException, "Reports found, but not from recent runs.  Retrying...")
+      end
+
+
+      report_id = resp.first["hash"]
+
+      query_str = "[\"=\", \"report\", \"#{report_id}\"]"
+      events_url = "http://localhost:7080/v3/events?query=#{URI.escape(query_str)}"
+      resp = JSON.parse(RestClient.get(events_url, :content_type => :json, :accept => :json))
+      if resp.size == 0
+          @logger.warn("No events for the latest report for agent #{certname}. Deployment run will continue.")
+      elsif resp.any?{|event| event["status"] =="failure"}
+        raise(PuppetEventException, "A recent Puppet event for the node #{certname} has failed.  Node may not be correctly configured.")
+      end
+
+      log("Agent #{certname} has completed a puppet run")
+      true
     end
-    log("Agent #{certname} has completed a puppet run")
-    #
-    #  TODO make sure that the puppet run actually passed
-    #
-    true
   end
 
   def await_agent_checkin(serial_number, timeout = 3600)
