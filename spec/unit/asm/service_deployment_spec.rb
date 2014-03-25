@@ -112,11 +112,9 @@ describe ASM::ServiceDeployment do
         @sd.process(@data)
       end
 
-      describe 'idrac with hyperV' do
-        before do
-          @hyper_data = {'serviceTemplate' => {'components' => [
-            {'id' => 'cert', 'resources' => []}
-          ]}}
+      describe 'hyperV server' do
+        it 'should process hyperv servers' do
+          component =  {'id' => 'cert', 'resources' => []}
           node = {'policy' => { 'name' => 'policy_test' } }
           @sd.stubs(:find_node).returns(node)
           policy = { 
@@ -124,49 +122,50 @@ describe ASM::ServiceDeployment do
             'installer' => {'name' => 'vmware_esxi'} 
           }
           @sd.stubs(:get).returns(policy)
-          ASM::Util.expects(:parse_device_config).with('bladeserver-serialno').returns({
-            :host => 'foo'
-          })
-          ASM::Util.expects(:get_preferred_ip).with('foo')
-          ASM::Util.expects(:fetch_server_inventory).with('bladeserver-serialno').returns({
-            'model' => '1 2'
-          })
-          @hyper_data['serviceTemplate']['components'][0]['id'] = 'bladeserver-serialno'
-          @hyper_data['serviceTemplate']['components'][0]['type'] = 'SERVER'
+          @sd.expects(:rule_number).returns(1)
+          component['id'] = 'bladeserver-serialno'
+          component['type'] = 'SERVER'
           parameters = [ {'id' => 'title', 'value' => 'bladeserver-serialno'},
-                         {'id' => 'razor_image', 'value' => 'esxi-5.1'},
-                         {'id' => 'os_image_type', 'value' => 'hyperv'}, ]
+                         {'id' => 'os_image_type', 'value' => 'hyperv'},
+                       ]
           resource1 = { 'id' => 'asm::server', 'parameters' => parameters }
           @sd.debug = true
-          @hyper_data['serviceTemplate']['components'][0]['resources'].push(resource1)
-        end
+          component['resources'].push(resource1)
 
-        it 'should fail if hyperv is deployed with SD' do
-          resource2 = { 'id' => 'asm::idrac', 'parameters' => [
-            {'id' => 'title', 'value' => 'bladeserver_serialno'},
-            {'id' => 'target_boot_device', 'value' => 'SD'},
-          ]}
-          @hyper_data['serviceTemplate']['components'][0]['resources'].push(resource2)
-          expect do
-            @sd.process_server(@hyper_data['serviceTemplate']['components'][0])
-          end.to raise_error(Exception, /HyperV does not work with target boot device SD/)
-        end
-
-        it 'should work if hyperv is deployed with HD' do
-          @sd.expects(:process_generic).with do |name, resources, apply, override|
-            !! resources['asm::idrac']['enable_npar'] == false
-          end
-          resource2 = { 'id' => 'asm::idrac', 'parameters' => [
-            {'id' => 'title', 'value' => 'bladeserver_serialno'},
-            {'id' => 'target_boot_device', 'value' => 'HD'},
-          ]}
-          @hyper_data['serviceTemplate']['components'][0]['resources'].push(resource2)
-          @sd.process_server(@hyper_data['serviceTemplate']['components'][0])
-        end
-
-        after do
+          component['relatedComponents'] = { 'entry'  => {
+              'key'   => 'k1',
+              'value' => 'v1'
+          }}
+          @sd.set_components_by_type('STORAGE',
+          [
+            {'id' => 'k1',
+             'resources' => [{
+               'id' => 'equallogic::create_vol_iqnorip_access',
+               'parameters' => [
+                 {'id' => 'title', 'value' => 'vol1'}
+               ]
+             }]
+            },
+            {'id' => 'k1',
+             'resources' => [{
+               'id' => 'equallogic::create_vol_iqnorip_access',
+               'parameters' => [
+                 {'id' => 'title', 'value' => 'vol2'}
+               ]
+             }]
+            }
+          ])
+          ASM::Util.expects(:find_equallogic_iscsi_ip).with('k1').returns('127.0.1.1')
+          ASM::Processor::Server.expects(:munge_hyperv_server).with(
+            'bladeserver-serialno',
+             {'asm::server' => {'bladeserver-serialno' => {'os_image_type' => 'hyperv', 'rule_number' => 1, 'broker_type' => 'puppet', 'serial_number' => 'SERIALNO', 'policy_name' => 'policy--8000'}}},
+            '127.0.1.1',
+            ['vol1', 'vol2']
+          ).returns({})
+          @sd.process_server(component)
           @sd.debug = false
         end
+
       end
       
     end
