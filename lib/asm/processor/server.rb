@@ -77,9 +77,6 @@ module ASM
 
           if ['private_cluster_network', 'live_migration_network', 'converged_network'].include?(name)
 
-File.open('/tmp/OUT.txt', 'a') do |fh|
-  fh.puts("#{name}:#{net_array.inspect}")
-end
             first_net = net_array.first
 
             param_prefix = name.sub(/_network$/, '')
