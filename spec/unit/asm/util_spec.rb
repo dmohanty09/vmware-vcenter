@@ -172,6 +172,13 @@ vMotion                 vSwitch1                     1       23
       raw.should == {'foo' => {'password' => 'secret'}} 
     end
   end
-  
-  
+
+  describe 'when hosts already deployed' do
+    it 'should return hosts if they are already deployed' do
+      ASM.stubs(:block_hostlist).returns([])
+      ASM::DeploymentTeardown.stubs(:get_deployed_certs).returns(['server1','server2'])
+      ASM::Util.check_host_list_against_previous_deployments(['server1','server2', 'server3']).should == ['server1','server2']
+    end
+  end
+
 end

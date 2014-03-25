@@ -9,7 +9,7 @@ module ASM
   # is not thread safe
 
   def self.initialized?
-    if @deployment_mutex and @certname_mutex
+    if @deployment_mutex and @certname_mutex and @hostlist_mutex
       true
     else
       nil
@@ -23,6 +23,8 @@ module ASM
     else
       @certname_mutex   = Mutex.new
       @deployment_mutex = Mutex.new
+      @hostlist_mutex   = Mutex.new
+      @running_cert_list = []
     end
   end
 
@@ -108,6 +110,22 @@ module ASM
     end
   end
 
+  def self.block_hostlist(hostlist)
+    @hostlist_mutex.synchronize do
+      dup_certs = @running_cert_list & hostlist
+      if dup_certs.empty?
+        @running_cert_list |= hostlist
+      end
+      return dup_certs
+    end
+  end
+
+  def self.unblock_hostlist(hostlist)
+    @hostlist_mutex.synchronize do
+      @running_cert_list -= hostlist
+    end
+  end
+
   # thread safe counter
   def self.counter
     @deployment_mutex.synchronize do
@@ -125,6 +143,8 @@ module ASM
   def self.clear_mutex
     @certname_mutex = nil
     @deployment_mutex = nil
+    @hostlist_mutex   = nil
+    @running_cert_list = nil
   end
 
   def self.track_service_deployments_locked(id)
