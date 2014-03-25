@@ -1205,7 +1205,7 @@ class ASM::ServiceDeployment
       storage.each do |c|
         target_devices.push(c['id'])
         ASM::Util.asm_json_array(c['resources']).each do |r|
-          if r['id'] == 'equallogic::create_vol_iqnorip_access'
+          if r['id'] == 'equallogic::create_vol_chap_user_access'
             r['parameters'].each do |param|
               if param['id'] == 'title'
                 vol_names.push(param['value'])
