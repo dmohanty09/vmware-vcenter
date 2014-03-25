@@ -1980,6 +1980,15 @@ class ASM::ServiceDeployment
     log("ESXi server #{hostname} is available")
   end
 
+  #
+  # This method was added so that we can easily mock out
+  # the related components for testing
+  #
+  def set_components_by_type(type, components)
+    @components_by_type ||= {}
+    @components_by_type[type] = components
+  end
+
   private
 
   def deployment_dir
