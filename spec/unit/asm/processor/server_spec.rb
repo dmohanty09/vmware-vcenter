@@ -47,6 +47,7 @@ describe ASM::Processor::Server do
         'fqdn'                    => 'aidev.com',
         'domain_admin_user'       => 'admin',
         'domain_admin_password'   => 'pass',
+        'ntp'                     => 'pool.ntp.org',
         'iscsi_target_ip_address' => '127.0.0.1',
         'iscsi_volumes'           => [],
       }
@@ -55,7 +56,6 @@ describe ASM::Processor::Server do
         'keyboard'    => 'en-us',
         'product_key' => 'PK',
         'timezone'    => 'Central',
-        'ntp'         => 'pool.ntp.org',
         'os_type'     => 'foo'
       }
     end
