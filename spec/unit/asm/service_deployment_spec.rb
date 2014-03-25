@@ -140,7 +140,7 @@ describe ASM::ServiceDeployment do
           [
             {'id' => 'k1',
              'resources' => [{
-               'id' => 'equallogic::create_vol_iqnorip_access',
+               'id' => 'equallogic::create_vol_chap_user_access',
                'parameters' => [
                  {'id' => 'title', 'value' => 'vol1'}
                ]
@@ -148,7 +148,7 @@ describe ASM::ServiceDeployment do
             },
             {'id' => 'k1',
              'resources' => [{
-               'id' => 'equallogic::create_vol_iqnorip_access',
+               'id' => 'equallogic::create_vol_chap_user_access',
                'parameters' => [
                  {'id' => 'title', 'value' => 'vol2'}
                ]
