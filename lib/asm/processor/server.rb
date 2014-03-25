@@ -69,7 +69,6 @@ module ASM
         net_mapper = {
           'ip_address' => 'ip_address',
           'subnet'     => 'netmask',
-          'primaryDns' => 'dns_server',
           'gateway'    => 'gateway'
         }
 
@@ -91,6 +90,10 @@ end
             net_mapper.each do |attr, puppet_param|
               param = "#{param_prefix}_#{puppet_param}"
               puppet_classification_data['hyperv::config'][param] = first_net['staticNetworkConfiguration'][attr]
+            end
+
+            if name == 'converged_network'
+              puppet_classification_data['hyperv::config']['converged_net_dns_server'] = first_net['staticNetworkConfiguration']['primaryDns']
             end
 
           end
