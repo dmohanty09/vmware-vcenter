@@ -601,6 +601,15 @@ module ASM
       end
     end
 
+    def self.check_host_list_against_previous_deployments(hostlist)
+      dup_certs =  ASM.block_hostlist(hostlist)
+      if dup_certs.empty?
+        puppet_certs = ASM::DeploymentTeardown.get_deployed_certs
+        dup_certs = hostlist & puppet_certs
+      end
+      dup_certs
+    end
+
     def self.get_logs(id)
       logs = []
       log_file = File.join(ASM.base_dir, id.to_s, 'deployment.log')

@@ -183,6 +183,21 @@ class ASM::ServiceDeployment
         file.write(JSON.pretty_generate({ "Deployment" => service_deployment }))
       end
 
+      hostlist = ASM::DeploymentTeardown.get_deployment_certs(service_deployment)
+      dup_servers = hostlist.select{|element| hostlist.count(element) > 1 }
+      unless dup_servers.empty?
+        msg = "Duplicate host names found in deployment #{dup_servers.inspect}"
+        logger.error(msg)
+        raise(Exception, msg)
+      end
+
+      ds = ASM::Util.check_host_list_against_previous_deployments(hostlist)
+      unless ds.empty?
+        nsg = "The listed hosts are already in use #{ds.inspect}"
+        logger.error(msg)
+        raise(Exception, msg)
+      end
+
       # Will need to access other component types during deployment
       # of a given component type in the future, e.g. VSwitch configuration
       # information is contained in the server component type data

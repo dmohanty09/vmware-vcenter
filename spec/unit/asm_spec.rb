@@ -62,6 +62,29 @@ describe ASM do
       ASM.init
     end.to raise_error(Exception, 'Can not initialize ASM class twice')
   end
+
+  describe 'when hostlist is initialized/updated with hosts' do
+
+    it 'should return [] list' do
+      ASM.block_hostlist(['server1','server2']).should == []
+    end
+
+    it 'should return list of duplicate hosts' do
+      ASM.block_hostlist(['host1','host2' ])
+      ASM.block_hostlist(['host1','host2']).should == ['host1','host2']
+    end
+
+    it 'should return [] if hosts are blocked, unblocked and blocked again' do
+      ASM.block_hostlist(['host1','host2', 'host3' ])
+      ASM.unblock_hostlist(['host1','host2'])
+      ASM.block_hostlist(['host1','host2']).should == []
+    end
+    it 'should return list of hosts if hosts are if they already exist in block list' do
+      ASM.block_hostlist(['host1','host2', 'host3' ])
+      ASM.unblock_hostlist(['host1','host2'])
+      ASM.block_hostlist(['host3']).should == ['host3']
+    end
+  end
   
   after do
     # Use send to bypass private scope
