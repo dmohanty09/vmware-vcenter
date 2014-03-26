@@ -195,7 +195,7 @@ class ASM::ServiceDeployment
 
       ds = ASM::Util.check_host_list_against_previous_deployments(hostlist)
       unless ds.empty?
-        nsg = "The listed hosts are already in use #{ds.inspect}"
+        msg = "The listed hosts are already in use #{ds.inspect}"
         logger.error(msg)
         raise(Exception, msg)
       end
