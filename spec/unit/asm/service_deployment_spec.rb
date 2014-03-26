@@ -152,12 +152,13 @@ describe ASM::ServiceDeployment do
           component['resources'].push(resource1)
 
           component['relatedComponents'] = { 'entry'  => {
-              'key'   => 'k1',
+              'key'   => 's1',
               'value' => 'v1'
           }}
           @sd.set_components_by_type('STORAGE',
           [
             {'id' => 'k1',
+             'componentID'=>'s1',
              'resources' => [{
                'id' => 'equallogic::create_vol_chap_user_access',
                'parameters' => [
@@ -166,6 +167,7 @@ describe ASM::ServiceDeployment do
              }]
             },
             {'id' => 'k1',
+             'componentID'=>'s1',
              'resources' => [{
                'id' => 'equallogic::create_vol_chap_user_access',
                'parameters' => [
@@ -410,5 +412,20 @@ describe ASM::ServiceDeployment do
 
       expect{ASM::ServiceDeployment.new('123').await_agent_run_completion('host', 10)}.to raise_exception(ASM::ServiceDeployment::PuppetEventException)
     end 
+  end
+  describe 'when checking find related components' do
+    before do
+      data = JSON.parse(File.read('/opt/asm-deployer/spec/fixtures/find_related_components.json'))['Deployment']
+      comp_by_type = @sd.components_by_type(data)
+      @sd.set_components_by_type('CLUSTER',  comp_by_type['CLUSTER'] )
+      @sd.set_components_by_type('VIRTUALMACHINE',  comp_by_type['VIRTUALMACHINE'] )
+      @components = data['serviceTemplate']['components']
+    end
+    it 'should return related component based on componentID' do
+       @sd.find_related_components('CLUSTER', @components[0]).should ==  [{"id"=>"ID1", "componentID"=>"COMPID1", "type"=>"CLUSTER", "relatedComponents"=>{"entry"=>{"key"=>"COMPID1", "value"=>"Virtual Machine 1"}}, "resources"=>{"id"=>"asm::cluster", "parameters"=>[{"id"=>"datacenter"}]}}]
+    end
+    it 'should fail to related component based on ID' do
+       @sd.find_related_components('VIRTUALMACHINE', @components[0]).should == []
+    end
   end
 end
