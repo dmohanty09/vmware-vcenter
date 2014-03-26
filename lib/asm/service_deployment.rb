@@ -572,11 +572,6 @@ class ASM::ServiceDeployment
           server_conf = ASM::Util.build_component_configuration(comp, :decrypt => decrypt?)
           (server_conf['asm::server'] || []).each do |server_cert, server_params|
             net_params = (server_conf['asm::esxiscsiconfig'] || {})[server_cert]
-            net_mapper = {
-              'ip_address' => 'ip_address',
-              'subnet'     => 'netmask',
-              'gateway'    => 'gateway'
-            }
             (net_params || {}).each do |name, net_array|
               if name == 'storage_network'
                 unless net_array.size == 2
