@@ -1,0 +1,62 @@
+{
+  "Deployment": {
+    "deploymentName": "devmultif0oz",
+    "serviceTemplate": {
+      "id": "unit-test",
+      "createdDate": "2014-03-24T15:54:50.084Z",
+      "components": [
+        {
+          "id": "ID1",
+          "componentID": "COMPID1",
+          "type": "CLUSTER",
+          "relatedComponents": {
+            "entry": {
+              "key": "COMPID1",
+              "value": "Virtual Machine 1"
+            }
+          },
+          "resources": {
+            "id": "asm::cluster",
+            "parameters": [
+              {
+                "id": "datacenter"
+              }
+            ]
+          }
+        },
+        {
+          "id": "ID2",
+          "componentID": "COMPID2",
+          "type": "VIRTUALMACHINE",
+          "relatedComponents": {
+            "entry": {
+              "key": "ID2",
+              "value": "Cluster 1"
+            }
+          },
+          "resources": [
+            {
+              "id": "asm::vm",
+              "displayName": "Virtual Machine Settings",
+              "parameters": [
+                {
+                  "id": "cpu_count",
+                  "value": 1
+                }
+              ]
+            },
+            {
+              "id": "asm::server",
+              "parameters": [
+                {
+                  "id": "os_host_name",
+                  "value": "devuncoolvmz"
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    }
+  }
+}
