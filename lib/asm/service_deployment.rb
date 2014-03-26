@@ -595,7 +595,6 @@ class ASM::ServiceDeployment
     iscsi_ip_addresses.compact.flatten.uniq
   end
 
-
   def get_specific_dell_server_wwpns(comp)
     wwpninfo=nil
     cert_name   = comp['id']
@@ -635,7 +634,7 @@ class ASM::ServiceDeployment
     # Process EqualLogic manifest file in case auth_type is 'iqnip'
     (resource_hash['equallogic::create_vol_chap_user_access'] || {}).each do |title, params|
       if ( resource_hash['equallogic::create_vol_chap_user_access'][title]['auth_type'] == "iqnip")
-        iscsi_ipaddresses ||= ( get_dell_server_iscsi_ipaddresses() || [])
+        iscsi_ipaddresses ||= (get_dell_server_iscsi_ipaddresses() || [])
         logger.debug "iSCSI IP Address reserved for the deployment: #{iscsi_ipaddresses}"
         server_template_iqnorip = resource_hash['equallogic::create_vol_chap_user_access'][title]['iqnorip']
         logger.debug "server_template_iqnorip : #{server_template_iqnorip}"
@@ -650,7 +649,6 @@ class ASM::ServiceDeployment
         resource_hash['equallogic::create_vol_chap_user_access'][title]['iqnorip'] = new_iscsi_iporiqn
       end
     end
-
     
     process_generic(
       component['id'],
@@ -1345,7 +1343,10 @@ class ASM::ServiceDeployment
             raise(Exception, "Static management IP address was not specified for #{serial_number}") unless static_ip
             block_until_esxi_ready(title, params, static_ip, timeout=3600)
           else
-            await_agent_run_completion(ASM::Util.hostname_to_certname(os_host_name), timeout = 3600)
+            deployment_status = await_agent_run_completion(ASM::Util.hostname_to_certname(os_host_name), timeout = 3600)
+            if (deployment_status and os_image_type == 'hyperv')
+               hyperv_post_installation(ASM::Util.hostname_to_certname(os_host_name), cert_name, timeout=3600)
+            end
           end
         end
       end
@@ -2015,6 +2016,41 @@ class ASM::ServiceDeployment
       log("Agent #{certname} has completed a puppet run")
       true
     end
+  end
+  
+  def hyperv_post_installation(os_host_name,certname,timeout = 3600)
+    # Reboot the server
+    serverhash = get_server_inventory(certname)
+    endpoint = {}
+    serverhash.each do |nodename,sinfo|
+      endpoint = {
+        :host => sinfo['idrac_ip'],
+        :user => sinfo['idrac_username'],
+        :password => sinfo['idrac_password']
+      }
+    end
+    ASM::WsMan.reboot(endpoint, logger)
+    log("Agent #{certname} has been rebooted to initiate post-installation")
+    log("Agent #{certname} - waiting for 10 minutes before validating the post-installation status")
+    sleep(600)
+    # Wait for the server to go to power-off state
+    ASM::Util.block_and_retry_until_ready(timeout, CommandException, 60) do\
+      powerstate = ASM::WsMan.get_power_state(endpoint, logger)
+      if powerstate.to_i != 13
+        raise(CommandException, "Post installation for Server #{certname} still in progress .  Retrying...")
+        log("Post installation for Server #{certname} still in progress .  Retrying...")
+      end
+    end
+    log("Post installation for Server #{certname} is completed")
+
+    # Power-on the server
+    log("Rebooting server #{certname}")
+    ASM::WsMan.reboot(endpoint, logger)
+
+    # Wait puppet agent to respond
+    log("Agent #{certname} Waiting for puppet agent to respond after reboot")
+    await_agent_run_completion(os_host_name,timeout = 600)
+    true
   end
 
   def await_agent_checkin(serial_number, timeout = 3600)
