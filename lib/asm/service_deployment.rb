@@ -1672,7 +1672,7 @@ class ASM::ServiceDeployment
                   
                   storage_hash['equallogic::create_vol_chap_user_access'].each do |storage_title, storage_params|
                     resource_hash['asm::datastore'] ||= {}
-                    resource_hash['asm::datastore']["#{hostip}:#{storage_title}"] = {
+                    resource_hash['asm::datastore']["#{hostip}:datastore"] ||= {
                       'data_center' => params['datacenter'],
                       'datastore' => params['datastore'],
                       'cluster' => params['cluster'],
@@ -1689,6 +1689,14 @@ class ASM::ServiceDeployment
                       'vmknics1' => "vmk#{storage_network_vmk_index + 1}",
                       'decrypt' => decrypt?,
                       'require' => storage_network_require,
+                    }
+                    resource_hash['esx_datastore'] ||= {}
+                    resource_hash['esx_datastore']["#{hostip}:#{storage_title}"] ={
+                      'ensure' => 'present',
+                      'type' => 'vmfs',
+                      'lun' => '0',
+                      'require' => "Asm::Datastore[#{hostip}:datastore]",
+                      'transport' => 'Transport[vcenter]'
                     }
                   end
                 end
