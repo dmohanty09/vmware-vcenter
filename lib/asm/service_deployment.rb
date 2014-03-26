@@ -557,6 +557,44 @@ class ASM::ServiceDeployment
       end.compact.flatten.uniq
     end
   end
+  
+  # Get the iSCSI IP Address reserved for each of the server
+  # and return the list of IP Addresses
+  def get_dell_server_iscsi_ipaddresses()
+    iscsi_ip_addresses = []
+    if components = @components_by_type['SERVER']
+      components.collect do |comp|
+        cert_name   = comp['id']
+        dell_service_tag = cert_name_to_service_tag(cert_name)
+        logger.debug "Getting iSCSI IP Address for server #{dell_service_tag}"
+        # service_tag is only set for Dell servers
+        if dell_service_tag
+          server_conf = ASM::Util.build_component_configuration(comp, :decrypt => decrypt?)
+          (server_conf['asm::server'] || []).each do |server_cert, server_params|
+            net_params = (server_conf['asm::esxiscsiconfig'] || {})[server_cert]
+            net_mapper = {
+              'ip_address' => 'ip_address',
+              'subnet'     => 'netmask',
+              'gateway'    => 'gateway'
+            }
+            (net_params || {}).each do |name, net_array|
+              if name == 'storage_network'
+                unless net_array.size == 2
+                  raise("Expected 2 iscsi interfaces for hyperv, only found #{net_array.size}")
+                end
+                first_net = net_array.first
+                iscsi_ip_addresses.push(first_net['staticNetworkConfiguration']['ip_address'])
+                iscsi_ip_addresses.push(net_array.last['staticNetworkConfiguration']['ip_address'])
+              end
+            end
+
+          end
+        end
+      end
+    end
+    iscsi_ip_addresses.compact.flatten.uniq
+  end
+
 
   def get_specific_dell_server_wwpns(comp)
     wwpninfo=nil
@@ -594,6 +632,26 @@ class ASM::ServiceDeployment
       resource_hash['compellent::createvol'][title].delete('configuresan')
     end
 
+    # Process EqualLogic manifest file in case auth_type is 'iqnip'
+    (resource_hash['equallogic::create_vol_chap_user_access'] || {}).each do |title, params|
+      if ( resource_hash['equallogic::create_vol_chap_user_access'][title]['auth_type'] == "iqnip")
+        iscsi_ipaddresses ||= ( get_dell_server_iscsi_ipaddresses() || [])
+        logger.debug "iSCSI IP Address reserved for the deployment: #{iscsi_ipaddresses}"
+        server_template_iqnorip = resource_hash['equallogic::create_vol_chap_user_access'][title]['iqnorip']
+        logger.debug "server_template_iqnorip : #{server_template_iqnorip}"
+        if !server_template_iqnorip.nil?
+          logger.debug "Value of IP or IQN provided"
+          new_iscsi_iporiqn = server_template_iqnorip.split(',') + iscsi_ipaddresses
+        else
+          logger.debug "Value of IP or IQN not provided in service template"
+          new_iscsi_iporiqn = iscsi_ipaddresses
+        end
+        new_iscsi_iporiqn = new_iscsi_iporiqn.compact.map {|s| s.gsub(/ /, '')}
+        resource_hash['equallogic::create_vol_chap_user_access'][title]['iqnorip'] = new_iscsi_iporiqn
+      end
+    end
+
+    
     process_generic(
       component['id'],
       resource_hash,
