@@ -152,7 +152,7 @@ describe ASM::ServiceDeployment do
           component['resources'].push(resource1)
 
           component['relatedComponents'] = { 'entry'  => {
-              'key'   => 's1',
+              'key'   => 'k1',
               'value' => 'v1'
           }}
           @sd.set_components_by_type('STORAGE',
@@ -422,10 +422,10 @@ describe ASM::ServiceDeployment do
       @components = data['serviceTemplate']['components']
     end
     it 'should return related component based on componentID' do
-       @sd.find_related_components('CLUSTER', @components[0]).should ==  [{"id"=>"ID1", "componentID"=>"COMPID1", "type"=>"CLUSTER", "relatedComponents"=>{"entry"=>{"key"=>"COMPID1", "value"=>"Virtual Machine 1"}}, "resources"=>{"id"=>"asm::cluster", "parameters"=>[{"id"=>"datacenter"}]}}]
+       @sd.find_related_components('CLUSTER', @components[0]).should ==  [{"id"=>"ID1", "componentID"=>"COMPID1", "type"=>"CLUSTER", "relatedComponents"=>{"entry"=>{"key"=>"ID1", "value"=>"Virtual Machine 1"}}, "resources"=>{"id"=>"asm::cluster", "parameters"=>[{"id"=>"datacenter"}]}}]
     end
     it 'should fail to related component based on ID' do
-       @sd.find_related_components('VIRTUALMACHINE', @components[0]).should == []
+       @sd.find_related_components('VIRTUALMACHINE', @components[1]).should == []
     end
   end
 end
