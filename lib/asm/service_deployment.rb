@@ -195,7 +195,7 @@ class ASM::ServiceDeployment
 
       ds = ASM::Util.check_host_list_against_previous_deployments(hostlist)
       unless ds.empty?
-        nsg = "The listed hosts are already in use #{ds.inspect}"
+        msg = "The listed hosts are already in use #{ds.inspect}"
         logger.error(msg)
         raise(Exception, msg)
       end
@@ -2180,28 +2180,23 @@ class ASM::ServiceDeployment
   end
 
   def get_server_networks(server_component,server_cert)
-    hypervisormanagementvlanid = ""
-    vmotionvlanid = ""
-    iscsivlanid = ""
-    pxevlanid = ""
-    workloadvlanid = ""
-    server_vlan_info = {}
-    tagged_vlaninfo = Array.new
-    tagged_workloadvlaninfo = Array.new
-    untagged_vlaninfo = Array.new
+    server_vlan_info        = {}
+    tagged_vlaninfo         = []
+    tagged_workloadvlaninfo = []
+    untagged_vlaninfo       = []
     server_conf = ASM::Util.build_component_configuration(server_component, :decrypt => decrypt?)
     network_params = (server_conf['asm::esxiscsiconfig'] || {})[server_cert]
     if network_params
-      if network_params['hypervisor_network']
-        networks = network_params['hypervisor_network']
-        raise(Exception, 'Exactly one hypervisor network expected') unless networks.size == 1
-        hypervisormanagementvlanid = networks[0]['vlanId']
-      end
-
-      if network_params['vmotion_network']
-        networks = network_params['vmotion_network']
-        raise(Exception, 'Exactly one vmotion network expected') unless networks.size == 1
-        vmotionvlanid = networks[0]['vlanId']
+      [ 'hypervisor_network', 'converged_network', 'vmotion_network',
+        'private_cluster_network', 'live_migration_network'
+      ].each do |net|
+        if  network_params[net]
+          networks = network_params[net]
+          raise(Exception, "Exactly one #{net} expected") unless networks.size == 1
+          vlan = networks[0]['vlanId'].to_s
+          logger.debug "#{net} :: #{vlan}"
+          tagged_vlaninfo.push(vlan)
+        end
       end
 
       if network_params['storage_network']
@@ -2209,6 +2204,7 @@ class ASM::ServiceDeployment
         raise(Exception, 'Exactly two storage networks expected') unless networks.size == 2
         iscsivlanid = networks[0]['vlanId']
         raise(Exception, 'iSCSI vlan ids must be the same') unless iscsivlanid == networks[1]['vlanId']
+        tagged_vlaninfo.push(iscsivlanid.to_s)
       end
 
       if network_params['workload_network']
@@ -2217,28 +2213,11 @@ class ASM::ServiceDeployment
           tagged_workloadvlaninfo.push(network['vlanId'])
         end
       end
-
+ 
       if network_params['pxe_network']
         networks = network_params['pxe_network']
         raise(Exception, "Exactly one pxe network expected, found #{network_params['pxe_network'].inspect}") unless networks.size == 1
         pxevlanid = networks[0]['vlanId']
-      end
-
-      logger.debug "hypervisormanagementvlanid :: #{hypervisormanagementvlanid} vmotionvlanid :: #{vmotionvlanid} iscsivlanid :: #{iscsivlanid} workloadvlanids :: #{tagged_workloadvlaninfo} pxevlanid :: #{pxevlanid}"
-
-      if hypervisormanagementvlanid != ""
-        tagged_vlaninfo.push(hypervisormanagementvlanid.to_s)
-      end
-
-      if vmotionvlanid != ""
-        tagged_vlaninfo.push(vmotionvlanid.to_s)
-      end
-
-      if iscsivlanid != ""
-        tagged_vlaninfo.push(iscsivlanid.to_s)
-      end
-
-      if pxevlanid != ""
         untagged_vlaninfo.push(pxevlanid.to_s)
       end
 
