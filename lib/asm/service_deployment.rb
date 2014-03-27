@@ -1118,6 +1118,7 @@ class ASM::ServiceDeployment
     server_vlan_info = {}
     deviceconf = nil
     inventory = nil
+    os_host_name = nil
     resource_hash = ASM::Util.build_component_configuration(component, :decrypt => decrypt?)
 
     if resource_hash['asm::server']
@@ -1164,7 +1165,7 @@ class ASM::ServiceDeployment
         end
 
         static_ip = static['ip_address']
-        content = "network --bootproto=static --device-vmnic0 --ip=#{static_ip}  --netmask=#{static['subnet']} --gateway=#{static['gateway']}"
+        content = "network --bootproto=static --device=vmnic0 --ip=#{static_ip}  --netmask=#{static['subnet']} --gateway=#{static['gateway']}"
         # NOTE: vlanId is a FixNum
         if mgmt_network['vlanId']
           content += " --vlanid=#{mgmt_network['vlanId']}"
@@ -1172,6 +1173,11 @@ class ASM::ServiceDeployment
         nameservers = [ static['dns1'], static['dns2'] ].select { |x| !x.nil? && !x.empty? }
         if nameservers.size > 0
           content += " --nameserver=#{nameservers.join(',')}"
+        else
+          content += ' --nodns'
+        end
+        if os_host_name
+          content += " --hostname='#{os_host_name}'"
         end
         content += "\n"
         
