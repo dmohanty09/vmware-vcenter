@@ -1822,6 +1822,13 @@ class ASM::ServiceDeployment
     vm_params['vcenter_options'] = { 'insecure' => true }
     vm_params['ensure'] = 'present'
 
+    #Added for multiple vm networks
+    n_i = [{'portgroup' => 'VM Network', 'nic_type' => 'vmxnet3'}]
+    vm_params['network_interfaces'].split(',').reject { |x| x.empty? }.each do |portgroup| 
+      n_i << {'portgroup' => portgroup, 'nic_type' => 'vmxnet3'}
+    end
+    vm_params['network_interfaces'] = n_i
+
     # Set titles from the host name. Can't be easily done from the
     # front-end because the host name is only entered in the
     # asm::server section
