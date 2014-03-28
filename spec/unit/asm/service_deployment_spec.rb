@@ -38,7 +38,7 @@ describe ASM::ServiceDeployment do
       @r_file = "#{@tmp_dir}/8000/resources/cert.yaml"
       @o_file = "#{@tmp_dir}/8000/cert.out"
       @data = {'serviceTemplate' => {'components' => [
-        {'id' => 'cert', 'resources' => []}
+        {'id' => 'id', 'puppetCertName' => 'cert', 'resources' => []}
       ]}}
     end
 
@@ -122,6 +122,7 @@ describe ASM::ServiceDeployment do
         }
         @sd.stubs(:get).returns(policy)
         @data['serviceTemplate']['components'][0]['id'] = 'bladeserver_serialno'
+        @data['serviceTemplate']['components'][0]['puppetCertName'] = 'bladeserver_serialno'
         @data['serviceTemplate']['components'][0]['type'] = 'SERVER'
         parameters = [ {'id' => 'title', 'value' => 'bladeserver_serialno'},
                        {'id' => 'razor_image', 'value' => 'esxi-5.1'},
@@ -133,7 +134,7 @@ describe ASM::ServiceDeployment do
 
       describe 'hyperV server' do
         it 'should process hyperv servers' do
-          component =  {'id' => 'cert', 'resources' => []}
+          component =  {'id' => 'id', 'resources' => []}
           node = {'policy' => { 'name' => 'policy_test' } }
           @sd.stubs(:find_node).returns(node)
           policy = { 
@@ -142,7 +143,8 @@ describe ASM::ServiceDeployment do
           }
           @sd.stubs(:get).returns(policy)
           @sd.expects(:rule_number).returns(1)
-          component['id'] = 'bladeserver-serialno'
+          component['id'] = 'id'
+          component['puppetCertName'] = 'bladeserver-serialno'
           component['type'] = 'SERVER'
           parameters = [ {'id' => 'title', 'value' => 'bladeserver-serialno'},
                          {'id' => 'os_image_type', 'value' => 'hyperv'},
@@ -152,7 +154,7 @@ describe ASM::ServiceDeployment do
           component['resources'].push(resource1)
 
           component['relatedComponents'] = { 'entry'  => {
-              'key'   => 's1',
+              'key'   => 'k1',
               'value' => 'v1'
           }}
           @sd.set_components_by_type('STORAGE',
@@ -309,7 +311,7 @@ describe ASM::ServiceDeployment do
     it 'should fail when resources do not have types' do
       expect do
         @sd.process({'serviceTemplate' => {'components' => [
-          {'id' => 'cert', 'type' => 'TEST', 'resources' => [
+          {'id' => 'id', 'puppetCertName' => 'cert', 'type' => 'TEST', 'resources' => [
             {}
           ]}
         ]}})
@@ -319,7 +321,7 @@ describe ASM::ServiceDeployment do
     it 'should fail when resources do not have paremeters' do
       expect do
         @sd.process({'serviceTemplate' => {'components' => [
-          {'type' => 'TEST', 'id' => 'cert2', 'resources' => [
+          {'type' => 'TEST', 'id' => 'id2','puppetCertName' => 'cert2', 'resources' => [
             {'id' => 'user'}
           ]}
         ]}})
@@ -339,7 +341,7 @@ describe ASM::ServiceDeployment do
     it 'should fail when a resource has no title' do
       expect do
         @sd.process({'serviceTemplate' => {'components' => [
-          {'type' => 'TEST', 'id' => 'foo', 'id' => 'cert4', 'resources' => [
+          {'type' => 'TEST', 'id' => 'foo', 'puppetCertName' => 'cert4', 'resources' => [
             {'id' => 'user', 'parameters' => []}
           ]}
         ]}})
@@ -422,10 +424,10 @@ describe ASM::ServiceDeployment do
       @components = data['serviceTemplate']['components']
     end
     it 'should return related component based on componentID' do
-       @sd.find_related_components('CLUSTER', @components[0]).should ==  [{"id"=>"ID1", "componentID"=>"COMPID1", "type"=>"CLUSTER", "relatedComponents"=>{"entry"=>{"key"=>"COMPID1", "value"=>"Virtual Machine 1"}}, "resources"=>{"id"=>"asm::cluster", "parameters"=>[{"id"=>"datacenter"}]}}]
+       @sd.find_related_components('CLUSTER', @components[0]).should ==  [{"id"=>"ID1", "componentID"=>"COMPID1", "type"=>"CLUSTER", "relatedComponents"=>{"entry"=>{"key"=>"ID1", "value"=>"Virtual Machine 1"}}, "resources"=>{"id"=>"asm::cluster", "parameters"=>[{"id"=>"datacenter"}]}}]
     end
     it 'should fail to related component based on ID' do
-       @sd.find_related_components('VIRTUALMACHINE', @components[0]).should == []
+       @sd.find_related_components('VIRTUALMACHINE', @components[1]).should == []
     end
   end
 end

@@ -11,7 +11,7 @@
           "type": "CLUSTER",
           "relatedComponents": {
             "entry": {
-              "key": "COMPID1",
+              "key": "ID1",
               "value": "Virtual Machine 1"
             }
           },
@@ -30,7 +30,7 @@
           "type": "VIRTUALMACHINE",
           "relatedComponents": {
             "entry": {
-              "key": "ID2",
+              "key": "COMPID2",
               "value": "Cluster 1"
             }
           },
