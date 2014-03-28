@@ -548,7 +548,7 @@ module ASM
         raise(Exception, "resource of type #{options[:type]} has no parameters")
       else
         resource['parameters'].each do |param|
-          if param['value']
+          if !param['value'].nil?
             param_hash[param['id'].downcase] = param['value']
           end
           if param['value'] and param['type'] == 'PASSWORD'
