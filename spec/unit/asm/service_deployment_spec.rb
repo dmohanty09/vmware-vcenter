@@ -159,6 +159,7 @@ describe ASM::ServiceDeployment do
           @sd.set_components_by_type('STORAGE',
           [
             {'id' => 'k1',
+             'puppetCertName' => 'k1',
              'componentID'=>'s1',
              'resources' => [{
                'id' => 'equallogic::create_vol_chap_user_access',
@@ -168,6 +169,7 @@ describe ASM::ServiceDeployment do
              }]
             },
             {'id' => 'k1',
+             'puppetCertName' => 'k1',
              'componentID'=>'s1',
              'resources' => [{
                'id' => 'equallogic::create_vol_chap_user_access',

@@ -1271,7 +1271,7 @@ class ASM::ServiceDeployment
       target_devices = []
       vol_names      = []
       storage.each do |c|
-        target_devices.push(c['id'])
+        target_devices.push(c['puppetCertName'])
         ASM::Util.asm_json_array(c['resources']).each do |r|
           if r['id'] == 'equallogic::create_vol_chap_user_access'
             r['parameters'].each do |param|
