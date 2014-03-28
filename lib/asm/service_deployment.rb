@@ -231,7 +231,7 @@ class ASM::ServiceDeployment
   def process_tor_switches()
     # Get all Servers
     (@components_by_type['SERVER'] || []).each do |server_component|
-      server_cert_name =  server_component['id']
+      server_cert_name =  server_component['puppetCertName']
       logger.debug "Server cert name: #{server_cert_name}"
 
       if service_tag = cert_name_to_service_tag(server_cert_name)
@@ -306,7 +306,7 @@ class ASM::ServiceDeployment
       
     # Perform the SAN configuration for each server
     (@components_by_type['SERVER'] || []).each do |server_component|
-      server_cert_name =  server_component['id']
+      server_cert_name =  server_component['puppetCertName']
       logger.debug "Server cert name: #{server_cert_name}"
 
       if service_tag = cert_name_to_service_tag(server_cert_name)
@@ -378,8 +378,8 @@ class ASM::ServiceDeployment
           # something smarter that actually uses a thread pool
           #
           Thread.new do
-            raise(Exception, 'Component has no certname') unless comp['id']
-            Thread.current[:certname] = comp['id']
+            raise(Exception, 'Component has no certname') unless comp['puppetCertName']
+            Thread.current[:certname] = comp['puppetCertName']
             send("process_#{type.downcase}", comp)
           end
         end.each do |thrd|
@@ -547,7 +547,7 @@ class ASM::ServiceDeployment
     log("Processing server component for compellent")
     if components = @components_by_type['SERVER']
       components.collect do |comp|
-        cert_name   = comp['id']
+        cert_name   = comp['puppetCertName']
         dell_service_tag = cert_name_to_service_tag(cert_name)
         # service_tag is only set for Dell servers
         if dell_service_tag
@@ -564,7 +564,7 @@ class ASM::ServiceDeployment
     iscsi_ip_addresses = []
     if components = @components_by_type['SERVER']
       components.collect do |comp|
-        cert_name   = comp['id']
+        cert_name   = comp['puppetCertName']
         dell_service_tag = cert_name_to_service_tag(cert_name)
         logger.debug "Getting iSCSI IP Address for server #{dell_service_tag}"
         # service_tag is only set for Dell servers
@@ -592,7 +592,7 @@ class ASM::ServiceDeployment
 
   def get_specific_dell_server_wwpns(comp)
     wwpninfo=nil
-    cert_name   = comp['id']
+    cert_name   = comp['puppetCertName']
     dell_service_tag = cert_name_to_service_tag(cert_name)
     # service_tag is only set for Dell servers
     if dell_service_tag
@@ -603,7 +603,7 @@ class ASM::ServiceDeployment
 
   def process_test(component)
     config = ASM::Util.build_component_configuration(component, :decrypt => decrypt?)
-    process_generic(component['id'], config, 'apply', true)
+    process_generic(component['puppetCertName'], config, 'apply', true)
   end
 
   def process_storage(component)
@@ -646,7 +646,7 @@ class ASM::ServiceDeployment
     end
     
     process_generic(
-      component['id'],
+      component['puppetCertName'],
       resource_hash,
       'device',
       true,
@@ -656,9 +656,9 @@ class ASM::ServiceDeployment
   end
 
   def process_tor(component)
-    log("Processing tor component: #{component['id']}")
+    log("Processing tor component: #{component['puppetCertName']}")
     config = ASM::Util.build_component_configuration(component, :decrypt => decrypt?)
-    process_generic(component['id'], config, 'device')
+    process_generic(component['puppetCertName'], config, 'device')
   end
 
   def configure_tor(server_cert_name,server_vlan_info)
@@ -1151,8 +1151,8 @@ class ASM::ServiceDeployment
   end
 
   def process_server(component)
-    log("Processing server component: #{component['id']}")
-    cert_name = component['id']
+    log("Processing server component: #{component['puppetCertName']}")
+    cert_name = component['puppetCertName']
 
     # In the case of Dell servers the cert_name should contain
     # the service tag and we retrieve it here
@@ -1330,7 +1330,7 @@ class ASM::ServiceDeployment
       # currently always reboots the server
       log("Skipping deployment of #{cert_name}; already complete.")
     else
-      process_generic(component['id'], resource_hash, 'apply', 'true')
+      process_generic(component['puppetCertName'], resource_hash, 'apply', 'true')
       unless @debug
         (resource_hash['asm::server'] || []).each do |title, params|
           type = params['os_image_type']
@@ -1525,7 +1525,7 @@ class ASM::ServiceDeployment
   end
 
   def process_cluster(component)
-    cert_name = component['id']
+    cert_name = component['puppetCertName']
     raise(Exception, 'Component has no certname') unless cert_name
     log("Processing cluster component: #{cert_name}")
 
@@ -1652,7 +1652,7 @@ class ASM::ServiceDeployment
 
               logger.debug('Configuring the storage manifest')
               (find_related_components('STORAGE', server_component) || []).each do |storage_component|
-                storage_cert = storage_component['id']
+                storage_cert = storage_component['puppetCertName']
                 storage_creds = ASM::Util.parse_device_config(storage_cert)
                 storage_hash = ASM::Util.build_component_configuration(storage_component, :decrypt => decrypt?)
                 
@@ -1771,7 +1771,7 @@ class ASM::ServiceDeployment
   end
  
   def process_virtualmachine(component)
-    log("Processing virtualmachine component: #{component['id']}")
+    log("Processing virtualmachine component: #{component['puppetCertName']}")
     resource_hash = ASM::Util.build_component_configuration(component, :decrypt => decrypt?)
 
     # For simplicity we require that there is exactly one asm::vm
@@ -1792,7 +1792,7 @@ class ASM::ServiceDeployment
     end
 
     clusters = (find_related_components('CLUSTER', component) || [])
-    raise(Exception, "Expected one cluster for #{component['id']} but found #{clusters.size}") unless clusters.size == 1
+    raise(Exception, "Expected one cluster for #{component['puppetCertName']} but found #{clusters.size}") unless clusters.size == 1
     cluster = clusters[0]
     cluster_deviceconf = ASM::Util.parse_device_config(cluster['id'])
     cluster_resource_hash = ASM::Util.build_component_configuration(cluster, :decrypt => decrypt?)
@@ -1878,11 +1878,11 @@ class ASM::ServiceDeployment
   end
 
   def process_service(component)
-    log("Processing service component: #{component['id']}")
+    log("Processing service component: #{component['puppetCertName']}")
     config = ASM::Util.build_component_configuration(component, :type => 'class', :decrypt => decrypt?)
 
     certificates = find_related_components('SERVER', component).map do |server_component|
-      server_id = server_component['id']
+      server_id = server_component['puppetCertName']
       serial_number = cert_name_to_service_tag(server_id) || server_id
 
       # Previous swim lanes should have already awaited agent checkin
@@ -1893,7 +1893,7 @@ class ASM::ServiceDeployment
 
     certificates += find_related_components('VIRTUALMACHINE', component).map do |vm_component|
       clusters = find_related_components('CLUSTER', vm_component)
-      raise(Exception, "Expected one cluster for #{vm_component['id']} but found #{clusters.size}") unless clusters && clusters.size == 1
+      raise(Exception, "Expected one cluster for #{vm_component['puppetCertName']} but found #{clusters.size}") unless clusters && clusters.size == 1
       cluster = clusters[0]
       cluster_deviceconf = ASM::Util.parse_device_config(cluster['id'])
 
@@ -1924,7 +1924,7 @@ class ASM::ServiceDeployment
         # so no timeout should be necessary, but including one just
         # to ensure the lookup command has time to run
         if @debug
-          "DEBUG-CERT-#{vm_component['id']}"
+          "DEBUG-CERT-#{vm_component['puppetCertName']}"
         else
           await_agent_checkin(serial_number, timeout = 300)
         end
@@ -2250,7 +2250,7 @@ class ASM::ServiceDeployment
   def compellent_in_service_template()
     found=false
     (@components_by_type['STORAGE'] || []).each do |storage_component|
-      storage_cert_name = storage_component['id']
+      storage_cert_name = storage_component['puppetCertName']
       if storage_cert_name.downcase.match(/compellent/)
         found=true
         break
@@ -2263,7 +2263,7 @@ class ASM::ServiceDeployment
     controller_info={}
     
     (@components_by_type['STORAGE'] || []).each do |storage_component|
-      storage_cert_name = storage_component['id']
+      storage_cert_name = storage_component['puppetCertName']
       if (storage_cert_name.downcase.match(/compellent/) != nil)
         asm_guid=storage_component['asmGUID']
         logger.debug"Getting the compellent facts"
@@ -2281,7 +2281,7 @@ class ASM::ServiceDeployment
     configure_san_switch=true
     (@components_by_type['STORAGE'] || []).each do |storage_component|
       logger.debug"Storage component: #{storage_component.inspect}"
-      storage_cert_name = storage_component['id']
+      storage_cert_name = storage_component['puppetCertName']
       logger.debug"Storage cert name: #{storage_cert_name}"
       if (storage_cert_name.downcase.match(/compellent/) != nil)
         resources = ASM::Util.asm_json_array(storage_component['resources']) || []
@@ -2306,7 +2306,7 @@ class ASM::ServiceDeployment
   def reboot_all_servers
     reboot_count = 0
     (@components_by_type['SERVER'] || []).each do |server_component|
-      server_cert_name = server_component['id']
+      server_cert_name = server_component['puppetCertName']
       deviceconf ||= ASM::Util.parse_device_config(server_cert_name)
       # Get the powerstate, if the powerstate is 13, the reboot the server
       power_state = ASM::WsMan.get_power_state(deviceconf, logger)
@@ -2330,7 +2330,7 @@ class ASM::ServiceDeployment
     returncode=true
     returnmessage=""
     (@components_by_type['SERVER'] || []).each do |server_component|
-      server_cert_name = server_component['id']
+      server_cert_name = server_component['puppetCertName']
       wwpns ||= (get_specific_dell_server_wwpns(server_component) || [])
       if wwpns.nil? or (wwpns.length == 0)
         returnmessage += "\n Server #{server_cert_name} do not have any WWPN in the inventory"
