@@ -2392,7 +2392,6 @@ class ASM::ServiceDeployment
 
     deviceconf = ASM::Util.parse_device_config(cert_name)
     option_hash = {
-      'connection' => ':plaintext',
       'username' => deviceconf[:user],
       'password' => deviceconf[:enc_password],
       'server' => deviceconf[:host]
