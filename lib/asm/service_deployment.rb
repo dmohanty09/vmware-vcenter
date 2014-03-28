@@ -1531,7 +1531,12 @@ class ASM::ServiceDeployment
 
     resource_hash = ASM::Util.build_component_configuration(component, :decrypt => decrypt?)
 
-    resource_hash['asm::cluster'].each do |title, params|
+    # Assuming there is a parameters to categorized the cluster type
+    (resource_hash['asm::cluster::scvmm'] || {}).each do |title,params|
+      configure_hypev_cluster(component,resource_hash,title)
+    end
+
+    (resource_hash['asm::cluster'] || {}).each do |title, params|
       resource_hash['asm::cluster'][title]['vcenter_options'] = { 'insecure' => true }
       resource_hash['asm::cluster'][title]['ensure'] = 'present'
 
@@ -2353,5 +2358,124 @@ class ASM::ServiceDeployment
       storage_info[0][0]
     end
   end
+  
+  def configure_hypev_cluster(component, cluster_resource_hash,title)
 
+    cert_name = component['id']
+    # Get all the hyperV hosts
+    hyperv_hosts = find_related_components('SERVER', component)
+    if hyperv_hosts.size == 0
+      logger.debug("No HyperV hosts in the template, skipping cluster configuration")
+      return true
+    end
+
+    hyperv_hostnames = get_hyperv_server_hostnames(hyperv_hosts)
+    logger.debug "HyperV Host's hostname: #{hyperv_hostnames}"
+
+    # Run-As-Account
+    run_as_account_credentials = run_as_account_credentials(hyperv_hosts[0])
+    logger.debug("Run-As Accounf credentials: #{run_as_account_credentials}")
+    host_group = cluster_resource_hash['asm::cluster::scvmm'][title]['path']
+    cluster_name = cluster_resource_hash['asm::cluster::scvmm'][title]['name']
+    logger.debug "Cluster name: #{cluster_name}"
+
+    # if not then reserve one ip address from the converged net
+    cluster_ip_address = cluster_resource_hash['asm::cluster::scvmm'][title]['ipaddress']
+    logger.debug "Cluster IP Address in service template: #{cluster_ip_address}"
+    if cluster_ip_address.nil?
+      cluster_ip_address = get_hyperv_cluster_ip(hyperv_hosts[0])
+    end
+
+    domain_username = "#{run_as_account_credentials['domain_name']}\\#{run_as_account_credentials['username']}"
+    resource_hash = Hash.new
+    option_hash = Hash.new
+
+    deviceconf = ASM::Util.parse_device_config(cert_name)
+    option_hash = {
+      'connection' => ':plaintext',
+      'username' => deviceconf[:user],
+      'password' => deviceconf[:enc_password],
+      'server' => deviceconf[:host]
+    }
+    resource_hash['asm::cluster::scvmm'] = {
+      "#{cluster_name}" => {
+      'ensure'      => 'present',
+      'host_group' => host_group,
+      'ipaddress' => cluster_ip_address,
+      'hosts' => hyperv_hostnames,
+      'username' => domain_username,
+      'password' => run_as_account_credentials['password'],
+      'scvmm_server' => cert_name,
+      'options' => option_hash
+      }
+    }
+
+    process_generic(cert_name, resource_hash, 'apply')
+  end
+  
+  def run_as_account_credentials(server_component)
+    run_as_account = {}
+    resource_hash = ASM::Util.build_component_configuration(server_component, :decrypt => decrypt?)
+    if resource_hash['asm::server']
+      title = resource_hash['asm::server'].keys[0]
+      params = resource_hash['asm::server'][title]
+      run_as_account['username'] = params['domain_admin_user']
+      run_as_account['password'] = params['domain_admin_password']
+      run_as_account['domain_name'] = params['domain_name']
+    end
+    run_as_account
+  end
+  
+  def get_hyperv_server_hostnames(server_components)
+    hyperv_host_names = []
+    server_components.each do |component|
+      cert_name = component['id']
+      serial_number = nil
+      service_tag = cert_name_to_service_tag(cert_name)
+      if service_tag
+        is_dell_server = true
+        serial_number = service_tag
+      else
+        is_dell_server = false
+        serial_number = cert_name
+      end
+      resource_hash = {}
+      resource_hash = ASM::Util.build_component_configuration(component, :decrypt => decrypt?)
+
+      if resource_hash['asm::server']
+        if resource_hash['asm::server'].size != 1
+          msg = "Only one O/S configuration allowed per server; found #{resource_hash['asm::server'].size} for #{serial_number}"
+          logger.error(msg)
+          raise(Exception, msg)
+        end
+
+        title = resource_hash['asm::server'].keys[0]
+        params = resource_hash['asm::server'][title]
+        os_image_type = params['os_image_type']
+        os_host_name  = params['os_host_name']
+        fqdn  = params['fqdn']
+        hyperv_host_names.push("#{os_host_name}.#{fqdn}")
+      end
+    end
+    hyperv_host_names
+  end
+  
+  def get_hyperv_cluster_ip(component)
+    # Need to reserve a IP address from the converged network
+    cluster_ip = ''
+    cert_name = component['id']
+    server_conf = ASM::Util.build_component_configuration(component, :decrypt => decrypt?)
+    network_params = (server_conf['asm::esxiscsiconfig'] || {})[cert_name]
+    if network_params
+      [ 'converged_network'].each do |net|
+        logger.debug "Network GUID : #{network_params.inspect}"
+        if  network_params[net]
+          cluster_ip = ASM::Util.reserve_network_ips(network_params[net], 1, @id)
+        end
+      end
+    end
+    cluster_ip[0]
+  end
+  
 end
+
