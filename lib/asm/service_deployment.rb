@@ -1872,7 +1872,7 @@ class ASM::ServiceDeployment
       process_generic(vm_cert_name, resource_hash, 'apply')
 
       unless @debug
-        await_agent_checkin(serial_number, timeout = 3600)
+	await_agent_run_completion(ASM::Util.hostname_to_certname(hostname))
       end
     end
   end
@@ -1881,55 +1881,12 @@ class ASM::ServiceDeployment
     log("Processing service component: #{component['puppetCertName']}")
     config = ASM::Util.build_component_configuration(component, :type => 'class', :decrypt => decrypt?)
 
-    certificates = find_related_components('SERVER', component).map do |server_component|
-      server_id = server_component['puppetCertName']
-      serial_number = cert_name_to_service_tag(server_id) || server_id
-
-      # Previous swim lanes should have already awaited agent checkin
-      # so no timeout should be necessary, but including one just
-      # to ensure the lookup command has time to run
-      await_agent_checkin(serial_number, timeout = 300)
+    related = find_related_components('SERVER', component) + find_related_components('VIRTUALMACHINE', component)
+    certificates = related.map do |server_component|
+      server_resource = server_component["resources"].select{|resource| resource["id"]=="asm::server"}.first
+      server_parameter = server_resource["parameters"].select{|parameter| parameter["id"]=="os_host_name"}.first
+      ASM::Util.hostname_to_certname(server_parameter["value"])
     end
-
-    certificates += find_related_components('VIRTUALMACHINE', component).map do |vm_component|
-      clusters = find_related_components('CLUSTER', vm_component)
-      raise(Exception, "Expected one cluster for #{vm_component['puppetCertName']} but found #{clusters.size}") unless clusters && clusters.size == 1
-      cluster = clusters[0]
-      cluster_deviceconf = ASM::Util.parse_device_config(cluster['id'])
-
-      resource_hash = ASM::Util.build_component_configuration(vm_component, :decrypt => decrypt?)
-
-      if resource_hash['asm::server']
-        # O/S install was started
-        unless resource_hash['asm::server'].size == 1
-          raise(Exception, "Exactly one set of VM configuration parameters is required")
-        end
-
-        server_params = resource_hash['asm::server'][resource_hash['asm::server'].keys[0]]
-        hostname = server_params['os_host_name']
-        uuid = nil
-        begin
-          uuid = ASM::Util.find_vm_uuid(cluster_deviceconf, hostname)
-        rescue Exception => e
-          if @debug
-            puts e
-            uuid = "DEBUG-MODE-UUID"
-          else
-            raise e
-          end
-        end
-
-        serial_number = @debug ? "vmware_debug_serial_no" : ASM::Util.vm_uuid_to_serial_number(uuid)
-        # Previous swim lanes should have already awaited agent checkin
-        # so no timeout should be necessary, but including one just
-        # to ensure the lookup command has time to run
-        if @debug
-          "DEBUG-CERT-#{vm_component['puppetCertName']}"
-        else
-          await_agent_checkin(serial_number, timeout = 300)
-        end
-      end
-    end.select { |cert| !cert.nil? }
 
     certificates.each do |certificate|
       log("Applying application configuration to #{certificate}")
@@ -2053,32 +2010,6 @@ class ASM::ServiceDeployment
     log("Agent #{certname} Waiting for puppet agent to respond after reboot")
     await_agent_run_completion(os_host_name,timeout = 600)
     true
-  end
-
-  def await_agent_checkin(serial_number, timeout = 3600)
-    cert_name = nil
-    cmd = "sudo puppet query nodes 'serialnumber=\"#{serial_number}\"'"
-    ASM::Util.block_and_retry_until_ready(timeout, CommandException, 60) do
-      log("Waiting for puppet agent to check in for serial number #{serial_number}")
-      result = ASM::Util.run_command_simple(cmd)
-      raise(Exception, "Puppetdb query for serialnumber #{serial_number} failed: #{result.inspect}") unless result['exit_status'] == 0
-      cert_names = result['stdout'].split("\n").map { |x| x.strip }
-      logger.debug("Found certname(s): #{cert_names.inspect}")
-      case cert_names.size
-      when 0
-        raise(CommandException, "Did not find our node by its serial number. Will try again")
-      when 1
-        cert_name = cert_names[0]
-      else
-        raise(Exception, "Multiple certificate names found for serial number #{serial_number}: #{cert_names.join(',')}")
-      end
-    end
-
-    if cert_name
-      log("Found puppet certificate name #{cert_name} for serial number #{serial_number}")
-    end
-
-    cert_name
   end
 
   # converts from an ASM style server resource into

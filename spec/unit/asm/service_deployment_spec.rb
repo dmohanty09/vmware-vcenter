@@ -14,7 +14,6 @@ describe ASM::ServiceDeployment do
     @sd.stubs(:create_broker_if_needed).returns('STUB-BROKER-NAME')
     @sd.stubs(:get_all_switches).returns([])
     @sd.stubs(:get_server_inventory).returns({})
-    @sd.stubs(:await_agent_checkin).returns('STUB-CERTIFICATE-NAME')
     @sd.stubs(:update_inventory_through_controller)
     ASM.stubs(:base_dir).returns(@tmp_dir)
     network = {
