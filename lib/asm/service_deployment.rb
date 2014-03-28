@@ -1533,7 +1533,7 @@ class ASM::ServiceDeployment
 
     # Assuming there is a parameters to categorized the cluster type
     (resource_hash['asm::cluster::scvmm'] || {}).each do |title,params|
-      configure_hypev_cluster(component,resource_hash,title)
+      configure_hyperv_cluster(component,resource_hash,title)
     end
 
     (resource_hash['asm::cluster'] || {}).each do |title, params|
@@ -2359,9 +2359,9 @@ class ASM::ServiceDeployment
     end
   end
   
-  def configure_hypev_cluster(component, cluster_resource_hash,title)
+  def configure_hyperv_cluster(component, cluster_resource_hash,title)
 
-    cert_name = component['id']
+    cert_name = component['puppetCertName']
     # Get all the hyperV hosts
     hyperv_hosts = find_related_components('SERVER', component)
     if hyperv_hosts.size == 0
@@ -2388,14 +2388,8 @@ class ASM::ServiceDeployment
 
     domain_username = "#{run_as_account_credentials['domain_name']}\\#{run_as_account_credentials['username']}"
     resource_hash = Hash.new
-    option_hash = Hash.new
 
     deviceconf = ASM::Util.parse_device_config(cert_name)
-    option_hash = {
-      'username' => deviceconf[:user],
-      'password' => deviceconf[:enc_password],
-      'server' => deviceconf[:host]
-    }
     resource_hash['asm::cluster::scvmm'] = {
       "#{cluster_name}" => {
       'ensure'      => 'present',
@@ -2405,7 +2399,6 @@ class ASM::ServiceDeployment
       'username' => domain_username,
       'password' => run_as_account_credentials['password'],
       'scvmm_server' => cert_name,
-      'options' => option_hash
       }
     }
 
@@ -2428,16 +2421,7 @@ class ASM::ServiceDeployment
   def get_hyperv_server_hostnames(server_components)
     hyperv_host_names = []
     server_components.each do |component|
-      cert_name = component['id']
-      serial_number = nil
-      service_tag = cert_name_to_service_tag(cert_name)
-      if service_tag
-        is_dell_server = true
-        serial_number = service_tag
-      else
-        is_dell_server = false
-        serial_number = cert_name
-      end
+      cert_name = component['puppetCertName']
       resource_hash = {}
       resource_hash = ASM::Util.build_component_configuration(component, :decrypt => decrypt?)
 
@@ -2450,7 +2434,6 @@ class ASM::ServiceDeployment
 
         title = resource_hash['asm::server'].keys[0]
         params = resource_hash['asm::server'][title]
-        os_image_type = params['os_image_type']
         os_host_name  = params['os_host_name']
         fqdn  = params['fqdn']
         hyperv_host_names.push("#{os_host_name}.#{fqdn}")
@@ -2462,7 +2445,7 @@ class ASM::ServiceDeployment
   def get_hyperv_cluster_ip(component)
     # Need to reserve a IP address from the converged network
     cluster_ip = ''
-    cert_name = component['id']
+    cert_name = component['puppetCertName']
     server_conf = ASM::Util.build_component_configuration(component, :decrypt => decrypt?)
     network_params = (server_conf['asm::esxiscsiconfig'] || {})[cert_name]
     if network_params
