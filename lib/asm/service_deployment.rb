@@ -1830,7 +1830,7 @@ class ASM::ServiceDeployment
     vm_params['cluster'] = cluster_params['cluster']
     vm_params['datacenter'] = cluster_params['datacenter']
     vm_params['datastore'] = cluster_params['datastore']
-    vm_params['vcenter_id'] = cluster['id']
+    vm_params['vcenter_id'] = cluster['puppetCertName']
     vm_params['vcenter_options'] = { 'insecure' => true }
     vm_params['ensure'] = 'present'
 
