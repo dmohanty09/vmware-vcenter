@@ -1806,7 +1806,7 @@ class ASM::ServiceDeployment
     clusters = (find_related_components('CLUSTER', component) || [])
     raise(Exception, "Expected one cluster for #{component['puppetCertName']} but found #{clusters.size}") unless clusters.size == 1
     cluster = clusters[0]
-    cluster_deviceconf = ASM::Util.parse_device_config(cluster['id'])
+    cluster_deviceconf = ASM::Util.parse_device_config(cluster['puppetCertName'])
     cluster_resource_hash = ASM::Util.build_component_configuration(cluster, :decrypt => decrypt?)
     cluster_hash = cluster_resource_hash['asm::cluster'] || {}
     raise(Exception, "Expected one asm::cluster resource but found #{cluster_hash.size}") unless cluster_hash.size == 1
