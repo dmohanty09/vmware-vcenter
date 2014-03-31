@@ -1745,12 +1745,13 @@ class ASM::ServiceDeployment
           end
         end
       end
+      # Moving the code inside the loop to ensure it do not conflict with HyperV Cluster
+      process_generic(cert_name, resource_hash, 'apply')
+      # Running into issues with hosts not coming out of maint mode
+      # Try it again for good measure.
+      process_generic(cert_name, resource_hash, 'apply')
+      mark_vcenter_as_needs_update(component['asmGUID'])
     end
-    process_generic(cert_name, resource_hash, 'apply')
-    # Running into issues with hosts not coming out of maint mode
-    # Try it again for good measure.
-    process_generic(cert_name, resource_hash, 'apply')
-    mark_vcenter_as_needs_update(component['asmGUID'])
   end
   
   def parse_hbas(hostip, username, password)
