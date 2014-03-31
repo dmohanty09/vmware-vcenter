@@ -1573,6 +1573,12 @@ class ASM::ServiceDeployment
       }
       resource_hash['asm::cluster'][title]['clusterConfigSpecEx'] = cluster_config_spec_ex
 
+      # [TODO] Need a flag in deployment.JSON to enable DRS
+      drs_config = {
+      'enabled' => 'true'}
+      resource_hash['asm::cluster'][title]['drs_config'] = drs_config
+
+
       # Add ESXi hosts and creds as separte resources
       (find_related_components('SERVER', component) || []).each do |server_component|
         server_conf = ASM::Util.build_component_configuration(server_component, :decrypt => decrypt?)
