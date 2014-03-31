@@ -2013,7 +2013,7 @@ class ASM::ServiceDeployment
 
     # Wait puppet agent to respond
     log("Agent #{certname} Waiting for puppet agent to respond after reboot")
-    await_agent_run_completion(os_host_name,timeout = 600)
+    await_agent_run_completion(os_host_name,timeout = 3600)
     true
   end
 
