@@ -1809,7 +1809,13 @@ class ASM::ServiceDeployment
       :password => password,
     }
     cmd = 'iscsi adapter list'.split
-    hba_list = ASM::Util.esxcli(cmd, endpoint, logger).sort_by{|hba| hba['Adapter'][/[0-9]+/].to_i }.select do |hba|
+    h_list = ASM::Util.esxcli(cmd, endpoint, logger)
+    if h_list.nil? or h_list.empty?
+      msg = "Did not find any iSCSI adapters for #{hostip}")
+      logger.error(msg)
+      raise(Exception, msg)
+    end
+    hba_list = h_list.sort_by{|hba| hba['Adapter'][/[0-9]+/].to_i }.select do |hba|
       hba['Description'].end_with?('iSCSI Adapter')
     end.map { |hba| hba['Adapter'] }
     
@@ -1847,7 +1853,7 @@ class ASM::ServiceDeployment
     clusters = (find_related_components('CLUSTER', component) || [])
     raise(Exception, "Expected one cluster for #{component['puppetCertName']} but found #{clusters.size}") unless clusters.size == 1
     cluster = clusters[0]
-    cluster_deviceconf = ASM::Util.parse_device_config(cluster['id'])
+    cluster_deviceconf = ASM::Util.parse_device_config(cluster['puppetCertName'])
     cluster_resource_hash = ASM::Util.build_component_configuration(cluster, :decrypt => decrypt?)
     cluster_hash = cluster_resource_hash['asm::cluster'] || {}
     raise(Exception, "Expected one asm::cluster resource but found #{cluster_hash.size}") unless cluster_hash.size == 1
@@ -2340,9 +2346,12 @@ class ASM::ServiceDeployment
     cmd = 'storage core path list'.split
     storage_path = ASM::Util.esxcli(cmd, endpoint, logger, true)
     storage_info = storage_path.scan(/Device:\s+naa.#{compellent_deviceid}.*?LUN:\s+(\d+)/m)
-    if !storage_info.empty?
-      storage_info[0][0]
+    if storage_info.empty?
+      msg = "Compellent lunid not found for hostip = #{hostip}, deviceid = #{compellent_deviceid}"
+      logger.error(msg)
+      raise(Exception, msg)
     end
+    storage_info[0][0]
   end
   
   def configure_hyperv_cluster(component, cluster_resource_hash,title)
