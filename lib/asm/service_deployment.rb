@@ -1169,6 +1169,7 @@ class ASM::ServiceDeployment
     server_vlan_info = {}
     deviceconf = nil
     inventory = nil
+    os_host_name = nil
     resource_hash = ASM::Util.build_component_configuration(component, :decrypt => decrypt?)
 
     if resource_hash['asm::server']
@@ -1215,7 +1216,7 @@ class ASM::ServiceDeployment
         end
 
         static_ip = static['ip_address']
-        content = "network --bootproto=static --device-vmnic0 --ip=#{static_ip}  --netmask=#{static['subnet']} --gateway=#{static['gateway']}"
+        content = "network --bootproto=static --device=vmnic0 --ip=#{static_ip}  --netmask=#{static['subnet']} --gateway=#{static['gateway']}"
         # NOTE: vlanId is a FixNum
         if mgmt_network['vlanId']
           content += " --vlanid=#{mgmt_network['vlanId']}"
@@ -1223,6 +1224,11 @@ class ASM::ServiceDeployment
         nameservers = [ static['dns1'], static['dns2'] ].select { |x| !x.nil? && !x.empty? }
         if nameservers.size > 0
           content += " --nameserver=#{nameservers.join(',')}"
+        else
+          content += ' --nodns'
+        end
+        if os_host_name
+          content += " --hostname='#{os_host_name}'"
         end
         content += "\n"
         
@@ -1271,7 +1277,7 @@ class ASM::ServiceDeployment
       target_devices = []
       vol_names      = []
       storage.each do |c|
-        target_devices.push(c['id'])
+        target_devices.push(c['puppetCertName'])
         ASM::Util.asm_json_array(c['resources']).each do |r|
           if r['id'] == 'equallogic::create_vol_chap_user_access'
             r['parameters'].each do |param|
@@ -1531,7 +1537,12 @@ class ASM::ServiceDeployment
 
     resource_hash = ASM::Util.build_component_configuration(component, :decrypt => decrypt?)
 
-    resource_hash['asm::cluster'].each do |title, params|
+    # Assuming there is a parameters to categorized the cluster type
+    (resource_hash['asm::cluster::scvmm'] || {}).each do |title,params|
+      configure_hyperv_cluster(component,resource_hash,title)
+    end
+
+    (resource_hash['asm::cluster'] || {}).each do |title, params|
       resource_hash['asm::cluster'][title]['vcenter_options'] = { 'insecure' => true }
       resource_hash['asm::cluster'][title]['ensure'] = 'present'
 
@@ -1748,12 +1759,13 @@ class ASM::ServiceDeployment
           end
         end
       end
+      # Moving the code inside the loop to ensure it do not conflict with HyperV Cluster
+      process_generic(cert_name, resource_hash, 'apply')
+      # Running into issues with hosts not coming out of maint mode
+      # Try it again for good measure.
+      process_generic(cert_name, resource_hash, 'apply')
+      mark_vcenter_as_needs_update(component['asmGUID'])
     end
-    process_generic(cert_name, resource_hash, 'apply')
-    # Running into issues with hosts not coming out of maint mode
-    # Try it again for good measure.
-    process_generic(cert_name, resource_hash, 'apply')
-    mark_vcenter_as_needs_update(component['asmGUID'])
   end
   
   def parse_hbas(hostip, username, password)
@@ -1880,7 +1892,7 @@ class ASM::ServiceDeployment
       process_generic(vm_cert_name, resource_hash, 'apply')
 
       unless @debug
-        await_agent_checkin(serial_number, timeout = 3600)
+	await_agent_run_completion(ASM::Util.hostname_to_certname(hostname))
       end
     end
   end
@@ -1889,55 +1901,12 @@ class ASM::ServiceDeployment
     log("Processing service component: #{component['puppetCertName']}")
     config = ASM::Util.build_component_configuration(component, :type => 'class', :decrypt => decrypt?)
 
-    certificates = find_related_components('SERVER', component).map do |server_component|
-      server_id = server_component['puppetCertName']
-      serial_number = cert_name_to_service_tag(server_id) || server_id
-
-      # Previous swim lanes should have already awaited agent checkin
-      # so no timeout should be necessary, but including one just
-      # to ensure the lookup command has time to run
-      await_agent_checkin(serial_number, timeout = 300)
+    related = find_related_components('SERVER', component) + find_related_components('VIRTUALMACHINE', component)
+    certificates = related.map do |server_component|
+      server_resource = server_component["resources"].select{|resource| resource["id"]=="asm::server"}.first
+      server_parameter = server_resource["parameters"].select{|parameter| parameter["id"]=="os_host_name"}.first
+      ASM::Util.hostname_to_certname(server_parameter["value"])
     end
-
-    certificates += find_related_components('VIRTUALMACHINE', component).map do |vm_component|
-      clusters = find_related_components('CLUSTER', vm_component)
-      raise(Exception, "Expected one cluster for #{vm_component['puppetCertName']} but found #{clusters.size}") unless clusters && clusters.size == 1
-      cluster = clusters[0]
-      cluster_deviceconf = ASM::Util.parse_device_config(cluster['id'])
-
-      resource_hash = ASM::Util.build_component_configuration(vm_component, :decrypt => decrypt?)
-
-      if resource_hash['asm::server']
-        # O/S install was started
-        unless resource_hash['asm::server'].size == 1
-          raise(Exception, "Exactly one set of VM configuration parameters is required")
-        end
-
-        server_params = resource_hash['asm::server'][resource_hash['asm::server'].keys[0]]
-        hostname = server_params['os_host_name']
-        uuid = nil
-        begin
-          uuid = ASM::Util.find_vm_uuid(cluster_deviceconf, hostname)
-        rescue Exception => e
-          if @debug
-            puts e
-            uuid = "DEBUG-MODE-UUID"
-          else
-            raise e
-          end
-        end
-
-        serial_number = @debug ? "vmware_debug_serial_no" : ASM::Util.vm_uuid_to_serial_number(uuid)
-        # Previous swim lanes should have already awaited agent checkin
-        # so no timeout should be necessary, but including one just
-        # to ensure the lookup command has time to run
-        if @debug
-          "DEBUG-CERT-#{vm_component['puppetCertName']}"
-        else
-          await_agent_checkin(serial_number, timeout = 300)
-        end
-      end
-    end.select { |cert| !cert.nil? }
 
     certificates.each do |certificate|
       log("Applying application configuration to #{certificate}")
@@ -2059,34 +2028,8 @@ class ASM::ServiceDeployment
 
     # Wait puppet agent to respond
     log("Agent #{certname} Waiting for puppet agent to respond after reboot")
-    await_agent_run_completion(os_host_name,timeout = 600)
+    await_agent_run_completion(os_host_name,timeout = 3600)
     true
-  end
-
-  def await_agent_checkin(serial_number, timeout = 3600)
-    cert_name = nil
-    cmd = "sudo puppet query nodes 'serialnumber=\"#{serial_number}\"'"
-    ASM::Util.block_and_retry_until_ready(timeout, CommandException, 60) do
-      log("Waiting for puppet agent to check in for serial number #{serial_number}")
-      result = ASM::Util.run_command_simple(cmd)
-      raise(Exception, "Puppetdb query for serialnumber #{serial_number} failed: #{result.inspect}") unless result['exit_status'] == 0
-      cert_names = result['stdout'].split("\n").map { |x| x.strip }
-      logger.debug("Found certname(s): #{cert_names.inspect}")
-      case cert_names.size
-      when 0
-        raise(CommandException, "Did not find our node by its serial number. Will try again")
-      when 1
-        cert_name = cert_names[0]
-      else
-        raise(Exception, "Multiple certificate names found for serial number #{serial_number}: #{cert_names.join(',')}")
-      end
-    end
-
-    if cert_name
-      log("Found puppet certificate name #{cert_name} for serial number #{serial_number}")
-    end
-
-    cert_name
   end
 
   # converts from an ASM style server resource into
@@ -2368,5 +2311,106 @@ class ASM::ServiceDeployment
       storage_info[0][0]
     end
   end
+  
+  def configure_hyperv_cluster(component, cluster_resource_hash,title)
 
+    cert_name = component['puppetCertName']
+    # Get all the hyperV hosts
+    hyperv_hosts = find_related_components('SERVER', component)
+    if hyperv_hosts.size == 0
+      logger.debug("No HyperV hosts in the template, skipping cluster configuration")
+      return true
+    end
+
+    hyperv_hostnames = get_hyperv_server_hostnames(hyperv_hosts)
+    logger.debug "HyperV Host's hostname: #{hyperv_hostnames}"
+
+    # Run-As-Account
+    run_as_account_credentials = run_as_account_credentials(hyperv_hosts[0])
+    logger.debug("Run-As Accounf credentials: #{run_as_account_credentials}")
+    host_group = cluster_resource_hash['asm::cluster::scvmm'][title]['path']
+    cluster_name = cluster_resource_hash['asm::cluster::scvmm'][title]['name']
+    logger.debug "Cluster name: #{cluster_name}"
+
+    # if not then reserve one ip address from the converged net
+    cluster_ip_address = cluster_resource_hash['asm::cluster::scvmm'][title]['ipaddress']
+    logger.debug "Cluster IP Address in service template: #{cluster_ip_address}"
+    if cluster_ip_address.nil?
+      cluster_ip_address = get_hyperv_cluster_ip(hyperv_hosts[0])
+    end
+
+    domain_username = "#{run_as_account_credentials['domain_name']}\\#{run_as_account_credentials['username']}"
+    resource_hash = Hash.new
+
+    deviceconf = ASM::Util.parse_device_config(cert_name)
+    resource_hash['asm::cluster::scvmm'] = {
+      "#{cluster_name}" => {
+      'ensure'      => 'present',
+      'host_group' => host_group,
+      'ipaddress' => cluster_ip_address,
+      'hosts' => hyperv_hostnames,
+      'username' => domain_username,
+      'password' => run_as_account_credentials['password'],
+      'scvmm_server' => cert_name,
+      }
+    }
+
+    process_generic(cert_name, resource_hash, 'apply')
+  end
+  
+  def run_as_account_credentials(server_component)
+    run_as_account = {}
+    resource_hash = ASM::Util.build_component_configuration(server_component, :decrypt => decrypt?)
+    if resource_hash['asm::server']
+      title = resource_hash['asm::server'].keys[0]
+      params = resource_hash['asm::server'][title]
+      run_as_account['username'] = params['domain_admin_user']
+      run_as_account['password'] = params['domain_admin_password']
+      run_as_account['domain_name'] = params['domain_name']
+    end
+    run_as_account
+  end
+  
+  def get_hyperv_server_hostnames(server_components)
+    hyperv_host_names = []
+    server_components.each do |component|
+      cert_name = component['puppetCertName']
+      resource_hash = {}
+      resource_hash = ASM::Util.build_component_configuration(component, :decrypt => decrypt?)
+
+      if resource_hash['asm::server']
+        if resource_hash['asm::server'].size != 1
+          msg = "Only one O/S configuration allowed per server; found #{resource_hash['asm::server'].size} for #{serial_number}"
+          logger.error(msg)
+          raise(Exception, msg)
+        end
+
+        title = resource_hash['asm::server'].keys[0]
+        params = resource_hash['asm::server'][title]
+        os_host_name  = params['os_host_name']
+        fqdn  = params['fqdn']
+        hyperv_host_names.push("#{os_host_name}.#{fqdn}")
+      end
+    end
+    hyperv_host_names
+  end
+  
+  def get_hyperv_cluster_ip(component)
+    # Need to reserve a IP address from the converged network
+    cluster_ip = ''
+    cert_name = component['puppetCertName']
+    server_conf = ASM::Util.build_component_configuration(component, :decrypt => decrypt?)
+    network_params = (server_conf['asm::esxiscsiconfig'] || {})[cert_name]
+    if network_params
+      [ 'converged_network'].each do |net|
+        logger.debug "Network GUID : #{network_params.inspect}"
+        if  network_params[net]
+          cluster_ip = ASM::Util.reserve_network_ips(network_params[net], 1, @id)
+        end
+      end
+    end
+    cluster_ip[0]
+  end
+  
 end
+
