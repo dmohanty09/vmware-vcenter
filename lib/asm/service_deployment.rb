@@ -1545,6 +1545,33 @@ class ASM::ServiceDeployment
     (resource_hash['asm::cluster'] || {}).each do |title, params|
       resource_hash['asm::cluster'][title]['vcenter_options'] = { 'insecure' => true }
       resource_hash['asm::cluster'][title]['ensure'] = 'present'
+      # Enable Vcenter HA
+      # [TODO] A flag in the deployment.json to enable / disable this 
+      cluster_config_spec_ex   = { 
+        'dasConfig' => {
+          'enabled' => 'true',
+          'admissionControlEnabled' => 'true',
+          'admissionControlPolicy' => {
+            'vsphereType' => 'ClusterFailoverResourcesAdmissionControlPolicy',
+            'cpuFailoverResourcesPercent' => 25,
+            'memoryFailoverResourcesPercent' => 30,
+          },
+          'defaultVmSettings' => {
+            'isolationResponse' => 'powerOff',
+            'restartPolicy' => 'high',
+            'vmToolsMonitoringSettings' => {
+              'failureInterval' => 40,
+              'maxFailures' => 4,
+              'maxFailureWindow' => -1,
+              'minUpTime' => 300,
+              'vmMonitoring' => 'vmMonitoringOnly'
+            }
+          },
+          'hostMonitoring' => 'enabled',
+          'vmMonitoring' => 'vmMonitoringOnly'
+        }
+      }
+      resource_hash['asm::cluster'][title]['clusterConfigSpecEx'] = cluster_config_spec_ex
 
       # Add ESXi hosts and creds as separte resources
       (find_related_components('SERVER', component) || []).each do |server_component|
