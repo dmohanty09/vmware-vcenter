@@ -2397,7 +2397,7 @@ class ASM::ServiceDeployment
       [ 'converged_network'].each do |net|
         logger.debug "Network GUID : #{network_params.inspect}"
         if  network_params[net]
-          cluster_ip = ASM::Util.reserve_network_ips(network_params[net], 1, @id)
+          cluster_ip = ASM::Util.reserve_network_ips(network_params[net][0]['id'], 1, @id)
         end
       end
     end
