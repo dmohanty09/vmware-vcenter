@@ -368,7 +368,7 @@ class ASM::ServiceDeployment
   end
 
   def process_components()
-    ['STORAGE', 'TOR', 'SERVER', 'CLUSTER', 'VIRTUALMACHINE', 'SERVICE', 'TEST'].each do |type|
+    ['STORAGE', 'TOR', 'SERVER', 'CLUSTER', 'VIRTUALMACHINE', 'TEST'].each do |type|
       if components = @components_by_type[type]
         log("Processing components of type #{type}")
         log("Status: Processing_#{type.downcase}")
@@ -515,7 +515,7 @@ class ASM::ServiceDeployment
     end
   end
 
-  def massage_asm_server_params(serial_number, params)
+  def massage_asm_server_params(serial_number, params, classes={})
     if params['rule_number']
       raise(Exception, "Did not expect rule_number in asm::server")
     else
@@ -530,6 +530,9 @@ class ASM::ServiceDeployment
 
     params['serial_number'] = serial_number
     params['policy_name'] = "policy-#{params['os_host_name']}-#{@id}"
+
+    params['cert_name'] = ASM::Util.hostname_to_certname(params['os_host_name'])
+    params['puppet_classification_data'] = classes unless classes.empty?
 
     custom_kickstart_content = (params['custom_script'] || '').strip
     params.delete('custom_script')
@@ -1183,7 +1186,8 @@ class ASM::ServiceDeployment
       params = resource_hash['asm::server'][title]
       os_image_type = params['os_image_type']
       os_host_name  = params['os_host_name']
-      massage_asm_server_params(serial_number, params)
+      classes_config = get_classification_data(component, os_host_name)
+      massage_asm_server_params(serial_number, params, classes_config)
     end
     
     # Create a vmware ks.cfg include file containing esxcli command line
@@ -1878,32 +1882,18 @@ class ASM::ServiceDeployment
       end
 
       serial_number = @debug ? "vmware_debug_serial_no" : ASM::Util.vm_uuid_to_serial_number(uuid)
-      massage_asm_server_params(serial_number, server_params)
+
+      #Get the list of related services to this virtual machine, and combine them into one hash
+      classes_config = get_classification_data(component, hostname)
+
+      massage_asm_server_params(serial_number, server_params, classes_config)
 
       resource_hash['asm::server'] = { hostname => server_params }
       process_generic(vm_cert_name, resource_hash, 'apply')
 
       unless @debug
-	await_agent_run_completion(ASM::Util.hostname_to_certname(hostname))
+        await_agent_run_completion(ASM::Util.hostname_to_certname(hostname))
       end
-    end
-  end
-
-  def process_service(component)
-    log("Processing service component: #{component['puppetCertName']}")
-    config = ASM::Util.build_component_configuration(component, :type => 'class', :decrypt => decrypt?)
-
-    related = find_related_components('SERVER', component) + find_related_components('VIRTUALMACHINE', component)
-    certificates = related.map do |server_component|
-      server_resource = server_component["resources"].select{|resource| resource["id"]=="asm::server"}.first
-      server_parameter = server_resource["parameters"].select{|parameter| parameter["id"]=="os_host_name"}.first
-      ASM::Util.hostname_to_certname(server_parameter["value"])
-    end
-
-    certificates.each do |certificate|
-      log("Applying application configuration to #{certificate}")
-      process_generic(certificate, config, 'agent')
-      log("Application configuration successfully applied to #{certificate}. The configured applications will be installed on the remote O/S in about an hour.")
     end
   end
 
@@ -2402,6 +2392,19 @@ class ASM::ServiceDeployment
       end
     end
     cluster_ip[0]
+  end
+
+  #This function gets the related services to a component, and creates the classification data that will be passed to puppet module
+  def get_classification_data(component, hostname)
+    classes_config = {}
+    related_services = find_related_components('SERVICE', component)
+    related_services.each { |service|
+      service_config = ASM::Util.build_component_configuration(service, :type=>'class', :decrypt=>decrypt?)
+      services_added = service_config['class'].keys
+      classes_config.merge!(service_config['class'])
+      log("Added agent application config for #{services_added.join(', ')} to virtual machine #{hostname}")
+    }
+    return classes_config
   end
   
 end

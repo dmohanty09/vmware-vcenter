@@ -125,7 +125,8 @@ describe ASM::ServiceDeployment do
         @data['serviceTemplate']['components'][0]['type'] = 'SERVER'
         parameters = [ {'id' => 'title', 'value' => 'bladeserver_serialno'},
                        {'id' => 'razor_image', 'value' => 'esxi-5.1'},
-                       {'id' => 'os_image_type', 'value' => 'vmware_esxi'}, ]
+                       {'id' => 'os_image_type', 'value' => 'vmware_esxi'}, 
+                       {'id' => 'os_host_name', 'value' => 'foo'}]
         resource = { 'id' => 'asm::server', 'parameters' => parameters }
         @data['serviceTemplate']['components'][0]['resources'].push(resource)
         @sd.process(@data)
@@ -147,6 +148,7 @@ describe ASM::ServiceDeployment do
           component['type'] = 'SERVER'
           parameters = [ {'id' => 'title', 'value' => 'bladeserver-serialno'},
                          {'id' => 'os_image_type', 'value' => 'hyperv'},
+                         {'id' => 'os_host_name', 'value' => 'foo'}
                        ]
           resource1 = { 'id' => 'asm::server', 'parameters' => parameters }
           @sd.debug = true
@@ -182,7 +184,7 @@ describe ASM::ServiceDeployment do
           ASM::Util.expects(:find_equallogic_iscsi_ip).with('k1').returns('127.0.1.1')
           ASM::Processor::Server.expects(:munge_hyperv_server).with(
             'bladeserver-serialno',
-             {'asm::server' => {'bladeserver-serialno' => {'os_image_type' => 'hyperv', 'rule_number' => 1, 'broker_type' => 'puppet', 'serial_number' => 'SERIALNO', 'policy_name' => 'policy--8000'}}},
+             {'asm::server' => {'bladeserver-serialno' => {'os_image_type' => 'hyperv', 'os_host_name' => 'foo', 'rule_number' => 1, 'broker_type' => 'puppet', 'serial_number' => 'SERIALNO', 'policy_name' => 'policy-foo-8000', 'cert_name' => 'agent-foo'}}},
             '127.0.1.1',
             ['vol1', 'vol2']
           ).returns({})
