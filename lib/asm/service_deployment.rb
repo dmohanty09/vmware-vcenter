@@ -1545,39 +1545,18 @@ class ASM::ServiceDeployment
     (resource_hash['asm::cluster'] || {}).each do |title, params|
       resource_hash['asm::cluster'][title]['vcenter_options'] = { 'insecure' => true }
       resource_hash['asm::cluster'][title]['ensure'] = 'present'
+      
       # Enable Vcenter HA
-      # [TODO] A flag in the deployment.json to enable / disable this 
-      cluster_config_spec_ex   = { 
-        'dasConfig' => {
-          'enabled' => 'true',
-          'admissionControlEnabled' => 'true',
-          'admissionControlPolicy' => {
-            'vsphereType' => 'ClusterFailoverResourcesAdmissionControlPolicy',
-            'cpuFailoverResourcesPercent' => 25,
-            'memoryFailoverResourcesPercent' => 30,
-          },
-          'defaultVmSettings' => {
-            'isolationResponse' => 'powerOff',
-            'restartPolicy' => 'high',
-            'vmToolsMonitoringSettings' => {
-              'failureInterval' => 40,
-              'maxFailures' => 4,
-              'maxFailureWindow' => -1,
-              'minUpTime' => 300,
-              'vmMonitoring' => 'vmMonitoringOnly'
-            }
-          },
-          'hostMonitoring' => 'enabled',
-          'vmMonitoring' => 'vmMonitoringOnly'
-        }
-      }
-      resource_hash['asm::cluster'][title]['clusterConfigSpecEx'] = cluster_config_spec_ex
+      if params.has_key? 'ha_config' and not params['ha_config'].nil?
+        resource_hash['asm::cluster'][title]['clusterConfigSpecEx'] = {
+          'dasConfig' => { 'enabled' => 'true'}} # [TODO] populate w/ a hash of conf values from ha_config
+      end
 
-      # [TODO] Need a flag in deployment.JSON to enable DRS
-      drs_config = {
-      'enabled' => 'true'}
-      resource_hash['asm::cluster'][title]['drs_config'] = drs_config
-
+      # Enable DRS too
+      if params.has_key? 'drs_config' and not params['drs_config'].nil?
+        resource_hash['asm::cluster'][title]['drs_config'] = {
+          'enabled' => 'true'} # [TODO] populate w/ a hash of conf values from drs_config 
+      end
 
       # Add ESXi hosts and creds as separte resources
       (find_related_components('SERVER', component) || []).each do |server_component|
