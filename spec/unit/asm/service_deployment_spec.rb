@@ -85,9 +85,9 @@ describe ASM::ServiceDeployment do
         .returns('[{"name":"agent-foo"}]')
 
         RestClient.stubs(:get)
-        .with(URI.escape("http://localhost:7080/v3/reports?query=[\"=\", \"certname\", \"agent-foo\"]&order-by=[{\"field\": \"end-time\", \"order\": \"desc\"}]&limit=1"),
+        .with(URI.escape("http://localhost:7080/v3/reports?query=[\"=\", \"certname\", \"agent-foo\"]&order-by=[{\"field\": \"receive-time\", \"order\": \"desc\"}]&limit=1"),
         {:content_type => :json, :accept => :json})
-        .returns('[{"end-time":"1969-01-01 01:00:00 -0600", "hash":"fooreport"}]')
+        .returns('[{"receive-time":"1969-01-01 01:00:00 -0600", "hash":"fooreport"}]')
 
         RestClient.stubs(:get)
         .with(URI.escape("http://localhost:7080/v3/events?query=[\"=\", \"report\", \"fooreport\"]"),
@@ -392,9 +392,9 @@ describe ASM::ServiceDeployment do
           .returns('[{"name":"host"}]')
 
       RestClient.stubs(:get)
-        .with(URI.escape("http://localhost:7080/v3/reports?query=[\"=\", \"certname\", \"host\"]&order-by=[{\"field\": \"end-time\", \"order\": \"desc\"}]&limit=1"),
+        .with(URI.escape("http://localhost:7080/v3/reports?query=[\"=\", \"certname\", \"host\"]&order-by=[{\"field\": \"receive-time\", \"order\": \"desc\"}]&limit=1"),
         {:content_type => :json, :accept => :json})
-          .returns('[{"end-time":"1969-01-01 01:00:00 -0600", "hash":"fooreport"}]')
+          .returns('[{"receive-time":"1969-01-01 01:00:00 -0600", "hash":"fooreport"}]')
     end
 
     it 'should be able to detect when a node has checked in' do
