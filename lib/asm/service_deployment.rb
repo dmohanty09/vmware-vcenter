@@ -1547,13 +1547,13 @@ class ASM::ServiceDeployment
       resource_hash['asm::cluster'][title]['ensure'] = 'present'
       
       # Enable Vcenter HA
-      if params.has_key? 'ha_config' and not params['ha_config'].nil?
+      if params.has_key? 'ha_config' and params['ha_config'].downcase == "true"
         resource_hash['asm::cluster'][title]['clusterConfigSpecEx'] = {
           'dasConfig' => { 'enabled' => 'true'}} # [TODO] populate w/ a hash of conf values from ha_config
       end
 
       # Enable DRS too
-      if params.has_key? 'drs_config' and not params['drs_config'].nil?
+      if params.has_key? 'drs_config' and params['drs_config'].downcase == "true"
         resource_hash['asm::cluster'][title]['drs_config'] = {
           'enabled' => 'true'} # [TODO] populate w/ a hash of conf values from drs_config 
       end
