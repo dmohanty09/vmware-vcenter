@@ -8,7 +8,7 @@ module ASM
       # and converts them into the expected asm::server
       # resource hash
       #
-      def self.munge_hyperv_server(title, old_resources, target_ip, vol_names)
+      def self.munge_hyperv_server(title, old_resources, target_ip, vol_names, disk_part_flag)
 
         resources = old_resources.dup 
 
@@ -107,6 +107,7 @@ module ASM
             puppet_classification_data['hyperv::config']['iscsi_ip_addresses'].push(net_array.last['staticNetworkConfiguration']['ip_address'])
           end
 
+          puppet_classification_data['hyperv::config']['hyperv_diskpart'] = disk_part_flag
         end
 
         server_params['puppet_classification_data'] = puppet_classification_data

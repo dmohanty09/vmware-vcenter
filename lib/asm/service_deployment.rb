@@ -1294,12 +1294,14 @@ class ASM::ServiceDeployment
       unless vol_names.size == 2
         raise(Exception, "Expected to find two volumes, found #{vol_names.size}")
       end
+      disk_part_flag = get_disk_part_flag(component)
       target_ip = ASM::Util.find_equallogic_iscsi_ip(target_devices.first)
       resource_hash = ASM::Processor::Server.munge_hyperv_server(
                         title,
                         resource_hash,
                         target_ip,
-                        vol_names
+                        vol_names,
+                        disk_part_flag
                       )
     end
 
@@ -2343,12 +2345,61 @@ class ASM::ServiceDeployment
       'hosts' => hyperv_hostnames,
       'username' => domain_username,
       'password' => run_as_account_credentials['password'],
+      'fqdn' => run_as_account_credentials['fqdn'],
       'scvmm_server' => cert_name,
       }
     }
 
     process_generic(cert_name, resource_hash, 'apply')
   end
+  
+def configure_hyperv_cluster_storage(component, cluster_resource_hash,title)
+
+  cert_name = component['puppetCertName']
+  # Get all the hyperV hosts
+  hyperv_hosts = find_related_components('SERVER', component)
+  if hyperv_hosts.size == 0
+    logger.debug("No HyperV hosts in the template, skipping cluster configuration")
+    return true
+  end
+
+  hyperv_hostnames = get_hyperv_server_hostnames(hyperv_hosts)
+  logger.debug "HyperV Host's hostname: #{hyperv_hostnames}"
+
+  # Run-As-Account
+  run_as_account_credentials = run_as_account_credentials(hyperv_hosts[0])
+  logger.debug("Run-As Accounf credentials: #{run_as_account_credentials}")
+  host_group = cluster_resource_hash['asm::cluster::scvmm'][title]['path']
+  cluster_name = cluster_resource_hash['asm::cluster::scvmm'][title]['name']
+  logger.debug "Cluster name: #{cluster_name}"
+
+  # if not then reserve one ip address from the converged net
+  cluster_ip_address = cluster_resource_hash['asm::cluster::scvmm'][title]['ipaddress']
+  logger.debug "Cluster IP Address in service template: #{cluster_ip_address}"
+  if cluster_ip_address.nil?
+    cluster_ip_address = get_hyperv_cluster_ip(hyperv_hosts[0])
+  end
+
+  domain_username = "#{run_as_account_credentials['domain_name']}\\#{run_as_account_credentials['username']}"
+  resource_hash = Hash.new
+
+  deviceconf = ASM::Util.parse_device_config(cert_name)
+  resource_hash['asm::cluster::scvmm'] = {
+    "#{cluster_name}" => {
+    'ensure'      => 'present',
+    'host_group' => host_group,
+    'ipaddress' => cluster_ip_address,
+    'hosts' => hyperv_hostnames,
+    'username' => domain_username,
+    'password' => run_as_account_credentials['password'],
+    'fqdn' => run_as_account_credentials['fqdn'],
+    'scvmm_server' => cert_name,
+    }
+  }
+
+  process_generic(cert_name, resource_hash, 'apply')
+end
+
   
   def run_as_account_credentials(server_component)
     run_as_account = {}
@@ -2359,6 +2410,7 @@ class ASM::ServiceDeployment
       run_as_account['username'] = params['domain_admin_user']
       run_as_account['password'] = params['domain_admin_password']
       run_as_account['domain_name'] = params['domain_name']
+      run_as_account['fqdn'] = params['fqdn']
     end
     run_as_account
   end
@@ -2384,7 +2436,7 @@ class ASM::ServiceDeployment
         hyperv_host_names.push("#{os_host_name}.#{fqdn}")
       end
     end
-    hyperv_host_names
+    hyperv_host_names.sort
   end
   
   def get_hyperv_cluster_ip(component)
@@ -2402,6 +2454,21 @@ class ASM::ServiceDeployment
       end
     end
     cluster_ip[0]
+  end
+  
+  # Server first in the acending order will have the flag as true
+  def get_disk_part_flag(server_component)
+    disk_part_flag = false
+    server_cert_names = []
+    cert_name = component['puppetCertName']
+    (@components_by_type['SERVER'] || []).each do |server_component|
+      server_cert_names.push(server_component['puppetCertName'])
+    end
+    server_cert_names.compact.uniq.sort
+    if (server_cert_names.compact.uniq.sort[0] == cert_name)
+      disk_part_flag = true
+    end
+    disk_part_flag
   end
   
 end
