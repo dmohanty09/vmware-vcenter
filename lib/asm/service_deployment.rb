@@ -1980,7 +1980,7 @@ class ASM::ServiceDeployment
 
       #get the latest report
       query_str = "[\"=\", \"certname\", \"#{certname}\"]"
-      order_str = "[{\"field\": \"end-time\", \"order\": \"desc\"}]"
+      order_str = "[{\"field\": \"receive-time\", \"order\": \"desc\"}]"
       report_url = "http://localhost:7080/v3/reports?query=#{URI.escape(query_str)}&order-by=#{URI.escape(order_str)}&limit=1"
       resp = JSON.parse(RestClient.get(report_url, :content_type=> :json, :accept => :json))
       if resp.size == 0
@@ -1989,8 +1989,8 @@ class ASM::ServiceDeployment
       
       #Check if report ended after the await_agent_run_completion function started
       #The agent shouldn't check in so fast that it checks in before this function has been called.  Takes many minutes to provision/insall OS
-      report_end_time = Time.parse(resp.first["end-time"])
-      if(report_end_time < function_start)
+      report_receive_time = Time.parse(resp.first["receive-time"])
+      if(report_receive_time < function_start)
         raise(CommandException, "Reports found, but not from recent runs.  Retrying...")
       end
 
