@@ -8,6 +8,7 @@ module ASM
       data = JSON.parse(File.read(deployment_json_file(id)))
       names = self.get_deployment_certs((data['Deployment'] || {}))
       if names !=[]
+        ASM.unblock_hostlist(names)
         self.clean_deployment_certs(names)
         logger.debug("Deactivated nodes #{names.join(',')} from deployment id #{id}") if logger
         self.clean_puppetdb_nodes(names)
