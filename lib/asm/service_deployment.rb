@@ -1545,7 +1545,7 @@ class ASM::ServiceDeployment
     (resource_hash['asm::cluster'] || {}).each do |title, params|
       resource_hash['asm::cluster'][title]['vcenter_options'] = { 'insecure' => true }
       resource_hash['asm::cluster'][title]['ensure'] = 'present'
-      
+
       # Add ESXi hosts and creds as separte resources
       (find_related_components('SERVER', component) || []).each do |server_component|
         server_conf = ASM::Util.build_component_configuration(server_component, :decrypt => decrypt?)
