@@ -1546,24 +1546,6 @@ class ASM::ServiceDeployment
       resource_hash['asm::cluster'][title]['vcenter_options'] = { 'insecure' => true }
       resource_hash['asm::cluster'][title]['ensure'] = 'present'
       
-      # Enable Vcenter HA
-      if params.has_key? 'ha_config' and params['ha_config'].downcase == "true"
-        # we first need to take ha_config out of the yaml
-        resource_hash['asm::cluster'][title].tap{|x| x.delete('ha_config')}
-	# [TODO] populate w/ a hash of conf values from ha_config
-        resource_hash['asm::cluster'][title]['clusterConfigSpecEx'] = {
-          'dasConfig' => {
-            'enabled' => 'true',
-            'admissionControlEnabled' => 'true',
-            'hostMonitoring' => 'enabled' } }
-      end
-
-      # Enable DRS too
-      if params.has_key? 'drs_config' and params['drs_config'].downcase == "true"
-        resource_hash['asm::cluster'][title]['drs_config'] = {
-          'enabled' => 'true'} # [TODO] populate w/ a hash of conf values from drs_config 
-      end
-
       # Add ESXi hosts and creds as separte resources
       (find_related_components('SERVER', component) || []).each do |server_component|
         server_conf = ASM::Util.build_component_configuration(server_component, :decrypt => decrypt?)
