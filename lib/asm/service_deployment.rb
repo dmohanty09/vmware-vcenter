@@ -1550,8 +1550,12 @@ class ASM::ServiceDeployment
       if params.has_key? 'ha_config' and params['ha_config'].downcase == "true"
         # we first need to take ha_config out of the yaml
         resource_hash['asm::cluster'][title].tap{|x| x.delete('ha_config')}
+	# [TODO] populate w/ a hash of conf values from ha_config
         resource_hash['asm::cluster'][title]['clusterConfigSpecEx'] = {
-          'dasConfig' => { 'enabled' => 'true'}} # [TODO] populate w/ a hash of conf values from ha_config
+          'dasConfig' => {
+            'enabled' => 'true',
+            'admissionControlEnabled' => 'true',
+            'hostMonitoring' => 'enabled' } }
       end
 
       # Enable DRS too
