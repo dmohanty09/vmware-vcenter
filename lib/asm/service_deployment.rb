@@ -2335,6 +2335,7 @@ class ASM::ServiceDeployment
     domain_username = "#{run_as_account_credentials['domain_name']}\\#{run_as_account_credentials['username']}"
     resource_hash = Hash.new
 
+    host_group_array = Array.new
     deviceconf = ASM::Util.parse_device_config(cert_name)
     resource_hash['asm::cluster::scvmm'] = {
       "#{cluster_name}" => {
@@ -2344,6 +2345,8 @@ class ASM::ServiceDeployment
       'hosts' => hyperv_hostnames,
       'username' => domain_username,
       'password' => run_as_account_credentials['password'],
+      'logical_network_hostgroups' => host_group_array.push(host_group),
+      'logical_network_subnet_vlans' => get_logical_network_subnet_vlans(hyperv_hosts[0]),
       'fqdn' => run_as_account_credentials['fqdn'],
       'scvmm_server' => cert_name,
       }
@@ -2454,6 +2457,78 @@ end
     end
     cluster_ip[0]
   end
+  
+
+  def get_logical_network_name(component)
+    logical_network_name = ''
+    cert_name = component['puppetCertName']
+    server_conf = ASM::Util.build_component_configuration(component, :decrypt => decrypt?)
+    network_params = (server_conf['asm::esxiscsiconfig'] || {})[cert_name]
+    if network_params
+      [ 'converged_network'].each do |net|
+        logger.debug "Network GUID : #{network_params.inspect}"
+        if  network_params[net]
+          logical_network_name = network_params[net][0]['name']
+        end
+      end
+    end
+    logical_network_name
+  end
+  
+def get_logical_network_subnet_vlans(server_component)
+  server_cert=server_component['puppetCertName']
+  server_vlan_info        = {}
+  logical_network_vlaninfo = []
+  server_conf = ASM::Util.build_component_configuration(server_component, :decrypt => decrypt?)
+  network_params = (server_conf['asm::esxiscsiconfig'] || {})[server_cert]
+  if network_params
+    [ 'hypervisor_network', 'converged_network', 'vmotion_network',
+      'private_cluster_network', 'live_migration_network'
+    ].each do |net|
+      if  network_params[net]
+        networks = network_params[net]
+        raise(Exception, "Exactly one #{net} expected") unless networks.size == 1
+        vlan = networks[0]['vlanId'].to_s
+        logger.debug "#{net} :: #{vlan}"
+        #logical_network_vlaninfo.push(vlan)
+      end
+    end
+
+    if network_params['workload_network']
+      networks = network_params['workload_network']
+      networks.each do |network|
+        logical_network_vlan = {}
+        #logical_network_vlaninfo.push(network['vlanId'])
+        logical_network_vlan = { 'vlan' => network['vlanId'],
+                                 'subnet' => ''
+                               }
+        #logical_network_vlaninfo.push(vlan)
+        logical_network_vlaninfo.push(logical_network_vlan)
+
+      end
+    end
+
+    if network_params['pxe_network']
+      networks = network_params['pxe_network']
+      raise(Exception, "Exactly one pxe network expected, found #{network_params['pxe_network'].inspect}") unless networks.size == 1
+      pxevlanid = networks[0]['vlanId']
+      logical_network_vlan = {}
+      logical_network_vlan = { 'vlan' => pxevlanid,
+                                 'subnet' => ''
+                               }
+        #logical_network_vlaninfo.push(vlan)
+        logical_network_vlaninfo.push(logical_network_vlan)
+
+      #logical_network_vlaninfo.push(pxevlanid.to_s)
+    end
+
+    logger.debug "Logical Network vlan info #{logical_network_vlaninfo}"
+  else
+    log("Did not find expected class asm::iscsiconfig")
+  end
+  logical_network_vlaninfo
+end
+
 
   #This function gets the related services to a component, and creates the classification data that will be passed to puppet module
   def get_classification_data(component, hostname)
