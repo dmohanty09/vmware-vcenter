@@ -273,37 +273,37 @@ class ASM::ServiceDeployment
   # only if the SAN Switch configuration flag is set to true
   # And compellent is available in the service template
   def process_san_switches()
-    
+
     # Check if Compellent is added to the service template
     if !compellent_in_service_template()
       logger.debug "Compellent is not in the service template, skippnig SAN configuration"
       return
     end
-    
+
     # Get Information from compellent component
     san_info_hash=get_compellent_san_information()
     logger.debug "Configure SAN Value: #{san_info_hash['configure_san_switch']}"
     if !san_info_hash['configure_san_switch']
-      logger.debug "Service template has configure SAN switch flag to false, 
+      logger.debug "Service template has configure SAN switch flag to false,
       skipping SAN switch configuration"
       return
     end
-    
+
     fcsupport=servers_has_fc_enabled()
     if !fcsupport['returncode']
       logger.error(fcsupport['returnmessage'])
       raise(Exception,"#{fcsupport['returnmessage']}")
     end
-    
+
     # Reboot all servers to ensure that the WWPN values are accessible on the Brocade switch
     reboot_all_servers()
 
     # Initiating the discovery of the Brocade switches so that all the values are updated
     initiate_discovery(@brocade_san_switchhash)
-    
+
     # Get the compellent controller id's, required for mapping of information
     compellent_contollers=compellent_controller_ids()
-      
+
     # Perform the SAN configuration for each server
     (@components_by_type['SERVER'] || []).each do |server_component|
       server_cert_name =  server_component['puppetCertName']
@@ -325,7 +325,7 @@ class ASM::ServiceDeployment
           next
         else
           logger.debug "WWPNs from the WSMAN command: #{wwpns}"
-          
+
           #new_wwns = wwpns.gsub(/:/, '').split(',')
           #logger.debug "WWPNs identified #{new_wwns}"
         end
@@ -442,13 +442,13 @@ class ASM::ServiceDeployment
           noop_opt     = @noop ? '--noop' : ''
           cmd = "sudo puppet asm process_node --debug --trace --filename #{resource_file} --run_type #{puppet_run_type} --statedir #{resources_dir} #{noop_opt} #{override_opt}#{cert_name}"
           logger.debug "Executing the command #{cmd}"
-          
+
           if @debug
             logger.info("[DEBUG MODE] puppet execution skipped")
           else
             ASM::Util.run_command(cmd, puppet_out)
           end
-          
+
           if puppet_run_type == 'device'
             update_inventory_through_controller(asm_guid)
           end
@@ -487,10 +487,10 @@ class ASM::ServiceDeployment
     results
   end
 
-  # 
+  #
   # occassionally, the same certificate is re-used by multiple
   # components in the same service deployment. This code checks
-  # if a given filename already exists, and creates a different 
+  # if a given filename already exists, and creates a different
   # resource file by appending a counter to the end of the
   # resource file name.
   #
@@ -560,7 +560,7 @@ class ASM::ServiceDeployment
       end.compact.flatten.uniq
     end
   end
-  
+
   # Get the iSCSI IP Address reserved for each of the server
   # and return the list of IP Addresses
   def get_dell_server_iscsi_ipaddresses()
@@ -647,7 +647,7 @@ class ASM::ServiceDeployment
         resource_hash['equallogic::create_vol_chap_user_access'][title]['iqnorip'] = new_iscsi_iporiqn
       end
     end
-    
+
     process_generic(
       component['puppetCertName'],
       resource_hash,
@@ -892,11 +892,11 @@ class ASM::ServiceDeployment
       else
         switch_active_zoneset=switch_info[2]
       end
-      
+
       switch_storage_alias=switch_info[3]
       logger.debug"switch_active_zoneset: #{switch_active_zoneset}"
       logger.debug"switch_storage_alias:#{switch_storage_alias}"
-      
+
       service_tag=self.cert_name_to_service_tag(server_cert_name)
       zone_name="ASM_#{service_tag}"
 
@@ -1181,7 +1181,7 @@ class ASM::ServiceDeployment
         logger.error(msg)
         raise(Exception, msg)
       end
-      
+
       title = resource_hash['asm::server'].keys[0]
       params = resource_hash['asm::server'][title]
       os_image_type = params['os_image_type']
@@ -1189,7 +1189,7 @@ class ASM::ServiceDeployment
       classes_config = get_classification_data(component, os_host_name)
       massage_asm_server_params(serial_number, params, classes_config)
     end
-    
+
     # Create a vmware ks.cfg include file containing esxcli command line
     # calls to create a static management network that will be executed
     # from the vmware ks.cfg
@@ -1235,7 +1235,7 @@ class ASM::ServiceDeployment
           content += " --hostname='#{os_host_name}'"
         end
         content += "\n"
-        
+
         resource_hash['file'] = {}
         resource_hash['file'][cert_name] = {
           'path' => "/opt/razor-server/installers/vmware_esxi/bootproto_#{serial_number}.inc.erb",
@@ -1253,7 +1253,7 @@ class ASM::ServiceDeployment
         logger.error(msg)
         raise(Exception, msg)
       end
-      
+
       title = resource_hash['asm::idrac'].keys[0]
       params = resource_hash['asm::idrac'][title]
       deviceconf = ASM::Util.parse_device_config(cert_name)
@@ -1315,7 +1315,7 @@ class ASM::ServiceDeployment
 
     # Check whether we should skip calling process_generic based on
     # whether the server already seems to be installed with the correct
-    # O/S. Don't bother doing this if we are @debug since we do not 
+    # O/S. Don't bother doing this if we are @debug since we do not
     # actually execute any puppet commands in that case any way.
     skip_deployment = nil
     unless @debug
@@ -1647,7 +1647,7 @@ class ASM::ServiceDeployment
                     # end up on so that the datastore can be configured.
                     next_require = "Esx_portgroup[#{title}]"
 
-                    # Increment vmk_index except for hypervisor_network which will 
+                    # Increment vmk_index except for hypervisor_network which will
                     # always be vmk0
                     if portgroup['portgrouptype'] == 'VMkernel' && type != 'hypervisor_network'
                       vmk_index += 1
@@ -1672,12 +1672,12 @@ class ASM::ServiceDeployment
                 storage_cert = storage_component['puppetCertName']
                 storage_creds = ASM::Util.parse_device_config(storage_cert)
                 storage_hash = ASM::Util.build_component_configuration(storage_component, :decrypt => decrypt?)
-                
+
                 esx_password = server_params['admin_password']
                 if decrypt?
                   esx_password = ASM::Cipher.decrypt_string(esx_password)
                 end
-                
+
                 if storage_hash['equallogic::create_vol_chap_user_access']
                   # Configure iscsi datastore
                   if @debug
@@ -1686,7 +1686,7 @@ class ASM::ServiceDeployment
                     hba_list = parse_hbas(hostip, ESXI_ADMIN_USER, esx_password)
                   end
                   raise(Exception, "Network not setup for #{server_cert}") unless storage_network_vmk_index
-                  
+
                   storage_hash['equallogic::create_vol_chap_user_access'].each do |storage_title, storage_params|
                     resource_hash['asm::datastore'] ||= {}
                     resource_hash['asm::datastore']["#{hostip}:#{storage_title}"] = {
@@ -1709,28 +1709,28 @@ class ASM::ServiceDeployment
                     }
                   end
                 end
-                
+
                 if storage_hash['compellent::createvol']
                   # Configure fiber channel datastore
-                  
+
                   storage_hash['compellent::createvol'].each do |volume, storage_params|
                     folder = storage_params['volumefolder']
                     asm_guid = storage_component['asmGUID']
-                    
+
                     if @debug
                       lun_id = 0
                     else
                       device_id = ASM::Util.find_compellent_volume_info(asm_guid, volume, folder, logger)
                       logger.debug("Compellent Volume info: #{device_id}")
-                      decrypt_password=server_params['admin_password'] 
+                      decrypt_password=server_params['admin_password']
                       if decrypt?
                         decrypt_password = ASM::Cipher.decrypt_string(server_params['admin_password'])
                       end
                       lun_id = get_compellent_lunid(hostip, 'root', decrypt_password, device_id)
                     end
-                    
+
                     logger.debug("Volume's LUN ID: #{lun_id}")
-                    
+
                     resource_hash['asm::fcdatastore'] ||= {}
                     resource_hash['asm::fcdatastore']["#{hostip}:#{volume}"] = {
                       'data_center' => params['datacenter'],
@@ -1765,7 +1765,7 @@ class ASM::ServiceDeployment
       mark_vcenter_as_needs_update(component['asmGUID'])
     end
   end
-  
+
   def parse_hbas(hostip, username, password)
     log("getting hba information for #{hostip}")
     endpoint = {
@@ -1783,7 +1783,7 @@ class ASM::ServiceDeployment
     hba_list = h_list.sort_by{|hba| hba['Adapter'][/[0-9]+/].to_i }.select do |hba|
       hba['Description'].end_with?('iSCSI Adapter')
     end.map { |hba| hba['Adapter'] }
-    
+
     if hba_list.count > 2
       log("Found iSCSI adapters #{hba_list.join(', ')} for #{hostip}; using #{hba_list[0]} and #{hba_list[1]} for datastore")
     elsif hba_list.count < 2
@@ -1793,7 +1793,7 @@ class ASM::ServiceDeployment
     end
     hba_list
   end
- 
+
   def process_virtualmachine(component)
     log("Processing virtualmachine component: #{component['puppetCertName']}")
     resource_hash = ASM::Util.build_component_configuration(component, :decrypt => decrypt?)
@@ -1848,7 +1848,7 @@ class ASM::ServiceDeployment
 
     #Added for multiple vm networks
     n_i = [{'portgroup' => 'VM Network', 'nic_type' => 'vmxnet3'}]
-    vm_params['network_interfaces'].split(',').reject { |x| x.empty? }.each do |portgroup| 
+    vm_params['network_interfaces'].split(',').reject { |x| x.empty? }.each do |portgroup|
       n_i << {'portgroup' => portgroup, 'nic_type' => 'vmxnet3'}
     end
     vm_params['network_interfaces'] = n_i
@@ -1962,7 +1962,7 @@ class ASM::ServiceDeployment
       if resp.size == 0
         raise(CommandException, "No reports for #{certname}.  Retrying...")
       end
-      
+
       #Check if report ended after the await_agent_run_completion function started
       #The agent shouldn't check in so fast that it checks in before this function has been called.  Takes many minutes to provision/insall OS
       report_receive_time = Time.parse(resp.first["receive-time"])
@@ -1986,7 +1986,7 @@ class ASM::ServiceDeployment
       true
     end
   end
-  
+
   def hyperv_post_installation(os_host_name,certname,timeout = 3600)
     # Reboot the server
     serverhash = get_server_inventory(certname)
@@ -2033,7 +2033,7 @@ class ASM::ServiceDeployment
     type = params['os_image_type'] || raise(Exception, "resource #{title} is missing required server attribute os_image_type")
     hostname = params['os_host_name'] || raise(Exception, "resource #{title} is missing required server attribute os_host_name")
     hostdisplayname = "#{serial_num} (#{hostname})"
-    
+
     log("Waiting until #{hostdisplayname} has checked in with Razor")
     dhcp_ip = find_host_ip_blocking(serial_num, timeout)
     log("#{hostdisplayname} has checked in with Razor with ip address #{dhcp_ip}")
@@ -2161,7 +2161,7 @@ class ASM::ServiceDeployment
           tagged_workloadvlaninfo.push(network['vlanId'])
         end
       end
- 
+
       if network_params['pxe_network']
         networks = network_params['pxe_network']
         raise(Exception, "Exactly one pxe network expected, found #{network_params['pxe_network'].inspect}") unless networks.size == 1
@@ -2180,14 +2180,14 @@ class ASM::ServiceDeployment
     end
     return server_vlan_info
   end
-  
+
   def initiate_discovery(device_hash)
     if !device_hash.empty?
       discovery_obj = Discoverswitch.new(device_hash)
-      discovery_obj.discoverswitch(logger)  
+      discovery_obj.discoverswitch(logger)
     end
   end
-  
+
   def compellent_in_service_template()
     found=false
     (@components_by_type['STORAGE'] || []).each do |storage_component|
@@ -2199,10 +2199,10 @@ class ASM::ServiceDeployment
     end
     found
   end
-  
+
   def compellent_controller_ids()
     controller_info={}
-    
+
     (@components_by_type['STORAGE'] || []).each do |storage_component|
       storage_cert_name = storage_component['puppetCertName']
       if (storage_cert_name.downcase.match(/compellent/) != nil)
@@ -2214,7 +2214,7 @@ class ASM::ServiceDeployment
     end
     controller_info
   end
-  
+
   def get_compellent_san_information()
     #    saninformation={
     #      'configure_san_switch' => true,
@@ -2243,7 +2243,7 @@ class ASM::ServiceDeployment
       'configure_san_switch' => configure_san_switch,
     }
   end
-  
+
   def reboot_all_servers
     reboot_count = 0
     (@components_by_type['SERVER'] || []).each do |server_component|
@@ -2266,7 +2266,7 @@ class ASM::ServiceDeployment
       logger.debug "No server is rebooted, no need to sleep"
     end
   end
-   
+
   def servers_has_fc_enabled()
     returncode=true
     returnmessage=""
@@ -2285,7 +2285,7 @@ class ASM::ServiceDeployment
       'returnmessage' => returnmessage
     }
   end
-  
+
   def get_compellent_lunid(hostip, username, password, compellent_deviceid)
     log("getting storage core path information for #{hostip}")
     endpoint = {
@@ -2293,7 +2293,7 @@ class ASM::ServiceDeployment
       :user => username,
       :password => password,
     }
-    
+
     cmd = 'storage core path list'.split
     storage_path = ASM::Util.esxcli(cmd, endpoint, logger, true)
     storage_info = storage_path.scan(/Device:\s+naa.#{compellent_deviceid}.*?LUN:\s+(\d+)/m)
@@ -2304,7 +2304,7 @@ class ASM::ServiceDeployment
     end
     storage_info[0][0]
   end
-  
+
   def configure_hyperv_cluster(component, cluster_resource_hash,title)
 
     cert_name = component['puppetCertName']
@@ -2351,7 +2351,7 @@ class ASM::ServiceDeployment
 
     process_generic(cert_name, resource_hash, 'apply')
   end
-  
+
 def configure_hyperv_cluster_storage(component, cluster_resource_hash,title)
 
   cert_name = component['puppetCertName']
@@ -2399,7 +2399,7 @@ def configure_hyperv_cluster_storage(component, cluster_resource_hash,title)
   process_generic(cert_name, resource_hash, 'apply')
 end
 
-  
+
   def run_as_account_credentials(server_component)
     run_as_account = {}
     resource_hash = ASM::Util.build_component_configuration(server_component, :decrypt => decrypt?)
@@ -2413,7 +2413,7 @@ end
     end
     run_as_account
   end
-  
+
   def get_hyperv_server_hostnames(server_components)
     hyperv_host_names = []
     server_components.each do |component|
@@ -2437,7 +2437,7 @@ end
     end
     hyperv_host_names.sort
   end
-  
+
   def get_hyperv_cluster_ip(component)
     # Need to reserve a IP address from the converged network
     cluster_ip = ''
@@ -2467,12 +2467,12 @@ end
     }
     return classes_config
   end
-  
+
   # Server first in the acending order will have the flag as true
   def get_disk_part_flag(server_component)
     disk_part_flag = false
     server_cert_names = []
-    cert_name = component['puppetCertName']
+    cert_name = server_component['puppetCertName']
     (@components_by_type['SERVER'] || []).each do |server_component|
       server_cert_names.push(server_component['puppetCertName'])
     end
@@ -2482,6 +2482,5 @@ end
     end
     disk_part_flag
   end
-  
-end
 
+end
