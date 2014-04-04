@@ -2322,6 +2322,17 @@ class ASM::ServiceDeployment
     run_as_account_credentials = run_as_account_credentials(hyperv_hosts[0])
     logger.debug("Run-As Accounf credentials: #{run_as_account_credentials}")
     host_group = cluster_resource_hash['asm::cluster::scvmm'][title]['path']
+
+    logger.debug "Host-Group : '#{host_group}'"
+    if ( host_group == '__new__')
+      logger.debug "New host-group needs to be created"
+      host_group = cluster_resource_hash['asm::cluster::scvmm'][title]['hostgroup']
+        if !host_group.include?('All Hosts')
+          logger.debug "Host-Group value do not contain All Hosts"
+          host_group = "All Hosts\\#{host_group}"
+        end
+    end
+
     cluster_name = cluster_resource_hash['asm::cluster::scvmm'][title]['name']
     logger.debug "Cluster name: #{cluster_name}"
 
@@ -2345,6 +2356,7 @@ class ASM::ServiceDeployment
       'hosts' => hyperv_hostnames,
       'username' => domain_username,
       'password' => run_as_account_credentials['password'],
+      'run_as_account_name' => run_as_account_credentials['username'],
       'logical_network_hostgroups' => host_group_array.push(host_group),
       'logical_network_subnet_vlans' => get_logical_network_subnet_vlans(hyperv_hosts[0]),
       'fqdn' => run_as_account_credentials['fqdn'],
@@ -2354,53 +2366,6 @@ class ASM::ServiceDeployment
 
     process_generic(cert_name, resource_hash, 'apply')
   end
-
-def configure_hyperv_cluster_storage(component, cluster_resource_hash,title)
-
-  cert_name = component['puppetCertName']
-  # Get all the hyperV hosts
-  hyperv_hosts = find_related_components('SERVER', component)
-  if hyperv_hosts.size == 0
-    logger.debug("No HyperV hosts in the template, skipping cluster configuration")
-    return true
-  end
-
-  hyperv_hostnames = get_hyperv_server_hostnames(hyperv_hosts)
-  logger.debug "HyperV Host's hostname: #{hyperv_hostnames}"
-
-  # Run-As-Account
-  run_as_account_credentials = run_as_account_credentials(hyperv_hosts[0])
-  logger.debug("Run-As Accounf credentials: #{run_as_account_credentials}")
-  host_group = cluster_resource_hash['asm::cluster::scvmm'][title]['path']
-  cluster_name = cluster_resource_hash['asm::cluster::scvmm'][title]['name']
-  logger.debug "Cluster name: #{cluster_name}"
-
-  # if not then reserve one ip address from the converged net
-  cluster_ip_address = cluster_resource_hash['asm::cluster::scvmm'][title]['ipaddress']
-  logger.debug "Cluster IP Address in service template: #{cluster_ip_address}"
-  if cluster_ip_address.nil?
-    cluster_ip_address = get_hyperv_cluster_ip(hyperv_hosts[0])
-  end
-
-  domain_username = "#{run_as_account_credentials['domain_name']}\\#{run_as_account_credentials['username']}"
-  resource_hash = Hash.new
-
-  deviceconf = ASM::Util.parse_device_config(cert_name)
-  resource_hash['asm::cluster::scvmm'] = {
-    "#{cluster_name}" => {
-    'ensure'      => 'present',
-    'host_group' => host_group,
-    'ipaddress' => cluster_ip_address,
-    'hosts' => hyperv_hostnames,
-    'username' => domain_username,
-    'password' => run_as_account_credentials['password'],
-    'fqdn' => run_as_account_credentials['fqdn'],
-    'scvmm_server' => cert_name,
-    }
-  }
-
-  process_generic(cert_name, resource_hash, 'apply')
-end
 
 
   def run_as_account_credentials(server_component)
