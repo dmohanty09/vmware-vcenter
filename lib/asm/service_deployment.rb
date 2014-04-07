@@ -184,7 +184,7 @@ class ASM::ServiceDeployment
       File.open(File.join(deployment_dir, 'deployment.json'), 'w') do |file|
         file.write(JSON.pretty_generate({ "Deployment" => service_deployment }))
       end
-
+      
       hostlist = ASM::DeploymentTeardown.get_deployment_certs(service_deployment)
       dup_servers = hostlist.select{|element| hostlist.count(element) > 1 }
       unless dup_servers.empty?
@@ -192,7 +192,9 @@ class ASM::ServiceDeployment
         logger.error(msg)
         raise(Exception, msg)
       end
-
+      if service_deployment['retry'] == 'true'
+        hostlist = hostlist - ASM::DeploymentTeardown.get_previous_deployment_certs(service_deployment['id'])
+      end
       ds = ASM::Util.check_host_list_against_previous_deployments(hostlist)
       unless ds.empty?
         msg = "The listed hosts are already in use #{ds.inspect}"

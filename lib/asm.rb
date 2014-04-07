@@ -2,6 +2,7 @@ require 'logger'
 require 'fileutils'
 require 'asm/service_deployment'
 require 'asm/deployment_teardown'
+require 'asm/update_deployment'
 
 module ASM
 
@@ -136,6 +137,10 @@ module ASM
 
   def self.clean_deployment(id)
     ASM::DeploymentTeardown.clean_deployment(id, logger)
+  end
+
+  def self.retry_deployment(id,deployment)
+    ASM::UpdateDeployment.retry_deployment(id,deployment)
   end
 
   private
