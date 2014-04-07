@@ -1732,7 +1732,7 @@ class ASM::ServiceDeployment
 
                       logger.info "Server params: #{server_params}"
                       resource_hash['esx_mem'] ||= {}
-                      resource_hash['esx_mem'][hostip] ||= {
+                      resource_hash['esx_mem'][hostip] = {
                         'require'                => [
                           "Esx_datastore[#{hostip}:#{storage_title}]",
                           "Esx_syslog[#{hostip}]"],
