@@ -1715,6 +1715,47 @@ class ASM::ServiceDeployment
                       'require' => "Asm::Datastore[#{hostip}:datastore]",
                       'transport' => 'Transport[vcenter]'
                     }
+
+                    # Esx_mem configuration is below
+                    if server_params.has_key? 'esx_mem' and server_params['esx_mem'] 
+                      vnics = resource_hash['esx_vswitch']["#{hostip}:vSwitch3"]['nics'].map do|n|
+                        n.strip
+                      end
+
+                      vnics_ipaddress = ['ISCSI0', 'ISCSI1'].map do |port|
+                        resource_hash['esx_portgroup']["#{hostip}:#{port}"]['ipaddress'].strip
+                      end
+
+                      vnics_ipaddress = vnics_ipaddress.join(',')
+                      vnics = vnics.join(',')
+
+                      logger.debug "Server params: #{server_params}"
+                      esx = {
+                        'require'                => [
+                          "Esx_datastore[#{hostip}:#{storage_title}]",
+                          "Esx_syslog[#{hostip}]"],
+                        'configure_mem'          => true,
+                        'install_mem'            => true,
+                        'script_executable_path' => '/opt/Dell/scripts/EquallogicMEM',
+                        'setup_script_filepath'  => 'setup.pl',
+                        'host_username'          => ESXI_ADMIN_USER,
+                        'host_password'          => server_params['admin_password'],
+                        'transport'              => "Transport[vcenter]",
+                        'storage_groupip'        => ASM::Util.find_equallogic_iscsi_ip(storage_cert),
+                        'iscsi_netmask'          => ASM::Util.find_equallogic_iscsi_netmask(storage_cert),
+                        'iscsi_vswitch'          => 'vSwitch3',  
+                        'vnics'                  => vnics,
+                        'vnics_ipaddress'        => vnics_ipaddress
+                      }
+                      if storage_params.has_key? 'chap_user_name' and not storage_params['chap_user_name'].empty?
+                        chap = {
+                          'iscsi_chapuser'         => storage_params['chap_user_name'],
+                          'iscsi_chapsecret'       => storage_params['passwd'] }
+                        esx.merge! chap 
+                      end
+                      resource_hash['esx_mem'] ||= {}
+                      resource_hash['esx_mem'][hostip] = esx
+                    end
                   end
                 end
 
@@ -1739,7 +1780,7 @@ class ASM::ServiceDeployment
 
                     logger.debug("Volume's LUN ID: #{lun_id}")
 
-                    resource_hash['asm::fcdatastore'] ||= {}
+                    
                     resource_hash['asm::fcdatastore']["#{hostip}:#{volume}"] = {
                       'data_center' => params['datacenter'],
                       'datastore' => params['datastore'],

@@ -46,6 +46,7 @@ module ASM
 
     def self.reserve_network_ips(guid, n_ips, usage_guid)
       url = "#{NETWORKS_RA_URL}/ipAddress/assign?networkId=#{URI.encode(guid)}&numberToReserve=#{n_ips}&usageGUID=#{URI.encode(usage_guid)}"
+      puts ("reserve_network_ips() - using:  #{url}")
       data = RestClient.put(url, {:content_type => :json}, {:accept => :json})
       ret = JSON.parse(data)
       n_retrieved = !ret ? 0 : ret.size
@@ -57,6 +58,7 @@ module ASM
 
     def self.release_network_ips(usage_guid)
       url = "#{NETWORKS_RA_URL}/ipAddress/release?usageGUID=#{URI.encode(usage_guid)}"
+      puts ("release_network_ips() - using:  #{url}")
       data = RestClient.put(url, '')
       true
     end
@@ -236,8 +238,8 @@ module ASM
       end
     end
 
-    # [TODO] merge with find_equallogic_iscsi_ip
     def self.find_equallogic_iscsi_netmask(cert_name)
+      # [XXX] we are not using '--terminus puppetdb' here, is this wrong?
       cmd = "sudo puppet facts find '#{cert_name}' "
       result = run_command_simple(cmd)
       unless result['exit_status'] == 0
@@ -251,7 +253,6 @@ module ASM
         facts['netmask']
       end
     end
-
 
     def self.find_compellent_controller_info(cert_name)
       facts = facts_find(cert_name)
@@ -415,7 +416,6 @@ module ASM
       unless result['exit_status'] == 0
         msg = "Failed to execute esxcli command on host #{endpoint[:host]}"
         logger.error(msg) if logger
-        args[0] = 'VI_PASSWORD=******' # mask password
         raise(Exception, "#{msg}: esxcli #{args.join(' ')}: #{result.inspect}")
       end
 
