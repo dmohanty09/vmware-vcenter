@@ -1,6 +1,9 @@
 require "sequel"
 require "aescrypt"
 require 'asm/util'
+require 'yaml'
+require 'base64'
+
 db_conf = YAML.load_file(ASM::Util::DATABASE_CONF)
 if RUBY_PLATFORM == "java"
   require 'jdbc/postgres'
