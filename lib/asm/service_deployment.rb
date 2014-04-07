@@ -1715,6 +1715,43 @@ class ASM::ServiceDeployment
                       'require' => "Asm::Datastore[#{hostip}:datastore]",
                       'transport' => 'Transport[vcenter]'
                     }
+
+                    # Esx_mem configuration is below
+                    # [XXX] For review: This might be better defined in a manifest
+                    if server_params.has_key? 'esx_mem' and server_params['esx_mem'].downcase == 'true'
+                      vnics = resource_hash['esx_vswitch']["#{hostip}:vSwitch3"]['nics'].map do|n|
+                        n.strip
+                      end
+                      vnics_ipaddress = []
+                      ['ISCSI0', 'ISCSI1'].each do |port|
+                        vnics_ipaddress += [ resource_hash['esx_portgroup']["#{hostip}:#{port}"]['ipaddress'].strip ]
+                      end
+
+                      vnics_ipaddress = vnics_ipaddress.join(',')
+                      vnics = vnics.join(',')
+
+                      logger.info "Server params: #{server_params}"
+                      resource_hash['esx_mem'] ||= {}
+                      resource_hash['esx_mem'][hostip] ||= {
+                        'require'                => [
+                          "Esx_datastore[#{hostip}:#{storage_title}]",
+                          "Esx_syslog[#{hostip}]"],
+                        'configure_mem'          => true,
+                        'install_mem'            => true,
+                        'script_executable_path' => '/opt/Dell/scripts/EquallogicMEM',
+                        'setup_script_filepath'  => 'setup.pl',
+                        'host_username'          => ESXI_ADMIN_USER,
+                        'host_password'          => server_params['admin_password'],
+                        'transport'              => "Transport[vcenter]",
+                        'storage_groupip'        => ASM::Util.find_equallogic_iscsi_ip(storage_cert),
+                        'iscsi_chapuser'         => storage_params['chap_user_name'],
+                        'iscsi_chapsecret'       => storage_params['passwd'],
+                        'iscsi_netmask'          => ASM::Util.find_equallogic_iscsi_netmask(storage_cert),
+                        'iscsi_vswitch'          => 'vSwitch3',  # [XXX] hardcoding this value - is there a way to discover this dynamically?
+                        'vnics'                  => vnics,
+                        'vnics_ipaddress'        => vnics_ipaddress
+                      }
+                    end
                   end
                 end
 
