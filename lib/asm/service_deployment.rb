@@ -1717,7 +1717,6 @@ class ASM::ServiceDeployment
                     }
 
                     # Esx_mem configuration is below
-                    # [XXX] For review: This might be better defined in a manifest
                     if server_params.has_key? 'esx_mem' and server_params['esx_mem'].downcase == 'true'
                       vnics = resource_hash['esx_vswitch']["#{hostip}:vSwitch3"]['nics'].map do|n|
                         n.strip
@@ -1730,9 +1729,8 @@ class ASM::ServiceDeployment
                       vnics_ipaddress = vnics_ipaddress.join(',')
                       vnics = vnics.join(',')
 
-                      logger.info "Server params: #{server_params}"
-                      resource_hash['esx_mem'] ||= {}
-                      resource_hash['esx_mem'][hostip] = {
+                      logger.debug "Server params: #{server_params}"
+                      esx = {
                         'require'                => [
                           "Esx_datastore[#{hostip}:#{storage_title}]",
                           "Esx_syslog[#{hostip}]"],
@@ -1744,13 +1742,19 @@ class ASM::ServiceDeployment
                         'host_password'          => server_params['admin_password'],
                         'transport'              => "Transport[vcenter]",
                         'storage_groupip'        => ASM::Util.find_equallogic_iscsi_ip(storage_cert),
-                        'iscsi_chapuser'         => storage_params['chap_user_name'],
-                        'iscsi_chapsecret'       => storage_params['passwd'],
                         'iscsi_netmask'          => ASM::Util.find_equallogic_iscsi_netmask(storage_cert),
-                        'iscsi_vswitch'          => 'vSwitch3',  # [XXX] hardcoding this value - is there a way to discover this dynamically?
+                        'iscsi_vswitch'          => 'vSwitch3',  
                         'vnics'                  => vnics,
                         'vnics_ipaddress'        => vnics_ipaddress
                       }
+                      if storage_params.has_key? 'chap_user_name' and not storage_params['chap_user_name'].empty?
+                        esx.merge! {
+                          'iscsi_chapuser'         => storage_params['chap_user_name'],
+                          'iscsi_chapsecret'       => storage_params['passwd']
+                        }
+                      end
+                      resource_hash['esx_mem'] ||= {}
+                      resource_hash['esx_mem'][hostip] = esx
                     end
                   end
                 end
@@ -1776,7 +1780,7 @@ class ASM::ServiceDeployment
 
                     logger.debug("Volume's LUN ID: #{lun_id}")
 
-                    resource_hash['asm::fcdatastore'] ||= {}
+                    
                     resource_hash['asm::fcdatastore']["#{hostip}:#{volume}"] = {
                       'data_center' => params['datacenter'],
                       'datastore' => params['datastore'],

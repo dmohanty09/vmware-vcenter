@@ -236,6 +236,23 @@ module ASM
       end
     end
 
+    # [TODO] merge with find_equallogic_iscsi_ip
+    def self.find_equallogic_iscsi_netmask(cert_name)
+      cmd = "sudo puppet facts find '#{cert_name}' "
+      result = run_command_simple(cmd)
+      unless result['exit_status'] == 0
+        msg = "Failed to find puppet facts for certificate name #{cert_name}"
+        raise(Exception, "#{msg}: #{cmd}: returned #{result.inspect}")
+      end
+      facts = (JSON.parse(result['stdout']) || {})['values']
+      unless facts['netmask']  # [XXX] there is also a netmask_eth0, using this one for now
+        raise(Exception, "Could not find ISCSI netmask for #{cert_name}")
+      else
+        facts['netmask']
+      end
+    end
+
+
     def self.find_compellent_controller_info(cert_name)
       facts = facts_find(cert_name)
       { 'controller1' => facts['controller_1_ControllerIndex'],
