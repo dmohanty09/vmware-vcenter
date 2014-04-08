@@ -1748,10 +1748,10 @@ class ASM::ServiceDeployment
                         'vnics_ipaddress'        => vnics_ipaddress
                       }
                       if storage_params.has_key? 'chap_user_name' and not storage_params['chap_user_name'].empty?
-                        esx.merge! {
+                        chap = {
                           'iscsi_chapuser'         => storage_params['chap_user_name'],
-                          'iscsi_chapsecret'       => storage_params['passwd']
-                        }
+                          'iscsi_chapsecret'       => storage_params['passwd'] }
+                        esx.merge! chap 
                       end
                       resource_hash['esx_mem'] ||= {}
                       resource_hash['esx_mem'][hostip] = esx
