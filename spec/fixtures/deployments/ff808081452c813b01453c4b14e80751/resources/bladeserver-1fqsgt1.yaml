@@ -1,0 +1,22 @@
+--- 
+  "asm::idrac": 
+    bladeserver-1fqsgt1: 
+      target_boot_device: HD
+      nfsipaddress: "172.25.15.100"
+      nfssharepath: /var/nfs/idrac_config_xml
+      servicetag: "1FQSGT1"
+      model: m620
+      before: 
+        - "Asm::Server[bladeserver-1fqsgt1]"
+  "asm::server": 
+    bladeserver-1fqsgt1: 
+      os_host_name: devlinuxhost1
+      admin_password: ff808081452c813b01453c4b146c074f
+      decrypt: true
+      razor_image: rhel6
+      os_image_type: redhat
+      rule_number: 851027101
+      broker_type: puppet
+      serial_number: "1FQSGT1"
+      policy_name: policy-devlinuxhost1-ff808081452c813b01453c4b14e80751
+      cert_name: agent-devlinuxhost1

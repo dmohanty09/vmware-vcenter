@@ -52,7 +52,6 @@ module ASM
       backup = backup_directory(dir)
       
       deployment_file = File.join(backup, 'deployment.json')
-      #deployment = JSON.parse(File.read(deployment_file))
       if debug_deployment == true
         deployment['Deployment']['debug'] = 'true'
       end
