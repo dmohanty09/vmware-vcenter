@@ -1717,13 +1717,12 @@ class ASM::ServiceDeployment
                     }
 
                     # Esx_mem configuration is below
-                    if server_params.has_key? 'esx_mem' and server_params['esx_mem'] == true
+                    if server_params.has_key? 'esx_mem' and server_params['esx_mem'] 
                       vnics = resource_hash['esx_vswitch']["#{hostip}:vSwitch3"]['nics'].map do|n|
                         n.strip
                       end
-                      vnics_ipaddress = []
-                      ['ISCSI0', 'ISCSI1'].each do |port|
-                        vnics_ipaddress += [ resource_hash['esx_portgroup']["#{hostip}:#{port}"]['ipaddress'].strip ]
+                      vnics_ipaddress = ['ISCSI0', 'ISCSI1'].map do |port|
+                        resource_hash['esx_portgroup']["#{hostip}:#{port}"]['host'].strip
                       end
 
                       vnics_ipaddress = vnics_ipaddress.join(',')
