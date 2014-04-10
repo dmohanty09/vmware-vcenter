@@ -1668,12 +1668,12 @@ class ASM::ServiceDeployment
               end
 
               logger.debug('Configuring the storage manifest')
+              storage_titles = Array.new # we will store storage_titles here - esx_syslog requires one
+
               (find_related_components('STORAGE', server_component) || []).each do |storage_component|
                 storage_cert = storage_component['puppetCertName']
                 storage_creds = ASM::Util.parse_device_config(storage_cert)
                 storage_hash = ASM::Util.build_component_configuration(storage_component, :decrypt => decrypt?)
-                storage_titles = Array.new # we will store storage_titles here - esx_syslog requires one
-
                 esx_password = server_params['admin_password']
                 if decrypt?
                   esx_password = ASM::Cipher.decrypt_string(esx_password)
