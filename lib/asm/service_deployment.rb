@@ -1721,8 +1721,9 @@ class ASM::ServiceDeployment
                       vnics = resource_hash['esx_vswitch']["#{hostip}:vSwitch3"]['nics'].map do|n|
                         n.strip
                       end
+
                       vnics_ipaddress = ['ISCSI0', 'ISCSI1'].map do |port|
-                        resource_hash['esx_portgroup']["#{hostip}:#{port}"]['host'].strip
+                        resource_hash['esx_portgroup']["#{hostip}:#{port}"]['ipaddress'].strip
                       end
 
                       vnics_ipaddress = vnics_ipaddress.join(',')
