@@ -1672,6 +1672,7 @@ class ASM::ServiceDeployment
                 storage_cert = storage_component['puppetCertName']
                 storage_creds = ASM::Util.parse_device_config(storage_cert)
                 storage_hash = ASM::Util.build_component_configuration(storage_component, :decrypt => decrypt?)
+                storage_titles = Array.new # we will store storage_titles here - esx_syslog requires one
 
                 esx_password = server_params['admin_password']
                 if decrypt?
@@ -1688,11 +1689,14 @@ class ASM::ServiceDeployment
                   raise(Exception, "Network not setup for #{server_cert}") unless storage_network_vmk_index
 
                   storage_hash['equallogic::create_vol_chap_user_access'].each do |storage_title, storage_params|
+
+                    storage_titles.push storage_title
+
                     resource_hash['asm::datastore'] ||= {}
                     resource_hash['asm::datastore']["#{hostip}:datastore"] ||= {
                       'data_center' => params['datacenter'],
-                      'datastore' => params['datastore'],
                       'cluster' => params['cluster'],
+                      'datastore' => storage_title,
                       'ensure' => 'present',
                       'esxhost' => hostip,
                       'esxusername' => 'root',
@@ -1763,6 +1767,7 @@ class ASM::ServiceDeployment
                   # Configure fiber channel datastore
 
                   storage_hash['compellent::createvol'].each do |volume, storage_params|
+                    storage_titles.push volume
                     folder = storage_params['volumefolder']
                     asm_guid = storage_component['asmGUID']
 
@@ -1783,7 +1788,7 @@ class ASM::ServiceDeployment
                     
                     resource_hash['asm::fcdatastore']["#{hostip}:#{volume}"] = {
                       'data_center' => params['datacenter'],
-                      'datastore' => params['datastore'],
+                      'datastore' => volume,
                       'cluster' => params['cluster'],
                       'ensure' => 'present',
                       'esxhost' => hostip,
@@ -1794,12 +1799,12 @@ class ASM::ServiceDeployment
                 end
               end
               logger.debug('Configuring persistent storage for logs')
-              if params['datastore']
+              if not storage_titles.empty?
                 resource_hash['esx_syslog'] ||= {}
                 resource_hash['esx_syslog'][hostip] = {
                   'log_dir_unique' => true,
                   'transport' => 'Transport[vcenter]',
-                  'log_dir' => "[#{params['datastore']}] logs"
+                  'log_dir' => "[#{storage_titles[0]}] logs"
                 }
               end
             end
