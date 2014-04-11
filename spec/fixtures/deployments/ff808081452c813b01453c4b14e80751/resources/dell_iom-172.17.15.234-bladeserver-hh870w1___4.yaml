@@ -1,0 +1,8 @@
+--- 
+  "asm::mxl": 
+    "20": 
+      vlan_name: ""
+      desc: ""
+      tagged_tengigabitethernet: "0/9"
+      tagged_portchannel: ""
+      mtu: 2500

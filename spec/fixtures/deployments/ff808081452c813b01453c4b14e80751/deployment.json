@@ -1,0 +1,370 @@
+{
+  "Deployment": {
+    "deploymentDescription": "",
+    "deploymentName": "devlinuxserv1",
+    "id": "ff808081452c813b01453c4b14e80751",
+    "jobStatus": "SUCCESSFUL",
+    "serviceTemplate": {
+      "id": "ff808081452c813b01453c49670a0744",
+      "templateName": "devlinuxtemp",
+      "templateDescription": "",
+      "draft": false,
+      "createdDate": "2014-04-07T13:03:34.666Z",
+      "createdBy": "admin",
+      "components": [
+        {
+          "id": "8e0f11be-d884-4a31-92be-906911f5ea6e",
+          "componentID": "component2",
+          "puppetCertName": "bladeserver-1fqsgt1",
+          "name": "Server 1",
+          "type": "SERVER",
+          "asmGUID": "ff808081452c813b01452cf8c01c065a",
+          "relatedComponents": "",
+          "resources": [
+            {
+              "id": "asm::idrac",
+              "displayName": "Hardware Settings",
+              "parameters": [
+                {
+                  "id": "target_boot_device",
+                  "value": "HD",
+                  "type": "ENUMERATED",
+                  "displayName": "Target Boot Device",
+                  "required": true,
+                  "requiredAtDeployment": false,
+                  "hideFromTemplate": false,
+                  "min": 0,
+                  "max": 0
+                },
+                {
+                  "id": "title",
+                  "value": "bladeserver-1fqsgt1",
+                  "type": "STRING",
+                  "required": true,
+                  "requiredAtDeployment": false,
+                  "hideFromTemplate": false
+                }
+              ]
+            },
+            {
+              "id": "asm::server",
+              "displayName": "OS Settings",
+              "parameters": [
+                {
+                  "id": "os_host_name",
+                  "value": "devlinuxhost1",
+                  "type": "STRING",
+                  "displayName": "Host Name",
+                  "required": true,
+                  "requiredAtDeployment": true,
+                  "hideFromTemplate": true,
+                  "min": 0,
+                  "max": 0
+                },
+                {
+                  "id": "admin_password",
+                  "value": "ff808081452c813b01453c4b146c074f",
+                  "type": "PASSWORD",
+                  "displayName": "Administrator password",
+                  "required": true,
+                  "requiredAtDeployment": false,
+                  "hideFromTemplate": false,
+                  "min": 0,
+                  "max": 0
+                },
+                {
+                  "id": "razor_image",
+                  "value": "rhel6",
+                  "type": "ENUMERATED",
+                  "displayName": "OS Image",
+                  "required": true,
+                  "requiredAtDeployment": false,
+                  "hideFromTemplate": false,
+                  "min": 0,
+                  "max": 0
+                },
+                {
+                  "id": "os_image_type",
+                  "value": "redhat",
+                  "type": "ENUMERATED",
+                  "displayName": "OS Image Type",
+                  "required": true,
+                  "requiredAtDeployment": false,
+                  "hideFromTemplate": false,
+                  "min": 0,
+                  "max": 0
+                },
+                {
+                  "id": "custom_script",
+                  "type": "TEXT",
+                  "displayName": "Custom OS Installation script",
+                  "required": false,
+                  "requiredAtDeployment": false,
+                  "hideFromTemplate": false,
+                  "min": 0,
+                  "max": 0
+                },
+                {
+                  "id": "title",
+                  "value": "bladeserver-1fqsgt1",
+                  "type": "STRING",
+                  "required": true,
+                  "requiredAtDeployment": false,
+                  "hideFromTemplate": false
+                }
+              ]
+            },
+            {
+              "id": "asm::esxiscsiconfig",
+              "displayName": "Network Settings",
+              "parameters": [
+                {
+                  "id": "identity_pool",
+                  "value": -1,
+                  "type": "ENUMERATED",
+                  "displayName": "Identity Pool",
+                  "required": true,
+                  "requiredAtDeployment": false,
+                  "hideFromTemplate": false,
+                  "min": 0,
+                  "max": 0
+                },
+                {
+                  "id": "storage_network",
+                  "value": "ff808081452c813b01452cf1876d00ce",
+                  "type": "ENUMERATED",
+                  "displayName": "Storage Network",
+                  "required": true,
+                  "requiredAtDeployment": false,
+                  "hideFromTemplate": false,
+                  "min": 0,
+                  "max": 0
+                },
+                {
+                  "id": "pxe_network",
+                  "value": "ff808081452c813b01452cefa56c00cd",
+                  "type": "ENUMERATED",
+                  "displayName": "PXE Network",
+                  "required": true,
+                  "requiredAtDeployment": false,
+                  "hideFromTemplate": false,
+                  "min": 0,
+                  "max": 0
+                },
+                {
+                  "id": "workload_network",
+                  "value": ",ff808081452c813b01452ceecdce00cc",
+                  "type": "LIST",
+                  "displayName": "Workload Networks",
+                  "required": true,
+                  "requiredAtDeployment": false,
+                  "hideFromTemplate": false,
+                  "min": 0,
+                  "max": 0
+                },
+                {
+                  "id": "title",
+                  "value": "bladeserver-1fqsgt1",
+                  "type": "STRING",
+                  "required": true,
+                  "requiredAtDeployment": false,
+                  "hideFromTemplate": false
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "id": "50ccb8cf-21c3-4dba-98cc-46648e0a620d",
+          "componentID": "component3",
+          "puppetCertName": "bladeserver-hh870w1",
+          "name": "Server 3",
+          "type": "SERVER",
+          "asmGUID": "ff808081452c813b01452cf8b13b025d",
+          "relatedComponents": "",
+          "resources": [
+            {
+              "id": "asm::idrac",
+              "displayName": "Hardware Settings",
+              "parameters": [
+                {
+                  "id": "target_boot_device",
+                  "value": "HD",
+                  "type": "ENUMERATED",
+                  "displayName": "Target Boot Device",
+                  "required": true,
+                  "requiredAtDeployment": false,
+                  "hideFromTemplate": false,
+                  "min": 0,
+                  "max": 0
+                },
+                {
+                  "id": "title",
+                  "value": "bladeserver-hh870w1",
+                  "type": "STRING",
+                  "required": true,
+                  "requiredAtDeployment": false,
+                  "hideFromTemplate": false
+                }
+              ]
+            },
+            {
+              "id": "asm::server",
+              "displayName": "OS Settings",
+              "parameters": [
+                {
+                  "id": "os_host_name",
+                  "value": "devoneserver4",
+                  "type": "STRING",
+                  "displayName": "Host Name",
+                  "required": true,
+                  "requiredAtDeployment": true,
+                  "hideFromTemplate": true,
+                  "min": 0,
+                  "max": 0
+                },
+                {
+                  "id": "admin_password",
+                  "value": "ff808081452c813b01452d00ff8e0720",
+                  "type": "PASSWORD",
+                  "displayName": "Administrator password",
+                  "required": true,
+                  "requiredAtDeployment": false,
+                  "hideFromTemplate": false,
+                  "min": 0,
+                  "max": 0
+                },
+                {
+                  "id": "razor_image",
+                  "value": "esxi-5.1",
+                  "type": "ENUMERATED",
+                  "displayName": "OS Image",
+                  "required": true,
+                  "requiredAtDeployment": false,
+                  "hideFromTemplate": false,
+                  "min": 0,
+                  "max": 0
+                },
+                {
+                  "id": "os_image_type",
+                  "value": "vmware_esxi",
+                  "type": "ENUMERATED",
+                  "displayName": "OS Image Type",
+                  "required": true,
+                  "requiredAtDeployment": false,
+                  "hideFromTemplate": false,
+                  "min": 0,
+                  "max": 0
+                },
+                {
+                  "id": "custom_script",
+                  "type": "TEXT",
+                  "displayName": "Custom OS Installation script",
+                  "required": false,
+                  "requiredAtDeployment": false,
+                  "hideFromTemplate": false,
+                  "min": 0,
+                  "max": 0
+                },
+                {
+                  "id": "title",
+                  "value": "bladeserver-hh870w1",
+                  "type": "STRING",
+                  "required": true,
+                  "requiredAtDeployment": false,
+                  "hideFromTemplate": false
+                }
+              ]
+            },
+            {
+              "id": "asm::esxiscsiconfig",
+              "displayName": "Network Settings",
+              "parameters": [
+                {
+                  "id": "identity_pool",
+                  "value": -1,
+                  "type": "ENUMERATED",
+                  "displayName": "Identity Pool",
+                  "required": true,
+                  "requiredAtDeployment": false,
+                  "hideFromTemplate": false,
+                  "min": 0,
+                  "max": 0
+                },
+                {
+                  "id": "hypervisor_network",
+                  "value": "ff808081452c813b01452cebf05d0000",
+                  "type": "ENUMERATED",
+                  "displayName": "Hypervisor Management Network",
+                  "required": true,
+                  "requiredAtDeployment": false,
+                  "hideFromTemplate": false,
+                  "min": 0,
+                  "max": 0,
+                  "dependencyTarget": "os_image_type",
+                  "dependencyValue": "vmware_esxi"
+                },
+                {
+                  "id": "vmotion_network",
+                  "value": "ff808081452c813b01452cee4a3f0066",
+                  "type": "ENUMERATED",
+                  "displayName": "Hypervisor vMotion Network",
+                  "required": true,
+                  "requiredAtDeployment": false,
+                  "hideFromTemplate": false,
+                  "min": 0,
+                  "max": 0,
+                  "dependencyTarget": "os_image_type",
+                  "dependencyValue": "vmware_esxi"
+                },
+                {
+                  "id": "storage_network",
+                  "value": "ff808081452c813b01452cf1876d00ce",
+                  "type": "ENUMERATED",
+                  "displayName": "Storage Network",
+                  "required": true,
+                  "requiredAtDeployment": false,
+                  "hideFromTemplate": false,
+                  "min": 0,
+                  "max": 0
+                },
+                {
+                  "id": "pxe_network",
+                  "value": "ff808081452c813b01452cefa56c00cd",
+                  "type": "ENUMERATED",
+                  "displayName": "PXE Network",
+                  "required": true,
+                  "requiredAtDeployment": false,
+                  "hideFromTemplate": false,
+                  "min": 0,
+                  "max": 0
+                },
+                {
+                  "id": "workload_network",
+                  "value": ",ff808081452c813b01452ceecdce00cc",
+                  "type": "LIST",
+                  "displayName": "Workload Networks",
+                  "required": true,
+                  "requiredAtDeployment": false,
+                  "hideFromTemplate": false,
+                  "min": 0,
+                  "max": 0
+                },
+                {
+                  "id": "title",
+                  "value": "bladeserver-hh870w1",
+                  "type": "STRING",
+                  "required": true,
+                  "requiredAtDeployment": false,
+                  "hideFromTemplate": false
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    "retry": "true",
+    "debug": "true"
+  }
+}
