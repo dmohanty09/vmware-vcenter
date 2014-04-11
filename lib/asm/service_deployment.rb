@@ -1693,7 +1693,7 @@ class ASM::ServiceDeployment
                     storage_titles.push storage_title
 
                     resource_hash['asm::datastore'] ||= {}
-                    resource_hash['asm::datastore']["#{hostip}:datastore"] ||= {
+                    resource_hash['asm::datastore']["#{hostip}:#{storage_title}:datastore"] = {
                       'data_center' => params['datacenter'],
                       'cluster' => params['cluster'],
                       'datastore' => storage_title,
@@ -1716,7 +1716,7 @@ class ASM::ServiceDeployment
                       'ensure' => 'present',
                       'type' => 'vmfs',
                       'lun' => '0',
-                      'require' => "Asm::Datastore[#{hostip}:datastore]",
+                      'require' => "Asm::Datastore[#{hostip}:#{storage_title}:datastore]",
                       'transport' => 'Transport[vcenter]'
                     }
 
