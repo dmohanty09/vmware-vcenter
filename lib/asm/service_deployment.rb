@@ -1433,7 +1433,7 @@ class ASM::ServiceDeployment
       'standbynic' => [],
       },
       'overridecheckbeacon' => 'enabled',
-      'checkbeacon' => true,
+      'checkbeacon' => false,
       'traffic_shaping_policy' => 'disabled',
       'averagebandwidth' => 1000,
       'peakbandwidth' => 1000,
@@ -1467,7 +1467,7 @@ class ASM::ServiceDeployment
       },
       'path' => path,
       'mtu' => index == 3 ? 9000 : 1500,
-      'checkbeacon' => true,
+      'checkbeacon' => false,
       'transport' => 'Transport[vcenter]',
     }
 
