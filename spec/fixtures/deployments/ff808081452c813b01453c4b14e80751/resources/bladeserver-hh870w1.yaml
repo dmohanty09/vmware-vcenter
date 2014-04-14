@@ -1,0 +1,30 @@
+--- 
+  "asm::idrac": 
+    bladeserver-hh870w1: 
+      target_boot_device: HD
+      nfsipaddress: "172.25.15.100"
+      nfssharepath: /var/nfs/idrac_config_xml
+      servicetag: HH870W1
+      model: m620
+      before: 
+        - "Asm::Server[bladeserver-hh870w1]"
+        - File[bladeserver-hh870w1]
+  "asm::server": 
+    bladeserver-hh870w1: 
+      os_host_name: devoneserver4
+      admin_password: ff808081452c813b01452d00ff8e0720
+      decrypt: true
+      razor_image: esxi-5.1
+      os_image_type: vmware_esxi
+      rule_number: 851027102
+      broker_type: noop
+      serial_number: HH870W1
+      policy_name: policy-devoneserver4-ff808081452c813b01453c4b14e80751
+      cert_name: agent-devoneserver4
+  file: 
+    bladeserver-hh870w1: 
+      path: /opt/razor-server/installers/vmware_esxi/bootproto_HH870W1.inc.erb
+      content: "network --bootproto=static --device=vmnic0 --ip=172.28.119.2  --netmask=255.255.0.0 --gateway=172.28.0.1 --vlanid=28 --nodns --hostname='devoneserver4'\n"
+      owner: razor
+      group: razor
+      mode: "0644"

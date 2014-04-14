@@ -78,6 +78,15 @@ module ASM
       cert_list
     end
 
+    def self.get_previous_deployment_certs(deployment_id)
+      old_certs = []
+      previous_dirs = Dir.entries(File.join(ASM.base_dir, deployment_id)).select{ |dir| dir.match(/^[0-9]+$/) }
+      previous_dirs.each do |pd|
+        old_deployment = JSON.parse(File.read(deployment_json_file("#{deployment_id}/#{pd}")))['Deployment']
+        old_certs << get_deployment_certs(old_deployment)
+      end
+      old_certs.flatten.uniq
+    end
 
     def self.deployment_json_file(id)
       deployment_dir = File.join(ASM.base_dir, id.to_s, 'deployment.json')
