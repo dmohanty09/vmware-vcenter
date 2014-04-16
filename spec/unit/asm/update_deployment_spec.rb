@@ -35,6 +35,10 @@ describe ASM::UpdateDeployment do
          "static"=>true
     }
     ASM::Util.stubs(:fetch_network_settings).returns(fetch_network_settings)
+    ASM::Util.stubs(:fetch_server_inventory).returns({"serverType"=>"BLADE","serviceTag"=>"1FQSGT1","model"=>"PowerEdge M620"})
+    ASM::ServiceDeployment.any_instance.stubs(:process_tor_switches).returns(nil)
+    ASM::ServiceDeployment.any_instance.stubs(:process_san_switches).returns(nil)
+    ASM::ServiceDeployment.any_instance.stubs(:process_components).returns(nil)
   end
 
   after do
