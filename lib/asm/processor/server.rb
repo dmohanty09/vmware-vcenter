@@ -8,7 +8,7 @@ module ASM
       # and converts them into the expected asm::server
       # resource hash
       #
-      def self.munge_hyperv_server(title, old_resources, target_ip, vol_names, disk_part_flag)
+      def self.munge_hyperv_server(title, old_resources, target_ip, vol_names, disk_part_flag, storage_type = 'iscsi')
 
         resources = old_resources.dup 
 
@@ -95,7 +95,7 @@ module ASM
 
           end
 
-          if name == 'storage_network'
+          if name == 'storage_network' and storage_type == 'iscsi'
             unless net_array.size == 2
               raise("Expected 2 iscsi interfaces for hyperv, only found #{net_array.size}")
             end
@@ -108,6 +108,9 @@ module ASM
           end
 
           puppet_classification_data['hyperv::config']['hyperv_diskpart'] = disk_part_flag
+          if storage_type == 'fc'
+            puppet_classification_data['hyperv::config']['pod_type'] = 'AS1000'
+          end
         end
 
         server_params['puppet_classification_data'] = puppet_classification_data

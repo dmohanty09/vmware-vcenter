@@ -1282,10 +1282,21 @@ class ASM::ServiceDeployment
                 )
       target_devices = []
       vol_names      = []
+      storage_type = 'iscsi'
+      target_ip = ''
       storage.each do |c|
         target_devices.push(c['puppetCertName'])
         ASM::Util.asm_json_array(c['resources']).each do |r|
           if r['id'] == 'equallogic::create_vol_chap_user_access'
+            r['parameters'].each do |param|
+              if param['id'] == 'title'
+                vol_names.push(param['value'])
+              end
+            end
+          end
+          # For supporting Compellent FC storage access with HyperV deployment
+          if r['id'] == 'compellent::createvol'
+            storage_type = 'fc'
             r['parameters'].each do |param|
               if param['id'] == 'title'
                 vol_names.push(param['value'])
@@ -1300,14 +1311,14 @@ class ASM::ServiceDeployment
       unless vol_names.size == 2
         raise(Exception, "Expected to find two volumes, found #{vol_names.size}")
       end
-      disk_part_flag = get_disk_part_flag(component)
-      target_ip = ASM::Util.find_equallogic_iscsi_ip(target_devices.first)
+      target_ip = ASM::Util.find_equallogic_iscsi_ip(target_devices.first) if storage_type == 'iscsi'
       resource_hash = ASM::Processor::Server.munge_hyperv_server(
                         title,
                         resource_hash,
                         target_ip,
                         vol_names,
-                        disk_part_flag
+                        get_disk_part_flag(component),
+                        storage_type
                       )
     end
 
