@@ -16,6 +16,7 @@ module ASM
     # TODO: give razor user access to this directory
     PUPPET_CONF_DIR='/etc/puppetlabs/puppet'
     DEVICE_CONF_DIR="#{PUPPET_CONF_DIR}/devices"
+    DEVICE_SSL_DIR="/var/opt/lib/pe-puppet/devices"
     DATABASE_CONF="#{PUPPET_CONF_DIR}/database.yaml"
     # See spec/fixtures/asm_server_m620.json for sample response
     #

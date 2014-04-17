@@ -3,6 +3,7 @@ require 'json'
 require 'logger'
 require 'asm'
 require 'asm/service_deployment'
+require 'asm/device_management'
 
 class ASM::App < Sinatra::Base
 
@@ -53,5 +54,9 @@ class ASM::App < Sinatra::Base
 
   delete '/deployments/:id' do | id |
     ASM.clean_deployment(id)
+  end
+
+  delete '/devices/:cert_name' do | cert_name |
+    ASM::DeviceManagement.remove_device( cert_name )
   end
 end
