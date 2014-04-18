@@ -1240,7 +1240,7 @@ class ASM::ServiceDeployment
 
         resource_hash['file'] = {}
         resource_hash['file'][cert_name] = {
-          'path' => "/opt/razor-server/installers/vmware_esxi/bootproto_#{serial_number}.inc.erb",
+          'path' => "/opt/razor-server/tasks/vmware_esxi/bootproto_#{serial_number}.inc.erb",
           'content' => content,
           'owner' => 'razor',
           'group' => 'razor',
@@ -1328,7 +1328,7 @@ class ASM::ServiceDeployment
           razor_params = resource_hash['asm::server'][cert_name]
           if policy &&
               (policy['repo'] || {})['name'] == razor_params['razor_image'] &&
-              (policy['installer'] || {})['name'] == razor_params['os_image_type']
+              (policy['tasks'] || {})['name'] == razor_params['os_image_type']
             skip_deployment = true
           end
         end
