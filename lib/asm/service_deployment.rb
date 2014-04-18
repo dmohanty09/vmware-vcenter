@@ -2159,23 +2159,16 @@ class ASM::ServiceDeployment
   def get(type, name=nil)
     begin
       response = nil
-      if name
-        response = RestClient.get(
-        "http://localhost:8081/api/collections/#{type}/#{name}"
-        )
-      else
-        response = RestClient.get(
-        "http://localhost:8081/api/collections/#{type}"
-        )
-      end
+      url = ['http://localhost:8081/api/collections', type, name].compact.join('/')
+      response = RestClient.get(url)
     rescue RestClient::ResourceNotFound => e
-      raise(CommandException, "rest call failed #{e}")
+      raise(CommandException, "Rest call to #{url} failed: #{e}")
     end
     if response.code == 200
       result = JSON.parse(response)
-      result['items'] if result.include? 'items'
+      result.include?('items') ? result['items'] : result
     else
-      raise(CommandException, "bad http code: #{response.code}:#{response.to_str}")
+      raise(CommandException, "Bad http code: #{response.code}:\n#{response.to_str}")
     end
   end
 
