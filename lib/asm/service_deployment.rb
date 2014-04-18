@@ -2172,7 +2172,8 @@ class ASM::ServiceDeployment
       raise(CommandException, "rest call failed #{e}")
     end
     if response.code == 200
-      JSON.parse(response)
+      result = JSON.parse(response)
+      result['items'] if result.include? 'items'
     else
       raise(CommandException, "bad http code: #{response.code}:#{response.to_str}")
     end
