@@ -1240,7 +1240,7 @@ class ASM::ServiceDeployment
 
         resource_hash['file'] = {}
         resource_hash['file'][cert_name] = {
-          'path' => "/opt/razor-server/installers/vmware_esxi/bootproto_#{serial_number}.inc.erb",
+          'path' => "/opt/razor-server/tasks/vmware_esxi/bootproto_#{serial_number}.inc.erb",
           'content' => content,
           'owner' => 'razor',
           'group' => 'razor',
@@ -1339,7 +1339,7 @@ class ASM::ServiceDeployment
           razor_params = resource_hash['asm::server'][cert_name]
           if policy &&
               (policy['repo'] || {})['name'] == razor_params['razor_image'] &&
-              (policy['installer'] || {})['name'] == razor_params['os_image_type']
+              (policy['tasks'] || {})['name'] == razor_params['os_image_type']
             skip_deployment = true
           end
         end
@@ -2170,22 +2170,16 @@ class ASM::ServiceDeployment
   def get(type, name=nil)
     begin
       response = nil
-      if name
-        response = RestClient.get(
-        "http://localhost:8081/api/collections/#{type}/#{name}"
-        )
-      else
-        response = RestClient.get(
-        "http://localhost:8081/api/collections/#{type}"
-        )
-      end
+      url = ['http://localhost:8081/api/collections', type, name].compact.join('/')
+      response = RestClient.get(url)
     rescue RestClient::ResourceNotFound => e
-      raise(CommandException, "rest call failed #{e}")
+      raise(CommandException, "Rest call to #{url} failed: #{e}")
     end
     if response.code == 200
-      JSON.parse(response)
+      result = JSON.parse(response)
+      result.include?('items') ? result['items'] : result
     else
-      raise(CommandException, "bad http code: #{response.code}:#{response.to_str}")
+      raise(CommandException, "Bad http code: #{response.code}:\n#{response.to_str}")
     end
   end
 
