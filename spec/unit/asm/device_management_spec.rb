@@ -20,16 +20,19 @@ describe ASM::DeviceManagement do
   end
 
   it 'should be able to delete a conf file' do
-    conf_file = Tempfile.new([@cert_name,".conf"] , @conf_dir)
-    conf_file_name = File.basename(conf_file).chomp(".conf")
-    ASM::DeviceManagement.remove_device_conf(conf_file_name)
-    File.exist?(conf_file.path).should == false
+    conf_file = FileUtils.touch("#{@conf_dir}/#{@cert_name}.conf").first
+    ASM::DeviceManagement.remove_device_conf(@cert_name)
+    File.exist?(conf_file).should == false
   end
 
   it 'should be able to delete a device puppet ssl folder' do
     dir_name = @ssl_dir + "/#{@cert_name}"
     dir = FileUtils.mkdir_p(dir_name)
     #Sanity check to ensure proper directory was created
+    #ASM::Util.run_command_simple("sudo /opt/Dell/scripts/rm-device-ssl.sh #{device_name}")
+    ASM::Util.stubs(:run_command_simple).with("sudo /opt/Dell/scripts/rm-device-ssl.sh #{@cert_name}") do
+      FileUtils.rm_rf(dir)
+    end.returns(true)
     File.exist?(dir_name).should == true
     ASM::DeviceManagement.remove_device_ssl_dir(@cert_name)
     File.exist?(dir_name).should == false
@@ -40,7 +43,10 @@ describe ASM::DeviceManagement do
     ssl_dir = ASM::Util::DEVICE_SSL_DIR + "/#{@cert_name}"
 
     FileUtils.expects(:rm).with(conf_file).returns(conf_file)
-    FileUtils.expects(:rm_rf).with(ssl_dir, :secure=>true).returns(ssl_dir)
+    FileUtils.expects(:rm_rf).with(ssl_dir).returns(ssl_dir)
+    ASM::Util.stubs(:run_command_simple).with("sudo /opt/Dell/scripts/rm-device-ssl.sh #{@cert_name}") do
+      FileUtils.rm_rf(ssl_dir)
+    end.returns(true)
 
     ASM::DeploymentTeardown.stubs(:get_deployed_certs).returns([@cert_name])
     ASM::DeploymentTeardown.expects(:clean_deployment_certs)
@@ -48,5 +54,7 @@ describe ASM::DeviceManagement do
         .returns(@cert_name)
 
     ASM::DeviceManagement.remove_device(@cert_name)
+    File.exist?(conf_file).should == false
+    File.exist?(ssl_dir).should == false
   end
 end
