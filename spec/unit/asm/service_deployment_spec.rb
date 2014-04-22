@@ -7,6 +7,8 @@ require 'asm/util'
 describe ASM::ServiceDeployment do
 
   before do
+    ENV['MOCK_SEQUEL'] = 'true'
+    DB = Sequel.mock
     ASM.init
     @tmp_dir = Dir.mktmpdir
     @sd = ASM::ServiceDeployment.new('8000')
