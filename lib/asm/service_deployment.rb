@@ -2138,14 +2138,14 @@ class ASM::ServiceDeployment
   def deployment_dir
     @deployment_dir ||= begin
       deployment_dir = File.join(ASM.base_dir, @id.to_s)
-      create_dir(deployment_dir)
+      create_dir(deployment_dir, true)
       deployment_dir 
     end
   end
 
-  def create_dir(dir)
+  def create_dir(dir, warning=false)
     if File.exists?(dir)
-      ASM.logger.warn("Directory already exists: #{dir}")
+      ASM.logger.warn("Directory already exists: #{dir}") if warning
     else
       FileUtils.mkdir_p(dir)
     end
@@ -2157,7 +2157,7 @@ class ASM::ServiceDeployment
 
   def resources_dir
     dir = deployment_file('resources')
-    FileUtils.mkdir_p(dir) unless Dir.exists?(dir)
+    create_dir(dir)
     dir
   end
 
