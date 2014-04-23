@@ -34,6 +34,16 @@ describe ASM::UpdateDeployment do
          "rel"=>"self"},
          "static"=>true
     }
+    populate_blade_switch_hash = {
+      "dell_iom-172.17.15.234"=>
+        {"connection_url"=>nil, 
+         "device_type"=>"dell_powerconnect"
+        },
+      "dell_iom-172.17.15.237"=>
+        {"connection_url"=>nil, 
+         "device_type"=>"dell_powerconnect"}
+    }
+    ASM::ServiceDeployment.any_instance.stubs(:populate_blade_switch_hash).returns(populate_blade_switch_hash)
     ASM::Util.stubs(:fetch_network_settings).returns(fetch_network_settings)
     ASM::Util.stubs(:fetch_server_inventory).returns({"serverType"=>"BLADE","serviceTag"=>"1FQSGT1","model"=>"PowerEdge M620"})
     ASM::ServiceDeployment.any_instance.stubs(:process_tor_switches).returns(nil)
