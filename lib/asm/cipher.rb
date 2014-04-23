@@ -31,17 +31,26 @@ DB = connect_database(database_config(ASM::Util::DATABASE_CONF)) unless ENV['MOC
 module ASM
   module Cipher
     def self.decrypt_string(id)
-      e_string = get_string(id)
+      e_string = get_encrypted_string(id)
       e_key    = get_key(e_string[:encryptionmethodid])
-      d_string = AESCrypt.decrypt_data(Base64.decode64(e_string[:encrypteddata]),Base64.decode64(e_key[:bytes]),nil,'AES-128-CBC')
-      d_string.slice!(0,16)
-      d_string
+      decrypt(e_key[:bytes], e_string[:encrypteddata])
     end
-    def self.get_string(id)
-      DB['SELECT * FROM encryptedstring WHERE id = ?', id].first
+
+    def self.decrypt(key, string)
+      result = AESCrypt.decrypt_data(Base64.decode64(string),Base64.decode64(key),nil,'AES-128-CBC')
+      result.slice(16..-1)
     end
-    def self.get_key(key_id)
-      DB['SELECT bytes FROM encryptionkey WHERE id = (SELECT key_id FROM encryptionmethod WHERE id = ?)', key_id].first
+
+    def self.get_encrypted_string(id)
+      result = DB['SELECT * FROM encryptedstring WHERE id = ?', id].first
+      raise(ArgumentError, "Invalid encryption string id: '#{id}'") unless result.is_a? ::Hash
+      result
+    end
+
+    def self.get_encryption_key(id)
+      result = DB['SELECT bytes FROM encryptionkey WHERE id = (SELECT key_id FROM encryptionmethod WHERE id = ?)', id].first
+      raise(ArgumentError, "Invalid encryption key id: '#{id}'") unless result.is_a? ::Hash
+      result
     end
   end
 end
