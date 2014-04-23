@@ -26,6 +26,8 @@ class ASM::ServiceDeployment
 
   class PuppetEventException < Exception; end
 
+  attr_reader :id
+
   def initialize(id)
     unless id
       raise(Exception, "Service deployment must have an id")
@@ -181,9 +183,10 @@ class ASM::ServiceDeployment
       log("Starting deployment #{service_deployment['deploymentName']}")
 
       # Write the deployment to filesystem for ease of debugging / reuse
-      File.open(File.join(deployment_dir, 'deployment.json'), 'w') do |file|
-        file.write(JSON.pretty_generate({ "Deployment" => service_deployment }))
-      end
+      File.write(
+        deployment_file('deployment.json'),
+        JSON.pretty_generate({ "Deployment" => service_deployment })
+      )
       
       hostlist = ASM::DeploymentTeardown.get_deployment_certs(service_deployment)
       dup_servers = hostlist.select{|element| hostlist.count(element) > 1 }
@@ -217,11 +220,11 @@ class ASM::ServiceDeployment
       process_san_switches()
       process_components()
     rescue Exception => e
-      File.open(File.join(deployment_dir, "exception.log"), 'w') do |fh|
-        fh.puts(e.inspect)
-        fh.puts
-        (e.backtrace || []).each { |line| fh.puts(line) }
-      end
+      backtrace = (e.backtrace || []).join('\n')
+      File.write(
+        deployment_file('exception.log'),
+        "#{e.inspect}\n#{backtrace}"
+      )
       log("Status: Error")
       raise(e)
     ensure
@@ -434,7 +437,7 @@ class ASM::ServiceDeployment
       while(yet_to_run_command)
         if ASM.block_certname(cert_name)
           yet_to_run_command = false
-          puppet_out = File.join(deployment_dir, "#{cert_name}.out")
+          puppet_out = deployment_file("#{cert_name}.out")
           # synchronize creation of file counter
           resource_file = iterate_resource_file(resource_file)
           File.open(resource_file, 'w') do |fh|
@@ -1005,11 +1008,9 @@ class ASM::ServiceDeployment
   end
 
   def get_all_switches()
-    puppet_out = File.join(deployment_dir, "puppetcert.out")
+    puppet_out = deployment_file('puppetcert.out')
     cmd = "sudo puppet cert list --all"
-    if File.exists?(puppet_out)
-      File.delete(puppet_out)
-    end
+    File.delete(puppet_out) if File.exists?(puppet_out)
 
     ASM::Util.run_command(cmd, puppet_out)
     resp = File.read(puppet_out)
@@ -1049,7 +1050,7 @@ class ASM::ServiceDeployment
     end
     @configured_rack_switches.uniq
     @configured_blade_switches.uniq
-    @configured_brocade_san_switches.uniq()
+    @configured_brocade_san_switches.uniq
     logger.debug "Rack ToR Switch certificate name list is #{@configured_rack_switches}"
     logger.debug "Blade IOM Switch certificate name list is #{@configured_blade_switches}"
     logger.debug "Brocade SAN Switches certificate name list is #{@configured_brocade_san_switches}"
@@ -1386,7 +1387,6 @@ class ASM::ServiceDeployment
     offset = 1388534400 # time at Jan 1, 2014
     ((currtime - offset) * 100) + (ASM.counter % 100)
   end
-
 
   def mark_vcenter_as_needs_update(vcenter_guid)
     (@vcenter_to_refresh ||= []).push(vcenter_guid)
@@ -2138,33 +2138,39 @@ class ASM::ServiceDeployment
   def deployment_dir
     @deployment_dir ||= begin
       deployment_dir = File.join(ASM.base_dir, @id.to_s)
-      if File.exists?(deployment_dir)
-        ASM.logger.warn("Service profile for #{@id} already exists")
-      else
-        FileUtils.mkdir_p(deployment_dir)
-      end
-      @deployment_dir = deployment_dir
+      create_dir(deployment_dir, true)
+      deployment_dir 
     end
   end
 
+  def create_dir(dir, warning=false)
+    if File.exists?(dir)
+      ASM.logger.warn("Directory already exists: #{dir}") if warning
+    else
+      FileUtils.mkdir_p(dir)
+    end
+  end
+
+  def deployment_file(*file)
+    File.join(deployment_dir, *file)
+  end
+
   def resources_dir
-    dir = File.join(deployment_dir, "resources")
-    FileUtils.mkdir_p(dir)
+    dir = deployment_file('resources')
+    create_dir(dir)
     dir
   end
 
   def create_logger
-    id_log_file = File.join(deployment_dir, "deployment.log")
+    id_log_file = deployment_file('deployment.log')
     File.open(id_log_file, 'w')
     Logger.new(id_log_file)
   end
 
   def create_custom_script(cert_name,file_content)
-    id_log_file = File.join(deployment_dir, "#{cert_name}.cfg")
-    File.open(id_log_file, 'w') do |filehandle|
-      filehandle.puts file_content
-    end
-    id_log_file.to_s
+    id_log_file = deployment_file("#{cert_name}.cfg")
+    File.write(id_log_file, file_content)
+    id_log_file
   end
 
   def get(type, name=nil)

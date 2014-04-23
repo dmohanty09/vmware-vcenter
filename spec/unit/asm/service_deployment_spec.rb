@@ -388,7 +388,6 @@ describe ASM::ServiceDeployment do
   end
 
   describe 'when checking agent status' do
-
     before do
       Time.stubs(:now).returns(Time.new("1969-01-01 00:00:00 -0600"))
       
@@ -422,6 +421,7 @@ describe ASM::ServiceDeployment do
       expect{ASM::ServiceDeployment.new('123').await_agent_run_completion('host', 10)}.to raise_exception(ASM::ServiceDeployment::PuppetEventException)
     end 
   end
+
   describe 'when checking find related components' do
     before do
       data = JSON.parse(File.read('/opt/asm-deployer/spec/fixtures/find_related_components.json'))['Deployment']
@@ -435,6 +435,14 @@ describe ASM::ServiceDeployment do
     end
     it 'should fail to related component based on ID' do
        @sd.find_related_components('VIRTUALMACHINE', @components[1]).should == []
+    end
+  end
+
+  describe 'verifying service deployer internal configuration' do
+    it 'configures directory' do
+      @sd.stubs(:create_dir)
+      @sd.send(:deployment_dir).should == File.join(@tmp_dir, @sd.id)
+      @sd.send(:resources_dir).should == File.join(@tmp_dir, @sd.id, 'resources')
     end
   end
 end
