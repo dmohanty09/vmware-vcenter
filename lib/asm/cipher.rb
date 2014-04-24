@@ -32,7 +32,7 @@ module ASM
   module Cipher
     def self.decrypt_string(id)
       e_string = get_encrypted_string(id)
-      e_key    = get_key(e_string[:encryptionmethodid])
+      e_key    = get_encryption_key(e_string[:encryptionmethodid])
       decrypt(e_key[:bytes], e_string[:encrypteddata])
     end
 
