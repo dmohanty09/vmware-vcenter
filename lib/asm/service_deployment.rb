@@ -598,6 +598,39 @@ class ASM::ServiceDeployment
     iscsi_ip_addresses.compact.flatten.uniq
   end
 
+  
+  def get_dell_server_nfs_ipaddresses()
+    nfs_ip_addresses = []
+    if components = @components_by_type['SERVER']
+      components.collect do |comp|
+        cert_name   = comp['puppetCertName']
+        dell_service_tag = cert_name_to_service_tag(cert_name)
+        logger.debug "Getting Management and Storage IP Address for server #{dell_service_tag}"
+        # service_tag is only set for Dell servers
+        if dell_service_tag
+          server_conf = ASM::Util.build_component_configuration(comp, :decrypt => decrypt?)
+          (server_conf['asm::server'] || []).each do |server_cert, server_params|
+            net_params = (server_conf['asm::esxiscsiconfig'] || {})[server_cert]
+            (net_params || {}).each do |name, net_array|
+              logger.debug "Network name: #{name}"
+              logger.debug "Network array : #{net_array.inspect}"
+              if name == 'hypervisor_network' or name == 'converged_network'
+                first_net = net_array.first
+                nfs_ip_addresses.push(first_net['staticNetworkConfiguration']['ip_address'])
+              end
+            end
+          end
+        end
+      end
+    end
+    logger.debug "NFS IP Address in host processing: #{nfs_ip_addresses}"
+    if nfs_ip_addresses.empty?
+      nfs_ip_addresses = ['all_hosts']
+      logger.debug "NFS IP Address list is empty: #{nfs_ip_addresses}"
+    end
+    nfs_ip_addresses.compact.flatten.uniq
+  end
+  
   def get_specific_dell_server_wwpns(comp)
     wwpninfo=nil
     cert_name   = comp['puppetCertName']
@@ -651,6 +684,27 @@ class ASM::ServiceDeployment
         new_iscsi_iporiqn = new_iscsi_iporiqn.compact.map {|s| s.gsub(/ /, '')}
         resource_hash['equallogic::create_vol_chap_user_access'][title]['iqnorip'] = new_iscsi_iporiqn
       end
+    end
+
+    (resource_hash['netapp::create_nfs_export'] || {}).each do |title, params|
+      management_ipaddress ||= ( get_dell_server_nfs_ipaddresses() || [] )  
+      resource_hash['netapp::create_nfs_export'][title]['readwrite'] = management_ipaddress
+      resource_hash['netapp::create_nfs_export'][title]['readonly'] = ''
+      
+      size_param = resource_hash['netapp::create_nfs_export'][title]['size']
+      if size_param.include?('GB')
+        resource_hash['netapp::create_nfs_export'][title]['size'] = size_param.gsub(/GB/,'g')
+      end
+      if size_param.include?('MB')
+        resource_hash['netapp::create_nfs_export'][title]['size'] = size_param.gsub(/MB/,'m')
+      end
+   
+      resource_hash['netapp::create_nfs_export'][title].delete ('path')
+      snapresv = resource_hash['netapp::create_nfs_export'][title]['snapresv']
+      resource_hash['netapp::create_nfs_export'][title]['snapresv'] = snapresv.to_s
+      
+      # handling anon
+      resource_hash['netapp::create_nfs_export'][title].delete ('anon')
     end
 
     process_generic(
@@ -1810,6 +1864,28 @@ class ASM::ServiceDeployment
                     }
                   end
                 end
+                
+                # Configure NFS Datastore
+                if storage_hash['netapp::create_nfs_export']
+                  storage_hash['netapp::create_nfs_export'].each do |volume, storage_params|
+                    remote_host = get_netapp_ip()
+                    remote_path = "/vol/#{volume}"
+                    logger.debug "Remote Path: #{remote_path}"
+                    logger.debug "Remote host: #{remote_host}"
+                    logger.debug "#{hostip}:#{volume}"
+                    resource_hash['asm::nfsdatastore'] ||= {}
+                    resource_hash['asm::nfsdatastore']["#{hostip}:#{volume}"] = {
+                      'data_center' => params['datacenter'],
+                      'datastore' => volume,
+                      'cluster' => params['cluster'],
+                      'ensure' => 'present',
+                      'esxhost' => hostip,
+                      'remote_host' => remote_host,
+                      'remote_path' => remote_path,
+                    }
+                  end
+                end
+                
               end
               logger.debug('Configuring persistent storage for logs')
               if not storage_titles.empty?
@@ -2589,4 +2665,17 @@ end
     disk_part_flag
   end
 
+  def get_netapp_ip()
+    netappip = ''
+    (@components_by_type['STORAGE'] || []).each do |storage_component|
+      storage_cert_name = storage_component['puppetCertName']
+      logger.debug"Storage cert name: #{storage_cert_name}"
+      if (storage_cert_name.downcase.match(/netapp/) != nil)
+        netappip = storage_cert_name.gsub(/^netapp-/,'')
+      end
+    end
+    netappip
+  end
+
 end
+
