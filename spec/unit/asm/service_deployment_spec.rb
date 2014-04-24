@@ -119,7 +119,7 @@ describe ASM::ServiceDeployment do
         @sd.stubs(:find_node).returns(node)
         policy = { 
           'repo' => {'name' => 'esxi-5.1'},
-          'installer' => {'name' => 'vmware_esxi'} 
+          'task' => {'name' => 'vmware_esxi'} 
         }
         @sd.stubs(:get).returns(policy)
         @data['serviceTemplate']['components'][0]['id'] = 'bladeserver_serialno'

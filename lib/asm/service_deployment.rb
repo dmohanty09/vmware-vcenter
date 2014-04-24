@@ -1394,7 +1394,7 @@ class ASM::ServiceDeployment
           razor_params = resource_hash['asm::server'][cert_name]
           if policy &&
               (policy['repo'] || {})['name'] == razor_params['razor_image'] &&
-              (policy['tasks'] || {})['name'] == razor_params['os_image_type']
+              (policy['task'] || {})['name'] == razor_params['os_image_type']
             skip_deployment = true
           end
         end
