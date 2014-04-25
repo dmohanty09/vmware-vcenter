@@ -64,121 +64,6 @@ class ASM::ServiceDeployment
     true
   end
 
-  # Network values come from the GUI as a list of ASM network guids.
-  # Those must be looked up from an ASM REST service, and if they
-  # correspond to a static network, static IPs must be reserved from
-  # the ASM REST service.
-  #
-  # This method replaces the parameter's list of guids with the
-  # corresponding list of ASM networks. For static IPs, those networks
-  # will have an additional field added corresponding to the IP to use:
-  # parameter['value']['staticNetworkConfiguration']['ip_address']
-  #
-  # Doing this lookup and reservation in advance of processing the
-  # components is done for two reasons:
-  #
-  # 1. The deployment will fail immediately if there are not enough
-  #    static IP addresses available to fulfill the deployment.
-  #
-  # 2. All reserved IP addresses will be tied to the same "usage id",
-  #    which will be the deployment id. This allows all of the static
-  #    IPs associated with a deployment to be relased by calling the
-  #    reservation service with the deployment id.
-  def massage_networks!(server_components)
-    guid_to_params = {}
-
-    # Build guid_to_params map of network guid to list of matching parameters
-    networks = [ 'hypervisor_network', 'converged_network', 'vmotion_network',
-                 'workload_network', 'storage_network', 'pxe_network',
-                 'private_cluster_network', 'live_migration_network' , 'nfs_network' ]
-    server_components.each do |component|
-      resources = ASM::Util.asm_json_array(component['resources']) || []
-      resources.each do |resource|
-        parameters = ASM::Util.asm_json_array(resource['parameters']) || []
-        parameters.each do |param|
-          if networks.include?(param['id'])
-            if !empty_guid?(param['value'])
-              # value may be a comma-separated list, but if that is the
-              # case it will lead with a comma, e.g. ,1,2,3
-              # The reject below gets rid of the initial empty element
-              guids = param['value'].split(',').reject { |x| x.empty? }
-
-              # Storage network special case: two portgroups are always
-              # created, so we need two networks, but only one is passed in
-              if param['id'] == 'storage_network' && guids.size == 1
-                guids.push(guids[0])
-              end
-
-
-              guids.each do |guid|
-                guid_to_params[guid] ||= []
-                guid_to_params[guid].push(param)
-              end
-            end
-
-            # Overwrite value with nil, later we will add the value
-            param['value'] = nil
-          end
-        end
-      end
-    end
-
-    # Look up each network guid
-    guid_to_network = {}
-    guid_to_params.each do |guid, params|
-      network = ASM::Util.fetch_network_settings(guid)
-      guid_to_network[guid] = network
-    end
-
-    # By default our ESXi hosts boot with 'VM Network' and 'Management
-    # Network' names. To avoid having new networks conflict with
-    # those, replace those names with non-conflicting ones.
-    reserved_names = [ 'VM Network', 'Management Network' ]
-    all_names = guid_to_network.values.map { |network| network['name'] }
-    guid_to_network.each do |guid, network|
-      name = network['name']
-      if reserved_names.include?(name)
-        i = 1
-        begin
-          replacement = "#{name} (#{i})"
-          i += 1
-        end while all_names.include?(replacement)
-        network['name'] = replacement
-      end
-    end
-
-    # Do static IP reservations if necessary and update params
-    guid_to_params.each do |guid, params|
-      network = guid_to_network[guid]
-      n_ips = params.size
-      ips = nil
-      if network['staticNetworkConfiguration']
-        ips = ASM::Util.reserve_network_ips(network['id'], n_ips, @id)
-      else
-        ips = Array.new(n_ips) # empty array, won't be used
-      end
-
-      # Add a copy of the network to param['value']
-      params.each_with_index do |param, index|
-        value = network.dup
-        if value['staticNetworkConfiguration']
-          # WARNING: dup doesn't dup the values! staticNetworkConfiguration
-          # is a hash, so we have to dup it again to maintain separate objects
-          value['staticNetworkConfiguration'] = network['staticNetworkConfiguration'].dup
-          value['staticNetworkConfiguration']['ip_address'] = ips[index]
-        elsif param['id'] == 'hypervisor_network'
-          msg = "Static networks are required for the hypervisor network and #{network['name']} is DHCP."
-          logger.error(msg)
-          raise(Exception, msg)
-        end
-
-        param['value'] ||= []
-        param['value'].push(value)
-      end
-    end
-
-  end
-
   def process(service_deployment)
     begin
       ASM.logger.info("Deploying #{service_deployment['deploymentName']} with id #{service_deployment['id']}")
@@ -212,7 +97,6 @@ class ASM::ServiceDeployment
       # of a given component type in the future, e.g. VSwitch configuration
       # information is contained in the server component type data
       @components_by_type = components_by_type(service_deployment)
-      massage_networks!(@components_by_type['SERVER'] || [])
       get_all_switches()
       @rack_server_switchhash = self.populate_rack_switch_hash()
       @blade_server_switchhash = self.populate_blade_switch_hash()
@@ -589,8 +473,8 @@ class ASM::ServiceDeployment
                   raise("Expected 2 iscsi interfaces for hyperv, only found #{net_array.size}")
                 end
                 first_net = net_array.first
-                iscsi_ip_addresses.push(first_net['staticNetworkConfiguration']['ip_address'])
-                iscsi_ip_addresses.push(net_array.last['staticNetworkConfiguration']['ip_address'])
+                iscsi_ip_addresses.push(first_net['staticNetworkConfiguration']['ipAddress'])
+                iscsi_ip_addresses.push(net_array.last['staticNetworkConfiguration']['ipAddress'])
               end
             end
 
@@ -1247,7 +1131,7 @@ class ASM::ServiceDeployment
           raise(Exception, msg)
         end
 
-        static_ip = static['ip_address']
+        static_ip = static['ipAddress']
         content = "network --bootproto=static --device=vmnic0 --ip=#{static_ip}  --netmask=#{static['subnet']} --gateway=#{static['gateway']}"
         # NOTE: vlanId is a FixNum
         if mgmt_network['vlanId']
@@ -1545,10 +1429,10 @@ class ASM::ServiceDeployment
 
       static = network['staticNetworkConfiguration']
 
-      if static
+      if static && (static != "")
         # TODO: we should consolidate our reservation requests
         reservation_guid = "#{@id}-#{portgroup_title}"
-        ip = static['ip_address'] || raise(Exception, "ip_address not set")
+        ip = static['ipAddress'] || raise(Exception, "ipAddress not set")
         raise(Exception, "Subnet not found in configuration #{static.inspect}") unless static['subnet']
 
         portgroup['ipsettings'] = 'static'
@@ -1623,7 +1507,7 @@ class ASM::ServiceDeployment
                 logger.error(msg)
                 raise(Exception, msg)
               end
-              hostip = static['ip_address']
+              hostip = static['ipAddress']
             end
 
             raise(Exception, "Could not find host ip for #{server_cert}") unless hostip
