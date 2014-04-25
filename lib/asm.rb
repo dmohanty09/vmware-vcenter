@@ -3,6 +3,7 @@ require 'fileutils'
 require 'asm/service_deployment'
 require 'asm/deployment_teardown'
 require 'asm/update_deployment'
+require 'asm/errors'
 
 module ASM
 
