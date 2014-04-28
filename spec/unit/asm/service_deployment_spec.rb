@@ -425,7 +425,9 @@ describe ASM::ServiceDeployment do
 
   describe 'when checking find related components' do
     before do
-      data = JSON.parse(File.read('/opt/asm-deployer/spec/fixtures/find_related_components.json'))['Deployment']
+      sample_file = File.join(File.dirname(__FILE__), '..', '..', 
+                              'fixtures', 'find_related_components.json')
+      data = JSON.parse(File.read(sample_file))['Deployment']
       comp_by_type = @sd.components_by_type(data)
       @sd.set_components_by_type('CLUSTER',  comp_by_type['CLUSTER'] )
       @sd.set_components_by_type('VIRTUALMACHINE',  comp_by_type['VIRTUALMACHINE'] )
