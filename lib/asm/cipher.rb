@@ -21,7 +21,7 @@ def connect_database(conf)
     Sequel.connect("jdbc:postgresql://#{conf.host}/encryptionmgr?user=#{conf.username}&password=#{conf.password}")
   else
     require 'pg'
-    Sequel.connect("postgres://#{conf.username}:#{conf.password}@#{conf.host}:#{db_conf['port']}/encryptionmgr")
+    Sequel.connect("postgres://#{conf.username}:#{conf.password}@#{conf.host}:#{conf.port}/encryptionmgr")
   end
 end
 
