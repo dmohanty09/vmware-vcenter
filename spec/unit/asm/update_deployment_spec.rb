@@ -12,6 +12,12 @@ describe ASM::UpdateDeployment do
     FileUtils.cp_r(File.expand_path("../../../fixtures/deployments", __FILE__), @test_dir)
     ASM.stubs(:base_dir).returns("#{@test_dir}/deployments")
     ASM::Util.stubs(:reserve_network_ips).returns(["172.23.119.2"])
+    ASM::Util.stubs(:release_network_ips)
+    mock_command_result = { 
+      'stdout' => '', 'stderr' => '', 'exit_status' => 0, 'pid' => 0,
+    }
+    ASM::Util.stubs(:run_command_simple).returns(mock_command_result)
+    ASM::Util.stubs(:run_command)
     fetch_network_settings = {
       "id"=>"ff808081452c813b01452cee4a3f0066",
       "name"=>"vMotion",
