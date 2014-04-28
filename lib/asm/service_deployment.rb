@@ -699,12 +699,13 @@ class ASM::ServiceDeployment
         resource_hash['netapp::create_nfs_export'][title]['size'] = size_param.gsub(/MB/,'m')
       end
    
-      resource_hash['netapp::create_nfs_export'][title].delete ('path')
+      resource_hash['netapp::create_nfs_export'][title].delete('path')
       snapresv = resource_hash['netapp::create_nfs_export'][title]['snapresv']
       resource_hash['netapp::create_nfs_export'][title]['snapresv'] = snapresv.to_s
       
       # handling anon
-      resource_hash['netapp::create_nfs_export'][title].delete ('anon')
+      resource_hash['netapp::create_nfs_export'][title].delete('anon')
+      resource_hash['netapp::create_nfs_export'][title].delete('nfs_network')
     end
 
     process_generic(
@@ -1882,6 +1883,7 @@ class ASM::ServiceDeployment
                       'esxhost' => hostip,
                       'remote_host' => remote_host,
                       'remote_path' => remote_path,
+                      'require' => host_require
                     }
                   end
                 end
@@ -2672,6 +2674,8 @@ end
       logger.debug"Storage cert name: #{storage_cert_name}"
       if (storage_cert_name.downcase.match(/netapp/) != nil)
         netappip = storage_cert_name.gsub(/^netapp-/,'')
+        deviceconf ||= ASM::Util.parse_device_config(storage_cert_name)
+        netappip = deviceconf[:host]
       end
     end
     netappip
