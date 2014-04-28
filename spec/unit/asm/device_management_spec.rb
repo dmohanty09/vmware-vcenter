@@ -48,7 +48,7 @@ describe ASM::DeviceManagement do
       FileUtils.rm_rf(ssl_dir)
     end.returns(true)
 
-    ASM::DeploymentTeardown.stubs(:get_deployed_certs).returns([@cert_name])
+    ASM::Util.stubs(:get_puppet_certs).returns([@cert_name])
     ASM::DeploymentTeardown.expects(:clean_deployment_certs)
       .with([@cert_name])
         .returns(@cert_name)
