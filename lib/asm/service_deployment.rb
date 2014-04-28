@@ -2004,10 +2004,6 @@ class ASM::ServiceDeployment
     vm_cert_name = "vm-#{hostname.downcase}" # cert names must be lower-case
     process_generic(vm_cert_name, resource_hash, 'apply')
 
-    # TODO: Puppet module does not power it on first time.
-    log("Powering on #{hostname}")
-    process_generic(vm_cert_name, resource_hash, 'apply')
-
     if server_params
       uuid = nil
       begin
