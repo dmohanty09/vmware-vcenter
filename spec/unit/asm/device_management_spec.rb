@@ -10,8 +10,15 @@ describe ASM::DeviceManagement do
     @conf_dir = FileUtils.mkdir("#{@test_dir}/devices").first
     @ssl_dir = FileUtils.mkdir("#{@test_dir}/ssl").first
     @cert_name = "foo-127.0.0.1"
-    ASM::Util::DEVICE_CONF_DIR = @conf_dir
-    ASM::Util::DEVICE_SSL_DIR = @ssl_dir
+
+    ASM::Util.send(:remove_const, :DEVICE_CONF_DIR)
+    ASM::Util.const_set(:DEVICE_CONF_DIR, @conf_dir)
+    ASM::Util.send(:remove_const, :DEVICE_SSL_DIR)
+    ASM::Util.const_set(:DEVICE_SSL_DIR, @ssl_dir)
+
+    mock_log = mock('device_management')
+    mock_log.stub_everything
+    ASM::DeviceManagement.expects(:logger).at_least_once.returns(mock_log)
   end
 
   after do
