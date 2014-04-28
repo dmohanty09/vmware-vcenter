@@ -25,11 +25,15 @@ def connect_database(conf)
   end
 end
 
-# TODO: unless someone else have better idea how to mock this:
-DB = connect_database(database_config(ASM::Util::DATABASE_CONF)) unless ENV['MOCK_SEQUEL']
-
 module ASM
   module Cipher
+
+    def self.db
+      @db ||= begin
+        connect_database(database_config(ASM::Util::DATABASE_CONF))
+      end
+    end
+
     def self.decrypt_string(id)
       e_string = get_encrypted_string(id)
       e_key    = get_encryption_key(e_string[:encryptionmethodid])
@@ -42,13 +46,13 @@ module ASM
     end
 
     def self.get_encrypted_string(id)
-      result = DB['SELECT * FROM encryptedstring WHERE id = ?', id].first
+      result = self.db['SELECT * FROM encryptedstring WHERE id = ?', id].first
       raise(ArgumentError, "Invalid encryption string id: '#{id}'") unless result.is_a? ::Hash
       result
     end
 
     def self.get_encryption_key(id)
-      result = DB['SELECT bytes FROM encryptionkey WHERE id = (SELECT key_id FROM encryptionmethod WHERE id = ?)', id].first
+      result = self.db['SELECT bytes FROM encryptionkey WHERE id = (SELECT key_id FROM encryptionmethod WHERE id = ?)', id].first
       raise(ArgumentError, "Invalid encryption key id: '#{id}'") unless result.is_a? ::Hash
       result
     end
