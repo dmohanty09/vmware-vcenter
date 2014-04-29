@@ -1960,8 +1960,8 @@ class ASM::ServiceDeployment
     cluster_params = nil
     cluster_params = cluster_hash[cluster_hash.keys.first]
 
-    hostname = vm_params.hostname
     vm_params.process(component['puppetCertName'], server_params, cluster_params)
+    hostname = vm_params.hostname
 
     # Set titles from the host name. Can't be easily done from the
     # front-end because the host name is only entered in the

@@ -35,11 +35,10 @@ module ASM
         end
 
         def nil?
-          any?
+          !any?
         end
 
         def validate(value)
-          raise(ArgumentException, 'VM hostname not specified') unless value.include? 'hostname'
         end
 
         def to_puppet!
@@ -49,7 +48,11 @@ module ASM
 
       class VMware < VM_Mash
         def process(certname, server, cluster)
-          case server.os_image_type
+          hostname = server['os_host_name']
+          raise(ArgumentException, 'VM hostname not specified, missing server os_host_name value') unless hostname
+          self.hostname = hostname
+
+          case server['os_image_type']
           when 'windows'
             self.os_type = 'windows'
             self.os_guest_id = 'windows8Server64Guest'
@@ -62,7 +65,7 @@ module ASM
 
           self.cluster = cluster.cluster
           self.datacenter = cluster.datacenter
-          self.vcenter_id = centername
+          self.vcenter_id = certname
           self.vcenter_options = { 'insecure' => true }
           self.ensure = 'present'
 
@@ -82,13 +85,13 @@ module ASM
           self.network_interfaces = network
         end
 
-        def to_puppet!(hostname)
+        def to_puppet!
           { 'asm::vm::vcenter' => self.to_hash }
         end
       end
 
       class Scvmm < VM_Mash
-        def to_puppet!(hostname)
+        def to_puppet!
           { 'asm::vm::scvmm' => self.to_hash }
         end
       end
