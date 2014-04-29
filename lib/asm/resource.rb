@@ -98,7 +98,26 @@ module ASM
     class Server
       def self.create(value)
         if value.include? 'asm::server'
-          value['asm::server'].collect{|server| ASM::Resource::Mash.new(server)}
+          value['asm::server'].collect{|server| ASM::Resource::Mash.new(cleanup(server))}
+        else
+          []
+        end
+      end
+
+      def self.cleanup(server)
+        if server.include? 'os_type'
+          server['os_image_type'] = server.delete('os_type')
+          # TODO: migrate logger
+          #@logger.warn('Server configuration contains deprecated param name os_type')
+        end
+        server
+      end
+    end
+
+    class Cluster
+      def self.create(value)
+        if value.include? 'asm::cluster'
+          value['asm::cluster'].collect{|cluster| ASM::Resource::Mash.new(cluster)}
         else
           []
         end

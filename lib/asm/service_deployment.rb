@@ -1947,35 +1947,32 @@ class ASM::ServiceDeployment
     raise(Exception, "Expect one set of VM configuration #{vm.size} configuration recieved.") unless vms.size == 1
     vm = vms.first
 
-    vm_params = ASM::Resource::VM.create(resource_hash).first
-
-    server = ASM::Resource::Server.create(resource_hash)
-    raise(Exception, "Accept zero or one set of VM O/S configuration parameters: #{server.size} were passed") if server.size > 1
-    server_params = server.first
+    servers = ASM::Resource::Server.create(resource_hash)
+    raise(Exception, "Expect zero or one set of Server configuration: #{server.size} were passed") if server.size > 1
+    server = servers.first
 
     clusters = (find_related_components('CLUSTER', component) || [])
-    raise(Exception, "Expected one cluster for #{component['puppetCertName']} but found #{clusters.size}") unless clusters.size == 1
+    certname = component['puppetCertName']
+    raise(Exception, "Expect one cluster for #{certname}: #{clusters.size} was passed") unless clusters.size == 1
     cluster = clusters.first
-    cluster_deviceconf = ASM::Util.parse_device_config(cluster['puppetCertName'])
-    cluster_resource_hash = ASM::Util.build_component_configuration(cluster, :decrypt => decrypt?)
-    cluster_hash = cluster_resource_hash['asm::cluster'] || {}
-    raise(Exception, "Expected one asm::cluster resource but found #{cluster_hash.size}") unless cluster_hash.size == 1
-    cluster_params = nil
-    cluster_params = cluster_hash[cluster_hash.keys.first]
 
-    vm_params.process(component['puppetCertName'], server_params, cluster_params)
-    hostname = vm_params.hostname
+    cluster_deviceconf = ASM::Util.parse_device_config(certname)
+    cluster_resource = ASM::Util.build_component_configuration(cluster, :decrypt => decrypt?)
+    clusters = ASM::Resource::Cluster.create(cluster_resource)
+    raise(Exception, "Expected one asm::cluster resource: #{clusters.size} was provided") unless clusters.size == 1
+    cluster_params = clusters.first
 
-    # Set titles from the host name. Can't be easily done from the
-    # front-end because the host name is only entered in the
-    # asm::server section
-    resource_hash = vm_params.to_puppet!
+    vm.process(certname, server, cluster_params)
+    hostname = vm.hostname
+
+    resource_hash = vm.to_puppet!
 
     log("Creating VM #{hostname}")
-    vm_cert_name = "vm-#{hostname.downcase}" # cert names must be lower-case
-    process_generic(vm_cert_name, resource_hash, 'apply')
+    # Puppet cert names must be lower-case
+    vm_certname = "vm-#{hostname.downcase}"
+    process_generic(vm_certname, resource_hash, 'apply')
 
-    if server_params
+    if server
       uuid = nil
       begin
         uuid = ASM::Util.find_vm_uuid(cluster_deviceconf, hostname)
@@ -1990,23 +1987,15 @@ class ASM::ServiceDeployment
       log("Found UUID #{uuid} for #{hostname}")
       log("Initiating O/S install for VM #{hostname}")
 
-      # Work around incorrect name in GUI for now
-      # TODO: remove when no longer needed
-      old_image_param = server_params.delete('os_type')
-      if old_image_param
-        @logger.warn('Incorrect os image param name os_type')
-        server_params['os_image_type'] = old_image_param
-      end
-
       serial_number = @debug ? "vmware_debug_serial_no" : ASM::Util.vm_uuid_to_serial_number(uuid)
 
       #Get the list of related services to this virtual machine, and combine them into one hash
       classes_config = get_classification_data(component, hostname)
 
-      massage_asm_server_params(serial_number, server_params, classes_config)
+      massage_asm_server_params(serial_number, server, classes_config)
 
-      resource_hash['asm::server'] = { hostname => server_params }
-      process_generic(vm_cert_name, resource_hash, 'apply')
+      resource_hash['asm::server'] = { hostname => server }
+      process_generic(vm_certname, resource_hash, 'apply')
 
       unless @debug
         await_agent_run_completion(ASM::Util.hostname_to_certname(hostname))
