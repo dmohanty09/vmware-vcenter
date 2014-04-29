@@ -27,15 +27,8 @@ module ASM
       end
 
       class VM_Mash < Hashie::Mash
-        def initialize(source_hash = nil, default = nil, &blk)
-          validate(source_hash)
-        end
-
         def nil?
           !any?
-        end
-
-        def validate(value)
         end
 
         def to_puppet!
