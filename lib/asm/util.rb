@@ -567,7 +567,9 @@ module ASM
         raise(Exception, "resource of type #{options[:type]} has no parameters")
       else
         resource['parameters'].each do |param|
-          if !param['value'].nil?
+          if !param['networks'].nil?
+	    param_hash[param['id'].downcase] = self.asm_json_array(param['networks'])
+          elsif !param['value'].nil?
             param_hash[param['id'].downcase] = param['value']
           end
           if param['value'] and param['type'] == 'PASSWORD'
