@@ -1485,8 +1485,7 @@ class ASM::ServiceDeployment
     }
   end
 
-  def build_vswitch(server_cert, index, networks, hostip,
-    params, server_params, network_type)
+  def build_vswitch(server_cert, index, networks, hostip, params, server_params, network_type)
     vswitch_name = "vSwitch#{index}"
     vmnic1 = "vmnic#{index * 2}"
     vmnic2 = "vmnic#{(index * 2) + 1}"
@@ -1649,6 +1648,7 @@ class ASM::ServiceDeployment
               host_require = next_require
               storage_network_require = nil
               storage_network_vmk_index = nil
+              storage_network_vswitch = nil
 
               # Each ESXi host will implicitly have a Management Network
               # on vmk0. Other VMkernel portgroups that we add will enumerate
@@ -1675,9 +1675,7 @@ class ASM::ServiceDeployment
                       log("Configuring #{type} #{network['name']}")
                     end
                   end
-                  vswitch_resources = build_vswitch(server_cert, index,
-                  networks, hostip,
-                  params, server_params, type)
+                  vswitch_resources = build_vswitch(server_cert, index, networks, hostip, params, server_params, type)
                   # Should be exactly one vswitch in response
                   vswitch_title = vswitch_resources['esx_vswitch'].keys[0]
                   vswitch = vswitch_resources['esx_vswitch'][vswitch_title]
@@ -1703,6 +1701,7 @@ class ASM::ServiceDeployment
                       storage_network_require ||= []
                       storage_network_vmk_index ||= vmk_index
                       storage_network_require.push("Esx_portgroup[#{title}]")
+                      storage_network_vswitch = "vSwitch#{index}"
                     end
 
                   end
@@ -1768,7 +1767,7 @@ class ASM::ServiceDeployment
 
                     # Esx_mem configuration is below
                     if server_params.has_key? 'esx_mem' and server_params['esx_mem'] 
-                      vnics = resource_hash['esx_vswitch']["#{hostip}:vSwitch3"]['nics'].map do|n|
+                      vnics = resource_hash['esx_vswitch']["#{hostip}:#{storage_network_vswitch}"]['nics'].map do|n|
                         n.strip
                       end
 
@@ -1793,7 +1792,7 @@ class ASM::ServiceDeployment
                         'transport'              => "Transport[vcenter]",
                         'storage_groupip'        => ASM::Util.find_equallogic_iscsi_ip(storage_cert),
                         'iscsi_netmask'          => ASM::Util.find_equallogic_iscsi_netmask(storage_cert),
-                        'iscsi_vswitch'          => 'vSwitch3',  
+                        'iscsi_vswitch'          => storage_network_vswitch,  
                         'vnics'                  => vnics,
                         'vnics_ipaddress'        => vnics_ipaddress
                       }
@@ -2131,7 +2130,7 @@ class ASM::ServiceDeployment
     # in the process_cluster method even after the uuid has been
     # obtained above; trying a 5 minute sleep... Seems to happen more
     # frequently when only one ESXi host is in the deployment.
-    sleep(300)
+    sleep(450)
 
     log("ESXi server #{hostname} is available")
   end
