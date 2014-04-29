@@ -18,9 +18,9 @@ module ASM
 
         case vm_type
         when 'asm::vm', 'asm::vm::vcenter'
-          vm_config.collect{|vm| VMware.new(vm)}
+          vm_config.collect{|uuid, vm| VMware.new(vm)}
         when 'asm::vm::scvmm'
-          vm_config.collect{|vm| Scvmm.new(vm)}
+          vm_config.collect{|uuid, vm| Scvmm.new(vm)}
         else
           raise ArgumentError, "Invalid VM resource type #{vm_type}"
         end

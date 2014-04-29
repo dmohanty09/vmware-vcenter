@@ -38,7 +38,7 @@ module ASM
       comps = (data['serviceTemplate'] || {})['components'] || []
       ASM::Util.asm_json_array(comps).each do |c|
         if c['type'] == 'SERVER' or c['type'] == "VIRTUALMACHINE" 
-          (c['resources'] || {}).each do |r|
+          ASM::Util.asm_json_array(c['resources'] || {}).each do |r|
             if r['id'] == 'asm::server'
               os_host_name = nil
               agent = true
