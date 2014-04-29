@@ -27,6 +27,9 @@ class ASM::ServiceDeployment
   class PuppetEventException < Exception; end
 
   attr_reader :id
+  attr_reader :configured_rack_switches
+  attr_reader :configured_blade_switches
+  attr_reader :configured_brocade_san_switches
 
   def initialize(id)
     unless id
@@ -1063,49 +1066,16 @@ class ASM::ServiceDeployment
   end
 
   def get_all_switches()
-    puppet_out = deployment_file('puppetcert.out')
-    cmd = "sudo puppet cert list --all"
-    File.delete(puppet_out) if File.exists?(puppet_out)
-
-    ASM::Util.run_command(cmd, puppet_out)
-    resp = File.read(puppet_out)
-    resp.split("\n").each do |line|
-      if line =~ /dell_ftos/
-        logger.debug "Found dell ftos certificate"
-        res = line.to_s.strip.split(' ')
-        switchCert = res[1]
-        switchCert = switchCert.gsub(/\"/, "")
-        puts "FTOS switch certificate is #{switchCert}"
-        @configured_rack_switches.push(switchCert)
-      end
-      if line =~ /dell_powerconnect/
-        logger.debug "Found dell powerconnect certificate"
-        res = line.to_s.strip.split(' ')
-        switchCert = res[1]
-        switchCert = switchCert.gsub(/\"/, "")
-        puts "Powerconnect switch certificate is #{switchCert}"
-        @configured_rack_switches.push(switchCert)
-      end
-      if line =~ /dell_iom/
-        logger.debug "Found dell powerconnect certificate"
-        res = line.to_s.strip.split(' ')
-        switchCert = res[1]
-        switchCert = switchCert.gsub(/\"/, "")
-        puts "Powerconnect switch certificate is #{switchCert}"
-        @configured_blade_switches.push(switchCert)
-      end
-      if line =~ /brocade_/
-        logger.debug "Found brocade switch certificate"
-        res = line.to_s.strip.split(' ')
-        switchCert = res[1]
-        switchCert = switchCert.gsub(/\"/, "")
-        puts "Brocade SAN switch certificate is #{switchCert}"
-        @configured_brocade_san_switches.push(switchCert)
-      end
+    certs = ASM::Util.get_puppet_certs
+    @configured_rack_switches = certs.find_all do |x|
+      x.start_with?('dell_ftos') or x.start_with?('dell_powerconnect')
     end
-    @configured_rack_switches.uniq
-    @configured_blade_switches.uniq
-    @configured_brocade_san_switches.uniq
+    @configured_blade_switches = certs.find_all do |x|
+      x.start_with?('dell_iom')
+    end
+    @configured_brocade_san_switches = certs.find_all do |x| 
+      x.start_with?('brocade_')
+    end
     logger.debug "Rack ToR Switch certificate name list is #{@configured_rack_switches}"
     logger.debug "Blade IOM Switch certificate name list is #{@configured_blade_switches}"
     logger.debug "Brocade SAN Switches certificate name list is #{@configured_brocade_san_switches}"

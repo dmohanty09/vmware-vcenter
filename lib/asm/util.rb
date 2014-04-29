@@ -620,10 +620,29 @@ module ASM
       end
     end
 
+
+    # Call to puppet returns list of hots which look like 
+    #  + "dell_iom-172.17.15.234" (SHA256) CF:EE:DB:CD:2A:45:17:99:E9:C0:4D:6D:5C:C4:F0:4F:9D:F1:B9:E5:1B:69:3D:99:C2:45:49:5B:0F:F0:08:83
+    # this strips all the information and just returns array of host names: "dell_iom-172.17.15.234", "dell_...."
+    def self.get_puppet_certs()
+      certs_list = []
+      results = ASM::Util.run_command_simple("sudo puppet cert list --all")
+      unless results['exit_status'] == 0
+        raise(Exception, "Call to puppet cert list all failed: \nstdout:#{results['stdout']}\nstderr:#{results['stderr']}\n")
+      end
+      rslt_str = results['stdout']
+      cert_list_array = rslt_str.split('+')
+      cert_list_array.delete_at(0)
+      cert_list_array.each do |cert|
+        certs_list.push(cert.slice(0..(cert.index('(SHA256)')-1)).gsub(/"/,'').strip)
+      end
+      certs_list
+    end
+
     def self.check_host_list_against_previous_deployments(hostlist)
       dup_certs =  ASM.block_hostlist(hostlist)
       if dup_certs.empty?
-        puppet_certs = ASM::DeploymentTeardown.get_deployed_certs
+        puppet_certs = self.get_puppet_certs
         dup_certs = hostlist & puppet_certs
       end
       dup_certs

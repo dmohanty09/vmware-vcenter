@@ -7,7 +7,7 @@ module ASM
 
     #under assumption hash will have at least {"ref_id":"....", "device_type":"...", "service_tag":"...."}, modeled from database entry
     def self.remove_device(cert_name)
-        certs = ASM::DeploymentTeardown.get_deployed_certs()
+        certs = ASM::Util.get_puppet_certs
 
         if certs.include?(cert_name)
           ASM::DeploymentTeardown.clean_deployment_certs([cert_name])
