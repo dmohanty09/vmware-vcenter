@@ -16,9 +16,6 @@ module ASM
         vm_type, vm_config = vm_hash.shift
         vm_config ||= []
 
-        # For simplicity we require exactly one asm::vm::* resource
-        raise(ArgumentError, 'Exactly one set of VM configuration accepted, multiple configuration recieved.') unless vm_config.size == 1
-
         case vm_type
         when 'asm::vm', 'asm::vm::vcenter'
           vm_config.collect{|vm| VMware.new(vm)}

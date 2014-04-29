@@ -1943,6 +1943,9 @@ class ASM::ServiceDeployment
 
     # For simplicity we require that there is exactly one asm::vm
     # and optionally one asm::server resource
+    vms = ASM::Resource::VM.create(resource_hash)
+    raise(Exception, "Expect one set of VM configuration #{vm.size} configuration recieved.") unless vms.size == 1
+    vm = vms.first
 
     vm_params = ASM::Resource::VM.create(resource_hash).first
 
