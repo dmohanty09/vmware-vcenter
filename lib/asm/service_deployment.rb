@@ -1814,23 +1814,23 @@ class ASM::ServiceDeployment
 
     servers = ASM::Resource::Server.create(resource_hash)
     raise(Exception, "Expect zero or one set of Server configuration: #{servers.size} were passed") if servers.size > 1
-    server = servers.first
+    server = servers.first || Hashie::Mash.new
 
     clusters = (find_related_components('CLUSTER', component) || [])
-    certname = component['puppetCertName']
+    cluster = clusters.first || {}
+    certname = cluster['puppetCertName']
     raise(Exception, "Expect one cluster for #{certname}: #{clusters.size} was passed") unless clusters.size == 1
-    cluster = clusters.first
 
     cluster_deviceconf = ASM::Util.parse_device_config(certname)
     cluster_resource = ASM::Util.build_component_configuration(cluster, :decrypt => decrypt?)
     clusters = ASM::Resource::Cluster.create(cluster_resource)
     raise(Exception, "Expected one asm::cluster resource: #{clusters.size} was provided") unless clusters.size == 1
-    cluster_params = clusters.first
+    cluster_name, cluster_params = clusters.first.shift
 
-    vm.process(certname, server, cluster_params)
+    vm.process!(certname, server, cluster_params)
     hostname = vm.hostname
 
-    resource_hash = vm.to_puppet!
+    resource_hash = vm.to_puppet
 
     log("Creating VM #{hostname}")
     # Puppet cert names must be lower-case

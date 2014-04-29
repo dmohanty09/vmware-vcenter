@@ -31,13 +31,13 @@ module ASM
           !any?
         end
 
-        def to_puppet!
+        def to_puppet
           raise NotImplementedError, 'VM_Mash is a not a puppet resource'
         end
       end
 
       class VMware < VM_Mash
-        def process(certname, server, cluster)
+        def process!(certname, server, cluster)
           hostname = server['os_host_name']
           raise(ArgumentError, 'VM hostname not specified, missing server os_host_name value') unless hostname
           self.hostname = hostname
@@ -75,14 +75,25 @@ module ASM
           self.network_interfaces = network
         end
 
-        def to_puppet!
-          { 'asm::vm::vcenter' => self.to_hash }
+        def to_puppet
+          hostname = self.delete 'hostname'
+          { 'asm::vm::vcenter' => { hostname => self.to_hash }}
         end
       end
 
       class Scvmm < VM_Mash
-        def to_puppet!
-          { 'asm::vm::scvmm' => self.to_hash }
+        def process!(certname, server, cluster)
+          hostname = server['os_host_name']
+          raise(ArgumentError, 'VM hostname not specified, missing server os_host_name value') unless hostname
+          self.hostname = hostname
+
+          self.scvmm_server = cluster.name
+          self.ensure = 'present'
+        end
+
+        def to_puppet
+          hostname = self.delete 'hostname'
+          { 'asm::vm::scvmm' => { hostname => self.to_hash }}
         end
       end
 
@@ -107,13 +118,27 @@ module ASM
       end
     end
 
-    class Cluster
+    module Cluster
       def self.create(value)
-        if value.include? 'asm::cluster'
-          value['asm::cluster'].collect{|cluster| ASM::Resource::Mash.new(cluster)}
-        else
-          []
+        result = []
+        value.each do |cluster_type, cluster_config|
+          case cluster_type
+          when 'asm::cluster', 'asm::cluster::vmware'
+            result << ASM::Resource::Cluster::VMware.new(cluster_config)
+          when 'asm::cluster::scvmm'
+            result << ASM::Resource::Cluster::Scvmm.new(cluster_config)
+          end
         end
+        result
+      end
+
+      class Cluster_Mash < Hashie::Mash
+      end
+
+      class VMware < Cluster_Mash
+      end
+
+      class Scvmm < Cluster_Mash
       end
     end
   end
