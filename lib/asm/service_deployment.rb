@@ -1943,62 +1943,30 @@ class ASM::ServiceDeployment
 
     # For simplicity we require that there is exactly one asm::vm
     # and optionally one asm::server resource
-    unless resource_hash['asm::vm'] && resource_hash['asm::vm'].size == 1
-      raise(Exception, "Exactly one set of VM configuration parameters is required")
-    end
-    vm_params = resource_hash['asm::vm'][resource_hash['asm::vm'].keys[0]]
 
-    if resource_hash['asm::server'] && resource_hash['asm::server'].size > 1
-      raise(Exception, "One or no sets of VM O/S configuration parameters required but #{resource_hash['asm::server'].size} were passed")
-    end
+    vm_params = ASM::Resource::VM.create(resource_hash).first
 
-    unless resource_hash['asm::server']
-      server_params = nil
-    else
-      server_params = resource_hash['asm::server'][resource_hash['asm::server'].keys[0]]
-    end
+    server = ASM::Resource::Server.create(resource_hash)
+    raise(Exception, "Accept zero or one set of VM O/S configuration parameters: #{server.size} were passed") if server.size > 1
+    server_params = server.first
 
     clusters = (find_related_components('CLUSTER', component) || [])
     raise(Exception, "Expected one cluster for #{component['puppetCertName']} but found #{clusters.size}") unless clusters.size == 1
-    cluster = clusters[0]
+    cluster = clusters.first
     cluster_deviceconf = ASM::Util.parse_device_config(cluster['puppetCertName'])
     cluster_resource_hash = ASM::Util.build_component_configuration(cluster, :decrypt => decrypt?)
     cluster_hash = cluster_resource_hash['asm::cluster'] || {}
     raise(Exception, "Expected one asm::cluster resource but found #{cluster_hash.size}") unless cluster_hash.size == 1
     cluster_params = nil
-    cluster_hash.each do |title, params|
-      cluster_params ||= params
-    end
+    cluster_params = cluster_hash[cluster_hash.keys.first]
 
-    vm_params['hostname'] = (server_params || {})['os_host_name']
-    hostname = vm_params['hostname'] || raise(Exception, "VM host name not specified")
-    if server_params['os_image_type'] == 'windows'
-      vm_params['os_type'] = 'windows'
-      vm_params['os_guest_id'] = 'windows8Server64Guest'
-      vm_params['scsi_controller_type'] = 'LSI Logic SAS'
-    else
-      vm_params['os_type'] = 'linux'
-      vm_params['os_guest_id'] = 'rhel6_64Guest'
-      vm_params['scsi_controller_type'] = 'VMware Paravirtual'
-    end
-
-    vm_params['cluster'] = cluster_params['cluster']
-    vm_params['datacenter'] = cluster_params['datacenter']
-    vm_params['vcenter_id'] = cluster['puppetCertName']
-    vm_params['vcenter_options'] = { 'insecure' => true }
-    vm_params['ensure'] = 'present'
-
-    #Added for multiple vm networks
-    n_i = [{'portgroup' => 'VM Network', 'nic_type' => 'vmxnet3'}]
-    vm_params['network_interfaces'].split(',').reject { |x| x.empty? }.each do |portgroup|
-      n_i << {'portgroup' => portgroup, 'nic_type' => 'vmxnet3'}
-    end
-    vm_params['network_interfaces'] = n_i
+    hostname = vm_params.hostname
+    vm_params.process(component['puppetCertName'], server_params, cluster_params)
 
     # Set titles from the host name. Can't be easily done from the
     # front-end because the host name is only entered in the
     # asm::server section
-    resource_hash = { 'asm::vm' => { hostname => vm_params }}
+    resource_hash = vm_params.to_puppet!
 
     log("Creating VM #{hostname}")
     vm_cert_name = "vm-#{hostname.downcase}" # cert names must be lower-case
