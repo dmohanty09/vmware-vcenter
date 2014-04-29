@@ -1768,8 +1768,7 @@ class ASM::ServiceDeployment
 
                     storage_titles.push storage_title
 
-                    resource_hash['asm::datastore'] ||= {}
-                    resource_hash['asm::datastore']["#{hostip}:#{storage_title}:datastore"] = {
+                    asm_datastore = {
                       'data_center' => params['datacenter'],
                       'cluster' => params['cluster'],
                       'datastore' => storage_title,
@@ -1780,16 +1779,25 @@ class ASM::ServiceDeployment
                       'hba1' => hba_list[0],
                       'hba2' => hba_list[1],
                       'iscsi_target_ip' => ASM::Util.find_equallogic_iscsi_ip(storage_cert),
-                      'chapname' => storage_params['chap_user_name'],
-                      'chapsecret' => storage_params['passwd'],
                       'vmknics' => "vmk#{storage_network_vmk_index}",
                       'vmknics1' => "vmk#{storage_network_vmk_index + 1}",
                       'decrypt' => decrypt?,
                       'require' => storage_network_require,
                     }
+                    # We are not using IQN auth? Then add chapname and chapsecret
+                    if storage_params.has_key? 'chap_user_name' and not storage_params['chap_user_name'].empty?
+                      chap = {
+                        'chapname' => storage_params['chap_user_name'],
+                        'chapsecret' => storage_params['passwd']}
+                      asm_datastore.merge! chap 
+                    end
+                    resource_hash['asm::datastore'] ||= {}
+                    resource_hash['asm::datastore']["#{hostip}:#{storage_title}:datastore"] = asm_datastore
+
                     resource_hash['esx_datastore'] ||= {}
                     resource_hash['esx_datastore']["#{hostip}:#{storage_title}"] ={
                       'ensure' => 'present',
+                      'datastore' => storage_title,
                       'type' => 'vmfs',
                       'lun' => '0',
                       'require' => "Asm::Datastore[#{hostip}:#{storage_title}:datastore]",
@@ -1810,7 +1818,7 @@ class ASM::ServiceDeployment
                       vnics = vnics.join(',')
 
                       logger.debug "Server params: #{server_params}"
-                      esx = {
+                      esx_mem = {
                         'require'                => [
                           "Esx_datastore[#{hostip}:#{storage_title}]",
                           "Esx_syslog[#{hostip}]"],
@@ -1831,10 +1839,10 @@ class ASM::ServiceDeployment
                         chap = {
                           'iscsi_chapuser'         => storage_params['chap_user_name'],
                           'iscsi_chapsecret'       => storage_params['passwd'] }
-                        esx.merge! chap 
+                        esx_mem.merge! chap 
                       end
                       resource_hash['esx_mem'] ||= {}
-                      resource_hash['esx_mem'][hostip] = esx
+                      resource_hash['esx_mem'][hostip] = esx_mem
                     end
                   end
                 end
@@ -1899,11 +1907,12 @@ class ASM::ServiceDeployment
               end
               logger.debug('Configuring persistent storage for logs')
               if not storage_titles.empty?
+                syslog_volume = storage_titles[0]
                 resource_hash['esx_syslog'] ||= {}
                 resource_hash['esx_syslog'][hostip] = {
                   'log_dir_unique' => true,
                   'transport' => 'Transport[vcenter]',
-                  'log_dir' => "[#{storage_titles[0]}] logs"
+                  'log_dir' => "[#{syslog_volume}] logs"
                 }
               end
             end
@@ -2161,7 +2170,7 @@ class ASM::ServiceDeployment
     # in the process_cluster method even after the uuid has been
     # obtained above; trying a 5 minute sleep... Seems to happen more
     # frequently when only one ESXi host is in the deployment.
-    sleep(300)
+    sleep(450)
 
     log("ESXi server #{hostname} is available")
   end
