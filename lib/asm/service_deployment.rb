@@ -87,7 +87,7 @@ class ASM::ServiceDeployment
     # Build guid_to_params map of network guid to list of matching parameters
     networks = [ 'hypervisor_network', 'converged_network', 'vmotion_network',
                  'workload_network', 'storage_network', 'pxe_network',
-                 'private_cluster_network', 'live_migration_network' ]
+                 'private_cluster_network', 'live_migration_network' , 'nfs_network' ]
     server_components.each do |component|
       resources = ASM::Util.asm_json_array(component['resources']) || []
       resources.each do |resource|
@@ -614,7 +614,7 @@ class ASM::ServiceDeployment
             (net_params || {}).each do |name, net_array|
               logger.debug "Network name: #{name}"
               logger.debug "Network array : #{net_array.inspect}"
-              if name == 'hypervisor_network' or name == 'converged_network'
+              if name == 'hypervisor_network' or name == 'converged_network' or name == 'nfs_network'
                 first_net = net_array.first
                 nfs_ip_addresses.push(first_net['staticNetworkConfiguration']['ip_address'])
               end
@@ -1685,7 +1685,15 @@ class ASM::ServiceDeployment
               # from there.
               vmk_index = 0
 
-              [ 'hypervisor_network', 'vmotion_network', 'workload_network', 'storage_network' ].each_with_index do | type, index |
+              network_array = [ 'hypervisor_network', 'vmotion_network', 'workload_network' ] 
+              nfs_networks = network_params['nfs_network']
+              if nfs_networks
+                network_array << 'nfs_network'
+              else
+                network_array << 'storage_network'
+              end
+                
+              network_array.each_with_index do | type, index |
                 networks = network_params[type]
 
                 if networks
@@ -2676,6 +2684,19 @@ end
         netappip = storage_cert_name.gsub(/^netapp-/,'')
         deviceconf ||= ASM::Util.parse_device_config(storage_cert_name)
         netappip = deviceconf[:host]
+
+        resources = ASM::Util.asm_json_array(storage_component['resources']) || []
+        resources.each do |resource|
+          parameters=ASM::Util.asm_json_array(resource['parameters']) || []
+          logger.debug"Resource info #{resource.inspect}"
+          parameters.each do |param|
+            if param['id'] == "nfs_network"
+              nfsip=param['value']
+              netappip = nfsip if !nfsip.nil?
+              break
+            end
+          end
+        end
       end
     end
     netappip
