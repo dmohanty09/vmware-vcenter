@@ -7,14 +7,11 @@ require 'asm/util'
 describe ASM::ServiceDeployment do
 
   before do
-    ENV['MOCK_SEQUEL'] = 'true'
-    DB = Sequel.mock
     ASM.init
     @tmp_dir = Dir.mktmpdir
     @sd = ASM::ServiceDeployment.new('8000')
     @sd.stubs(:find_node).returns({})
     @sd.stubs(:create_broker_if_needed).returns('STUB-BROKER-NAME')
-    @sd.stubs(:get_all_switches).returns([])
     @sd.stubs(:get_server_inventory).returns({})
     @sd.stubs(:update_inventory_through_controller)
     ASM.stubs(:base_dir).returns(@tmp_dir)
@@ -26,6 +23,10 @@ describe ASM::ServiceDeployment do
     }
     ASM::Util.stubs(:fetch_network_settings).returns(network)
     ASM::Util.stubs(:reserve_network_ips).returns(['172.28.118.1'])
+    mock_command_result = { 
+      'stdout' => '', 'stderr' => '', 'exit_status' => 0, 'pid' => 0,
+    }
+    ASM::Util.stubs(:run_command_simple).returns(mock_command_result)
   end
 
   after do
@@ -424,7 +425,9 @@ describe ASM::ServiceDeployment do
 
   describe 'when checking find related components' do
     before do
-      data = JSON.parse(File.read('/opt/asm-deployer/spec/fixtures/find_related_components.json'))['Deployment']
+      sample_file = File.join(File.dirname(__FILE__), '..', '..', 
+                              'fixtures', 'find_related_components.json')
+      data = JSON.parse(File.read(sample_file))['Deployment']
       comp_by_type = @sd.components_by_type(data)
       @sd.set_components_by_type('CLUSTER',  comp_by_type['CLUSTER'] )
       @sd.set_components_by_type('VIRTUALMACHINE',  comp_by_type['VIRTUALMACHINE'] )
@@ -445,4 +448,21 @@ describe ASM::ServiceDeployment do
       @sd.send(:resources_dir).should == File.join(@tmp_dir, @sd.id, 'resources')
     end
   end
+
+  describe 'when getting all switches' do
+    it 'should find them' do
+      certs = ['dell_ftos-1','server2', 'dell_ftos-2', 'brocade_foo-bar',
+        'dell_iom-3', 'brocade_bar-4', 'dell_powerconnect-5',
+        'dell_powerconnect-6' ]
+      ASM::Util.stubs(:get_puppet_certs).returns(certs)
+      ASM::Util.get_puppet_certs.should == certs
+      @sd.get_all_switches
+      @sd.configured_rack_switches.should == [ 'dell_ftos-1', 'dell_ftos-2', 
+        'dell_powerconnect-5', 'dell_powerconnect-6' ]
+      @sd.configured_blade_switches.should == [ 'dell_iom-3' ]
+      @sd.configured_brocade_san_switches.should == [ 'brocade_foo-bar', 'brocade_bar-4' ]
+      ASM::Util.unstub(:get_puppet_certs)
+    end
+  end
+
 end
