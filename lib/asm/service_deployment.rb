@@ -15,6 +15,7 @@ require 'asm/get_switch_information'
 require 'uri'
 require 'asm/discoverswitch'
 require 'asm/cipher'
+require 'asm/resource'
 
 class ASM::ServiceDeployment
 
@@ -1812,7 +1813,7 @@ class ASM::ServiceDeployment
     vm = vms.first
 
     servers = ASM::Resource::Server.create(resource_hash)
-    raise(Exception, "Expect zero or one set of Server configuration: #{server.size} were passed") if server.size > 1
+    raise(Exception, "Expect zero or one set of Server configuration: #{servers.size} were passed") if servers.size > 1
     server = servers.first
 
     clusters = (find_related_components('CLUSTER', component) || [])
