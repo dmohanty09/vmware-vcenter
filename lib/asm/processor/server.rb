@@ -67,7 +67,7 @@ module ASM
         net_params   = (resources['asm::esxiscsiconfig'] || {})[title]
 
         net_mapper = {
-          'ip_address' => 'ip_address',
+          'ipAddress' => 'ip_address',
           'subnet'     => 'netmask',
           'gateway'    => 'gateway'
         }
@@ -103,8 +103,8 @@ module ASM
             puppet_classification_data['hyperv::config']['iscsi_netmask']     =  first_net['staticNetworkConfiguration']['subnet']
             puppet_classification_data['hyperv::config']['iscsi_vlan_id']           =  first_net['vlanId']
             puppet_classification_data['hyperv::config']['iscsi_ip_addresses'] = []
-            puppet_classification_data['hyperv::config']['iscsi_ip_addresses'].push(first_net['staticNetworkConfiguration']['ip_address'])
-            puppet_classification_data['hyperv::config']['iscsi_ip_addresses'].push(net_array.last['staticNetworkConfiguration']['ip_address'])
+            puppet_classification_data['hyperv::config']['iscsi_ip_addresses'].push(first_net['staticNetworkConfiguration']['ipAddress'])
+            puppet_classification_data['hyperv::config']['iscsi_ip_addresses'].push(net_array.last['staticNetworkConfiguration']['ipAddress'])
           end
 
           puppet_classification_data['hyperv::config']['hyperv_diskpart'] = disk_part_flag
