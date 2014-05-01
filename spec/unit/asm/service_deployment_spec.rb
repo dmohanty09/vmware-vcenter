@@ -10,7 +10,9 @@ describe ASM::ServiceDeployment do
     ASM.init
     @tmp_dir = Dir.mktmpdir
     @sd = ASM::ServiceDeployment.new('8000')
-    @sd.stubs(:find_node).returns({})
+    razor = mock('razor')
+    razor.stubs(:find_node).returns({})
+    @sd.stubs(:razor).returns(razor)
     @sd.stubs(:create_broker_if_needed).returns('STUB-BROKER-NAME')
     @sd.stubs(:get_server_inventory).returns({})
     @sd.stubs(:update_inventory_through_controller)
@@ -61,7 +63,7 @@ describe ASM::ServiceDeployment do
       YAML.load_file(@r_file)['user']['foo']['foo'].should == 'bar'
     end
 
-    describe 'for server bare metal provisioining' do
+    describe 'for server bare metal provisioning' do
       it 'should fail is rule_number was already set' do
         @data['serviceTemplate']['components'][0]['type'] = 'SERVER'
         @data['serviceTemplate']['components'][0]['resources'].push(
@@ -117,12 +119,14 @@ describe ASM::ServiceDeployment do
       it 'should skip processing if server already deployed' do
         @sd.expects(:process_generic).never
         node = {'policy' => { 'name' => 'policy_test' } }
-        @sd.stubs(:find_node).returns(node)
-        policy = { 
+        razor = mock('razor')
+        razor.stubs(:find_node).returns(node)
+        policy = {
           'repo' => {'name' => 'esxi-5.1'},
           'task' => {'name' => 'vmware_esxi'} 
         }
-        @sd.stubs(:get).returns(policy)
+        razor.stubs(:get).returns(policy)
+        @sd.stubs(:razor).returns(razor)
         @data['serviceTemplate']['components'][0]['id'] = 'bladeserver_serialno'
         @data['serviceTemplate']['components'][0]['puppetCertName'] = 'bladeserver_serialno'
         @data['serviceTemplate']['components'][0]['type'] = 'SERVER'

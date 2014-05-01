@@ -1,6 +1,7 @@
 require 'asm'
 require 'asm/util'
 require 'asm/processor/server'
+require 'asm/razor'
 require 'fileutils'
 require 'json'
 require 'logger'
@@ -1247,6 +1248,10 @@ class ASM::ServiceDeployment
                       )
     end
 
+    def razor
+      @razor ||= ASM::Razor.new
+    end
+
     # The rest of the asm::esxiscsiconfig is used to configure vswitches
     # and portgroups on the esxi host and is done in the cluster swimlane
     resource_hash.delete('asm::esxiscsiconfig')
@@ -1258,9 +1263,9 @@ class ASM::ServiceDeployment
     skip_deployment = nil
     unless @debug
       begin
-        node = (find_node(serial_number) || {})
+        node = (razor.find_node(serial_number) || {})
         if node['policy'] && node['policy']['name']
-          policy = get('policies', node['policy']['name'])
+          policy = razor.get('policies', node['policy']['name'])
           razor_params = resource_hash['asm::server'][cert_name]
           if policy &&
               (policy['repo'] || {})['name'] == razor_params['razor_image'] &&
@@ -1502,7 +1507,7 @@ class ASM::ServiceDeployment
 
             # Determine host IP
             log("Finding host ip for serial number #{serial_number}")
-            hostip = find_host_ip(serial_number)
+            hostip = razor.find_host_ip(serial_number)
             if @debug && !hostip
               hostip = "DEBUG-IP-ADDRESS"
             end
@@ -1894,40 +1899,6 @@ class ASM::ServiceDeployment
     end
   end
 
-  def find_node(serial_num)
-    ret = nil
-    results = get('nodes').each do |node|
-      results = get('nodes', node['name'])
-      # Facts will be empty for a period until server checks in
-      serial  = (results['facts'] || {})['serialnumber']
-      if serial == serial_num
-        ret = results
-      end
-    end
-    ret
-  end
-
-  def find_host_ip(serial_num)
-    node = find_node(serial_num)
-    if node && node['facts'] && node['facts']['ipaddress']
-      node['facts']['ipaddress']
-    else
-      nil
-    end
-  end
-
-  def find_host_ip_blocking(serial_num, timeout)
-    ipaddress = nil
-    max_sleep = 30
-    ASM::Util.block_and_retry_until_ready(timeout, CommandException, max_sleep) do
-      ipaddress = find_host_ip(serial_num)
-      unless ipaddress
-        raise(CommandException, "Did not find our node by its serial number. Will try again")
-      end
-    end
-    ipaddress
-  end
-
   def await_agent_run_completion(certname, timeout = 3600)
     #get the time that this method starts so can check for reports that happen afterwards
     function_start = Time.now
@@ -2024,7 +1995,7 @@ class ASM::ServiceDeployment
     hostdisplayname = "#{serial_num} (#{hostname})"
 
     log("Waiting until #{hostdisplayname} has checked in with Razor")
-    dhcp_ip = find_host_ip_blocking(serial_num, timeout)
+    dhcp_ip = razor.find_host_ip_blocking(serial_num, timeout)
     log("#{hostdisplayname} has checked in with Razor with ip address #{dhcp_ip}")
 
     log("Waiting until #{hostdisplayname} is ready")
@@ -2094,22 +2065,6 @@ class ASM::ServiceDeployment
     id_log_file = deployment_file("#{cert_name}.cfg")
     File.write(id_log_file, file_content)
     id_log_file
-  end
-
-  def get(type, name=nil)
-    begin
-      response = nil
-      url = ['http://localhost:8081/api/collections', type, name].compact.join('/')
-      response = RestClient.get(url)
-    rescue RestClient::ResourceNotFound => e
-      raise(CommandException, "Rest call to #{url} failed: #{e}")
-    end
-    if response.code == 200
-      result = JSON.parse(response)
-      result.include?('items') ? result['items'] : result
-    else
-      raise(CommandException, "Bad http code: #{response.code}:\n#{response.to_str}")
-    end
   end
 
   def empty_guid?(guid)
