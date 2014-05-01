@@ -83,12 +83,32 @@ module ASM
 
       class Scvmm < VM_Mash
         def process!(certname, server, cluster)
-          hostname = server['os_host_name']
+          hostname = self.delete('name')
           raise(ArgumentError, 'VM hostname not specified, missing server os_host_name value') unless hostname
           self.hostname = hostname
 
-          self.scvmm_server = cluster.name
+          self.scvmm_server = certname
+          self.vm_cluster = cluster.name
           self.ensure = 'present'
+
+          network_default = {
+            :ensure => 'present',
+            :mac_address_type => 'dynamic',
+            :ipv4_address_type => 'dynamic',
+            :vlan_enabled => 'true',
+            :transport => 'Transport[winrm]',
+          }
+
+          networks = {}
+          self.network_interfaces.split(',').reject{|x| x.empty?}.each_with_index do |vlan,i|
+            network = network_default.clone
+            vlan =~ /VLAN(\d+)$/
+            vlan_id = $1
+            raise(ArgumentError, "Missing VLAN id #{vlan}") unless vlan_id
+            network['vlan_id'] = vlan_id
+            networks["#{hostname}:#{i}"] = network
+          end
+          self.network_interfaces = networks
         end
 
         def to_puppet
