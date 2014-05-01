@@ -567,10 +567,16 @@ module ASM
         raise(Exception, "resource of type #{options[:type]} has no parameters")
       else
         resource['parameters'].each do |param|
-          if !param['networks'].nil?
-	    param_hash[param['id'].downcase] = self.asm_json_array(param['networks'])
-          elsif !param['value'].nil?
-            param_hash[param['id'].downcase] = param['value']
+          # HACK: consider any parameter id ending in _network to be a 
+          # "network" type. This can go away when we move to using the
+          # networkconfiguration type for all network data
+          key = param['id'].downcase
+          if !key.end_with?('_network')
+            param_hash[key] = param['value']
+          elsif param['networks'].nil?
+            param_hash[key] = nil
+          else
+            param_hash[key] = self.asm_json_array(param['networks'])
           end
           if param['value'] and param['type'] == 'PASSWORD'
             param_hash['decrypt'] = options[:decrypt]
