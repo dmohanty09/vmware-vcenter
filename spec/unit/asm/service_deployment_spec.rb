@@ -12,6 +12,7 @@ describe ASM::ServiceDeployment do
     @sd = ASM::ServiceDeployment.new('8000')
     razor = mock('razor')
     razor.stubs(:find_node).returns({})
+    razor.stubs(:block_until_task_complete)
     @sd.stubs(:razor).returns(razor)
     @sd.stubs(:create_broker_if_needed).returns('STUB-BROKER-NAME')
     @sd.stubs(:get_server_inventory).returns({})

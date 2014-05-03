@@ -66,6 +66,10 @@ class ASM::ServiceDeployment
     true
   end
 
+  def razor
+    @razor ||= ASM::Razor.new
+  end
+
   def process(service_deployment)
     begin
       ASM.logger.info("Deploying #{service_deployment['deploymentName']} with id #{service_deployment['id']}")
@@ -109,10 +113,13 @@ class ASM::ServiceDeployment
       process_san_switches()
       process_components()
     rescue Exception => e
-      backtrace = (e.backtrace || []).join('\n')
+      if e.class == ASM::UserException
+        logger.error(e.to_s)
+      end
+      backtrace = (e.backtrace || []).join("\n")
       File.write(
-        deployment_file('exception.log'),
-        "#{e.inspect}\n#{backtrace}"
+          deployment_file('exception.log'),
+          "#{e.inspect}\n\n#{backtrace}"
       )
       log("Status: Error")
       raise(e)
@@ -1248,10 +1255,6 @@ class ASM::ServiceDeployment
                       )
     end
 
-    def razor
-      @razor ||= ASM::Razor.new
-    end
-
     # The rest of the asm::esxiscsiconfig is used to configure vswitches
     # and portgroups on the esxi host and is done in the cluster swimlane
     resource_hash.delete('asm::esxiscsiconfig')
@@ -1289,9 +1292,11 @@ class ASM::ServiceDeployment
       unless @debug
         (resource_hash['asm::server'] || []).each do |title, params|
           type = params['os_image_type']
+          node = razor.block_until_task_complete(serial_number,
+                                                 params['policy_name'], type)
           if type == 'vmware_esxi'
             raise(Exception, "Static management IP address was not specified for #{serial_number}") unless static_ip
-            block_until_esxi_ready(title, params, static_ip, timeout=3600)
+            block_until_esxi_ready(title, params, static_ip, timeout = 900)
           else
             deployment_status = await_agent_run_completion(ASM::Util.hostname_to_certname(os_host_name), timeout = 3600)
             if (deployment_status and os_image_type == 'hyperv')
@@ -1894,6 +1899,12 @@ class ASM::ServiceDeployment
       process_generic(vm_certname, resource_hash, 'apply')
 
       unless @debug
+        # Wait for O/S install to complete; not really necessary but doing
+        # it for consistency with bare-metal installs
+        razor.block_until_task_complete(serial_number, server['policy_name'],
+                                        server['os_image_type'])
+
+        # Wait for first agent run to complete
         await_agent_run_completion(ASM::Util.hostname_to_certname(hostname))
       end
     end
@@ -1984,7 +1995,7 @@ class ASM::ServiceDeployment
 
   # converts from an ASM style server resource into
   # a method call to check if the esx host is up
-  def block_until_esxi_ready(title, params, static_ip, timeout=3600)
+  def block_until_esxi_ready(title, params, static_ip, timeout = 3600)
     serial_num = params['serial_number'] || raise(Exception, "resource #{title} is missing required server attribute admin_password")
     password = params['admin_password'] || raise(Exception, "resource #{title} is missing required server attribute admin_password")
     if decrypt?
@@ -1994,11 +2005,8 @@ class ASM::ServiceDeployment
     hostname = params['os_host_name'] || raise(Exception, "resource #{title} is missing required server attribute os_host_name")
     hostdisplayname = "#{serial_num} (#{hostname})"
 
-    log("Waiting until #{hostdisplayname} has checked in with Razor")
-    dhcp_ip = razor.find_host_ip_blocking(serial_num, timeout)
-    log("#{hostdisplayname} has checked in with Razor with ip address #{dhcp_ip}")
-
-    log("Waiting until #{hostdisplayname} is ready")
+    log("Waiting until ESXi management services available on #{hostdisplayname}")
+    start_time = Time.now
     ASM::Util.block_and_retry_until_ready(timeout, CommandException, 150) do
       esx_command =  "system uuid get"
       cmd = "esxcli --server=#{static_ip} --username=root --password=#{password} #{esx_command}"
@@ -2009,13 +2017,22 @@ class ASM::ServiceDeployment
       end
     end
 
-    # Still cases where ESXi is not available to be added to the cluster
-    # in the process_cluster method even after the uuid has been
-    # obtained above; trying a 5 minute sleep... Seems to happen more
-    # frequently when only one ESXi host is in the deployment.
-    sleep(450)
+    elapsed = Time.now - start_time
+    if elapsed > 60
+      # Still cases where ESXi is not available to be added to the cluster
+      # in the process_cluster method even after the uuid has been
+      # obtained above; trying a 5 minute sleep... Seems to happen more
+      # frequently when only one ESXi host is in the deployment.
+      #
+      # NOTE: Only doing this additional sleep if it appears that the host was
+      # not already online when this method was called, e.g. if it took more
+      # than 60 seconds to complete.
+      sleep_secs = 450
+      logger.debug("Sleeping an additional #{sleep_secs} waiting for ESXi host #{hostdisplayname} to come online")
+      sleep(sleep_secs)
+    end
 
-    log("ESXi server #{hostname} is available")
+    log("ESXi server #{hostdisplayname} is available")
   end
 
   #
