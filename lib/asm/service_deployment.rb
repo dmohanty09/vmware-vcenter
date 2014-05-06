@@ -737,8 +737,9 @@ class ASM::ServiceDeployment
       
       switchportdetail.each do |switchportdetailhash|
         switchportdetailhash.each do |macaddress,intfhashes|
-          logger.debug "macaddress :: #{macaddress}, intfhash :: #{intfhashes}"
           resource_hash = Hash.new
+          switchcertname = ""
+          logger.debug "macaddress :: #{macaddress}, intfhash :: #{intfhashes}"
           
           logger.debug "IOA Slots to process: #{ioaslots}"
           
@@ -765,14 +766,14 @@ class ASM::ServiceDeployment
             if iom_type == "ioa"
               if switchcertname =~ /dell_iom/
                 switch_resource_type = "asm::ioa"
-                resource_hash[switch_resource_type] = {
-                  "#{interface}" => {
+                resource_hash[switch_resource_type] ||= {}
+                resource_hash[switch_resource_type]["#{interface}"] = {
+                  
                   'vlan_tagged' => tagged_vlans.join(","),
                   'vlan_untagged' => untagged_vlans.join(","),
-                  }
+                  
                 }
                 logger.debug("*** resource_hash is #{resource_hash} ******")
-                process_generic(switchcertname, resource_hash, 'device', true, server_cert_name)
               end
             elsif iom_type == "mxl"
               match = interface.match(/(\w*)(\d.*)/)
@@ -781,15 +782,13 @@ class ASM::ServiceDeployment
                 logger.debug "vlanid :: #{vlanid}"
                 if switchcertname =~ /dell_iom/
                   switch_resource_type = "asm::mxl"
-                  resource_hash[switch_resource_type] = {
-                    "#{vlanid}" => {
+                  resource_hash[switch_resource_type] ||= {}
+                  resource_hash[switch_resource_type]["#{vlanid}"] = {
                     'vlan_name' => '',
                     'tagged_tengigabitethernet' => interface,
                     'tagged_portchannel' => ''
-                    }
                   }
                   logger.debug("*** resource_hash is #{resource_hash} ******")
-                  process_generic(switchcertname, resource_hash, 'device', true, server_cert_name)
                 end
               end # end of tagged vlan loop
 
@@ -798,20 +797,20 @@ class ASM::ServiceDeployment
                 logger.debug "vlanid :: #{vlanid}"
                 if switchcertname =~ /dell_iom/
                   switch_resource_type = "asm::mxl"
-                  resource_hash[switch_resource_type] = {
-                    "#{vlanid}" => {
+                  resource_hash[switch_resource_type] ||= {}
+                  resource_hash[switch_resource_type]["#{vlanid}"] = {
                     'vlan_name' => '',
                     'untagged_tengigabitethernet' => interface,
                     'tagged_portchannel' => '',
-                    }
                   }
                   logger.debug("*** resource_hash is #{resource_hash} ******")
-                  process_generic(switchcertname, resource_hash, 'device', true, server_cert_name)
                 end
               end
             else
               logger.debug "Non supported IOA type #{iom_type}"
             end
+            logger.debug("final resource_hash for switch #{switchcertname} is #{resource_hash} ******")
+            process_generic(switchcertname, resource_hash, 'device', true, server_cert_name)
           end
         end
       end
