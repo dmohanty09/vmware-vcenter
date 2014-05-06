@@ -317,9 +317,22 @@ module ASM
     end
 
     def self.get_plain_password(encoded_password)
-      plain_password = `/opt/puppet/bin/ruby /opt/asm-deployer/lib/asm/encode_asm.rb #{encoded_password}`
-      plain_password = plain_password.strip
-      return URI.decode(plain_password)
+      # NOTE: The actual decryption code in encode_asm.rb is being executed in
+      # MRI ruby because it fails in jruby with "OpenSSL::Cipher::CipherError:
+      # Illegal key size".
+      #
+      # Additionally the env command is being used to clear the environment
+      # before running MRI ruby to ensure that any torquebox environment
+      # variables do not confuse the execution. We saw a few strange cases
+      # where jruby gems were being pulled into MRI that were causing
+      # decryption failures.
+      cmd = "env --ignore-environment /opt/puppet/bin/ruby /opt/asm-deployer/lib/asm/encode_asm.rb #{encoded_password}"
+      ret = ASM::Util.run_command_with_args(cmd)
+      if ret['exit_status'] != 0
+        raise(Exception, "Executing #{cmd} failed: #{ret.inspect}")
+      else
+        URI.decode(ret['stdout'].strip)
+      end
     end
     
     def self.parse_device_config(cert_name)
