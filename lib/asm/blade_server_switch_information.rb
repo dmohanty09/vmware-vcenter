@@ -140,7 +140,7 @@ class Blade_server_switch_information
         interfaceLocationList = interfaceLocationList.push(interfaceLoc)
       end
       logger.debug "A-- IOA #{ioa} interfaceLocationList #{interfaceLocationList}"
-      retVal.push([ioa, interfaceLocationList])
+      retVal.push([ioa, interfaceLocationList,ioaslot])
     end
     retVals = { "#{serviceTag}" => retVal }
     logger.debug "A-- #{retVals}"

@@ -711,97 +711,110 @@ class ASM::ServiceDeployment
     switchinfoobj = Get_switch_information.new()
     switchportdetail = switchinfoobj.get_info(serverhash,@blade_server_switchhash,logger)
     logger.debug "******** In process_tor switchportdetail :: #{switchportdetail} *********\n"
-    tagged_vlaninfo = server_vlan_info["#{server_cert_name}_taggedvlanlist"]
-    tagged_workloadvlaninfo = server_vlan_info["#{server_cert_name}_taggedworkloadvlanlist"]
-    untagged_vlaninfo = server_vlan_info["#{server_cert_name}_untaggedvlanlist"]
-    tagged_vlanlist = tagged_vlaninfo + tagged_workloadvlaninfo
-    tagged_vlanlist = tagged_vlanlist.uniq
-    temptagged_vlanlist = untagged_vlaninfo & tagged_vlanlist
-    tagged_vlanlist = tagged_vlanlist - temptagged_vlanlist
-    logger.debug "In configure_tor tagged vlan list found #{tagged_vlanlist}"
-    logger.debug "In configure_tor untagged vlan list found #{untagged_vlaninfo}"
-    resource_hash = Hash.new
-    switchportdetail.each do |switchportdetailhash|
-      switchportdetailhash.each do |macaddress,intfhashes|
-        logger.debug "macaddress :: #{macaddress}    intfhash :: #{intfhashes}"
 
-        intfhashes.each do |intfhash|
-          switchcertname = intfhash[0]
-          interface = intfhash[1][0]
-          inv  ||= ASM::Util.fetch_server_inventory(server_cert_name)
-          server_service_tag = inv['serviceTag']
-          iom_type = ASM::Util.get_iom_type(server_service_tag,switchcertname, logger)
-          logger.debug "IOM Type: #{iom_type}"
-          if iom_type == ""
-             logger.debug("IOM Type is empty.")
-             next
-          end
-
-          logger.debug "switchcertname :: #{switchcertname} interface :: #{interface}"
-          logger.debug "Configuring tagged VLANs"
-
-          if iom_type == "ioa"
-            if switchcertname =~ /dell_iom/
-              switch_resource_type = "asm::ioa"
-              resource_hash[switch_resource_type] = {
-                "#{interface}" => {
-                'vlan_tagged' => tagged_vlanlist.join(","),
-                'vlan_untagged' => untagged_vlaninfo.join(","),
-                }
-              }
-              logger.debug("*** resource_hash is #{resource_hash} ******")
-              process_generic(switchcertname, resource_hash, 'device', true, server_cert_name)
+    # Need to process for the ToR Switches for each Fabric
+    ["Fabric A", "Fabric B", "Fabric C"].each do |fabric|
+      logger.debug "Configuring IOM for fabric : #{fabric}"
+      tagged_vlans = server_vlan_info["#{fabric}"]['tagged_vlan']
+      untagged_vlans = server_vlan_info["#{fabric}"]['untagged_vlan']
+      logger.debug "In configure_tor tagged vlan list found #{tagged_vlans}"
+      logger.debug "In configure_tor untagged vlan list found #{untagged_vlans}"
+      if (tagged_vlans.length == 0 and untagged_vlans.length == 0)
+        logger.debug("No tagged / untagged VLANS for fabric #{fabric}")
+        next
+      end
+      
+      ioaslots = []
+      case fabric
+      when "Fabric A"
+        ioaslots = ["A1", "A2"]
+      when "Fabric B"
+        ioaslots = ["B1", "B2"]
+      when "Fabric C"
+        ioaslots = ["C1", "C2"]
+      end
+      
+      
+      switchportdetail.each do |switchportdetailhash|
+        switchportdetailhash.each do |macaddress,intfhashes|
+          resource_hash = Hash.new
+          switchcertname = ""
+          logger.debug "macaddress :: #{macaddress}, intfhash :: #{intfhashes}"
+          
+          logger.debug "IOA Slots to process: #{ioaslots}"
+          
+          intfhashes.each do |intfhash|
+            ioaslot = intfhash[2]
+            if !ioaslots.include?(ioaslot)
+              next
             end
-          elsif iom_type == "mxl"
-            match = interface.match(/(\w*)(\d.*)/)
-            interface = $2
-            tagged_vlanlist.each do |vlanid|
-              logger.debug "vlanid :: #{vlanid}"
+            
+            switchcertname = intfhash[0]
+            interface = intfhash[1][0]
+            inv  ||= ASM::Util.fetch_server_inventory(server_cert_name)
+            server_service_tag = inv['serviceTag']
+            iom_type = ASM::Util.get_iom_type(server_service_tag,switchcertname, logger)
+            logger.debug "IOM Type: #{iom_type}"
+            if iom_type == ""
+              logger.debug("IOM Type is empty.")
+              next
+            end
+            
+            logger.debug "switchcertname :: #{switchcertname} interface :: #{interface}"
+            logger.debug "Configuring tagged VLANs"
+
+            if iom_type == "ioa"
               if switchcertname =~ /dell_iom/
-                switch_resource_type = "asm::mxl"
-                resource_hash[switch_resource_type] = {
-                  "#{vlanid}" => {
-                  'vlan_name' => '',
-                  'desc' => '',
-                  'tagged_tengigabitethernet' => interface,
-                  'tagged_portchannel' => '',
-                  'mtu' => 2500,
-                  }
+                switch_resource_type = "asm::ioa"
+                resource_hash[switch_resource_type] ||= {}
+                resource_hash[switch_resource_type]["#{interface}"] = {
+                  
+                  'vlan_tagged' => tagged_vlans.join(","),
+                  'vlan_untagged' => untagged_vlans.join(","),
+                  
                 }
                 logger.debug("*** resource_hash is #{resource_hash} ******")
-                process_generic(switchcertname, resource_hash, 'device', true, server_cert_name)
               end
-            end # end of tagged vlan loop
-
-            logger.debug "Configuring un-tagged vlans"
-            untagged_vlaninfo.each do |vlanid|
-              logger.debug "vlanid :: #{vlanid}"
-              if switchcertname =~ /dell_iom/
-                switch_resource_type = "asm::mxl"
-                resource_hash[switch_resource_type] = {
-                  "#{vlanid}" => {
-                  'vlan_name' => '',
-                  'desc' => '',
-                  'untagged_tengigabitethernet' => interface,
-                  'tagged_portchannel' => '',
-                  'mtu' => 2500,
+            elsif iom_type == "mxl"
+              match = interface.match(/(\w*)(\d.*)/)
+              interface = $2
+              tagged_vlans.each do |vlanid|
+                logger.debug "vlanid :: #{vlanid}"
+                if switchcertname =~ /dell_iom/
+                  switch_resource_type = "asm::mxl"
+                  resource_hash[switch_resource_type] ||= {}
+                  resource_hash[switch_resource_type]["#{vlanid}"] = {
+                    'vlan_name' => '',
+                    'tagged_tengigabitethernet' => interface,
+                    'tagged_portchannel' => ''
                   }
-                }
-                logger.debug("*** resource_hash is #{resource_hash} ******")
-                process_generic(switchcertname, resource_hash, 'device', true, server_cert_name)
+                  logger.debug("*** resource_hash is #{resource_hash} ******")
+                end
+              end # end of tagged vlan loop
+
+              logger.debug "Configuring un-tagged vlans"
+              untagged_vlans.each do |vlanid|
+                logger.debug "vlanid :: #{vlanid}"
+                if switchcertname =~ /dell_iom/
+                  switch_resource_type = "asm::mxl"
+                  resource_hash[switch_resource_type] ||= {}
+                  resource_hash[switch_resource_type]["#{vlanid}"] = {
+                    'vlan_name' => '',
+                    'untagged_tengigabitethernet' => interface,
+                    'tagged_portchannel' => '',
+                  }
+                  logger.debug("*** resource_hash is #{resource_hash} ******")
+                end
               end
-
+            else
+              logger.debug "Non supported IOA type #{iom_type}"
             end
-
-          else
-            logger.debug "Non supported IOA type #{iom_type}"
+            logger.debug("final resource_hash for switch #{switchcertname} is #{resource_hash} ******")
+            process_generic(switchcertname, resource_hash, 'device', true, server_cert_name)
           end
-
         end
-
       end
     end
-
   end
 
   def configure_san_switch(server_cert_name, wwpns, compellent_contollers)
@@ -2106,6 +2119,36 @@ class ASM::ServiceDeployment
     untagged_vlaninfo       = []
     server_conf = ASM::Util.build_component_configuration(server_component, :decrypt => decrypt?)
     network_params = (server_conf['asm::esxiscsiconfig'] || {})[server_cert]
+    # get fabric information
+    network_fabric_info = {}
+    if network_params
+      network_configuration=network_params['network_configuration']
+      network_info = JSON.parse(network_configuration)
+      fabrics = network_info['fabrics']
+      if fabrics
+        fabrics.each do |fabric|
+          fabric_networks = []
+          fabic_interfaces = fabric['interfaces']
+          if fabic_interfaces
+            networks = []
+            fabic_interfaces.each do |fabic_interface|
+              partitions = fabic_interface['partitions']
+              fabric_networks.concat(get_partitions_networks(partitions))
+            end
+          end
+          network_fabric_info["#{fabric['name']}"] = fabric_networks.uniq.compact
+        end
+      end
+      logger.debug"network_info: #{network_fabric_info}"
+    end
+   
+    fabric_vlan_info = {} 
+    if network_fabric_info
+      fabric_vlan_info = get_fabric_vlan_info(network_fabric_info)
+      logger.debug("Fabric VLAN INFO: #{fabric_vlan_info}")
+    end
+    return fabric_vlan_info
+
     if network_params
       [ 'hypervisor_network', 'converged_network', 'vmotion_network',
         'private_cluster_network', 'live_migration_network'
@@ -2520,6 +2563,41 @@ end
       end
     end
     netappip
+  end
+  
+  def get_partitions_networks(partition_info)
+    networks = []
+    if partition_info
+      partition_info.each do |partition|
+        networks.concat(partition['networks'])
+      end
+    end
+    logger.debug("networks returned from partition method: #{networks.uniq.compact}")
+    networks = networks.uniq.compact
+  end
+  
+  def get_fabric_vlan_info(network_fabric_info)
+    fabric_vlan_info = {}
+    ["Fabric A", "Fabric B", "Fabric C"].each do |fabric|
+      vlan_tagged = []
+      vlan_untagged = []
+      fabric_vlan_info["#{fabric}"] = {}
+      if network_fabric_info["#{fabric}"]
+        logger.debug("Processing fabric : #{fabric}")
+        network_fabric_info["#{fabric}"].each do |net|
+          network_info = ASM::Util.fetch_network_settings(net)
+          if network_info['type'].to_s != "PXE"
+            vlan_tagged.push(network_info['vlanId'])
+          else
+            vlan_untagged.push(network_info['vlanId'])
+          end
+        end
+        fabric_vlan_info["#{fabric}"]['tagged_vlan'] = vlan_tagged
+        fabric_vlan_info["#{fabric}"]['untagged_vlan'] = vlan_untagged
+        logger.debug("fabric_vlan_info: #{fabric_vlan_info.inspect}")
+      end
+    end
+    fabric_vlan_info
   end
 
 end
