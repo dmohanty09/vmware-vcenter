@@ -140,6 +140,7 @@ class ASM::ServiceDeployment
         # Putting the re-direction as per the blade type
         # Blade and RACK server
         server_vlan_info = get_server_networks(server_component,server_cert_name)
+        server_nic_type = get_server_nic_type(server_component,server_cert_name)
         blade_type = inventory['serverType'].downcase
         logger.debug("Server Blade type: #{blade_type}")
         if blade_type == "rack"
@@ -153,7 +154,7 @@ class ASM::ServiceDeployment
         else
           if @configured_blade_switches.length() > 0
             logger.debug "Configuring blade server"
-            configure_tor_blade(server_cert_name, server_vlan_info)
+            configure_tor_blade(server_cert_name, server_vlan_info,server_nic_type)
           else
             logger.debug "INFO: There are no IOM Switches in the ASM Inventory"
           end
@@ -700,7 +701,7 @@ class ASM::ServiceDeployment
 
   end
 
-  def configure_tor_blade(server_cert_name, server_vlan_info)
+  def configure_tor_blade(server_cert_name, server_vlan_info,server_nic_type)
     device_conf = nil
     inv = nil
     switchhash = {}
@@ -709,7 +710,7 @@ class ASM::ServiceDeployment
     serverhash = get_server_inventory(server_cert_name)
     logger.debug "******** In process_tor after getServerInventory serverhash is #{ASM::Util.sanitize(serverhash)} **********\n"
     switchinfoobj = Get_switch_information.new()
-    switchportdetail = switchinfoobj.get_info(serverhash,@blade_server_switchhash,logger)
+    switchportdetail = switchinfoobj.get_info(serverhash,@blade_server_switchhash,logger,server_nic_type)
     logger.debug "******** In process_tor switchportdetail :: #{switchportdetail} *********\n"
 
     # Need to process for the ToR Switches for each Fabric
@@ -2603,5 +2604,33 @@ end
     fabric_vlan_info
   end
 
+  # Get the count of interfaces
+  def get_server_nic_type(server_component,server_cert)
+    server_conf = ASM::Util.build_component_configuration(server_component, :decrypt => decrypt?)
+    network_params = (server_conf['asm::esxiscsiconfig'] || {})[server_cert]
+    # get fabric information
+    network_fabric_info = {}
+    network_configuration=network_params['network_configuration']
+    network_info = JSON.parse(network_configuration)
+    fabrics = network_info['fabrics']
+    fabrics.each do |fabric|
+      redundancy =  fabric['redundancy']
+      interface_names = []
+      interface_count = fabric['interfaces'].count
+      fabric['interfaces'].each do |interface|
+        interface_names << interface['name'] 
+      end
+      fabric_id = fabric['name'].match(/Fabric\s+(\S+)/)[1]
+      fabric_interface_names= interface_names.collect{|x| x.match(/Interface #{fabric_id}/)}
+      if redundancy
+        network_fabric_info["#{fabric['name']}"] = ( interface_count * 2) / fabric_interface_names.count 
+      else
+        network_fabric_info["#{fabric['name']}"] = interface_count / fabric_interface_names.count
+      end
+    end
+    logger.debug"network_info: #{network_fabric_info}"
+    return network_fabric_info
+  end
+  
 end
 
