@@ -5,7 +5,7 @@ class Blade_server_switch_information
     @switchinfo=swinfo
   end
 
-  def identify_switch_ports(swinfo, logger)
+  def identify_switch_ports(swinfo, logger, server_nic_type)
     serviceTag=@nodename
     serverModel=@sinfo['servermodel']
     idracIp=@sinfo['idrac_ip']
@@ -37,6 +37,7 @@ class Blade_server_switch_information
     switchlist = @sinfo['ioaips']
     switch_certs = Array.new
       
+    logger.debug("server_nic_type: #{server_nic_type.inspect}")
     # Eliminate the switches which are not discovered
     swinfo.each do |switch_cert_name,switch_info|
       switch_certs.push switch_cert_name
@@ -60,6 +61,15 @@ class Blade_server_switch_information
       logger.debug"IOA Slot information: #{ioaslot}"
       index +=1
       logger.debug "IOA Slot : #{ioaslot}"
+      case ioaslot
+      when "A1","A2"
+        fabric_name = "Fabric A"
+      when "B1","B2"
+        fabric_name = "Fabric B"
+      when "C1","C2"
+        fabric_name = "Fabric C"
+      end
+      logger.debug "Fabric Name: #{fabric_name}"
       bladeModel = ""
       fullBladeModelList.each do|model|
         if model.to_s == serverModel.to_s
@@ -80,7 +90,8 @@ class Blade_server_switch_information
         end
       end
       interfaceLocationList = []
-      if  bladeModel == "Full"
+      # For M620 server with Quad-Port card, two locations each needs to be configured
+      if  (bladeModel == "Full") or (bladeModel == "Half" and server_nic_type["#{fabric_name}"] == 4)
         intLoc1 = "0/#{slot}"
         interfaceLoc1 = "Tengigabitethernet#{intLoc1}"
         #self.class.const_set(InterfaceLoc1,"Tengigabitethernet#{intLoc1})
@@ -91,7 +102,7 @@ class Blade_server_switch_information
         interfaceLocationList = interfaceLocationList.push(interfaceLoc2)
 
       end
-      if  bladeModel == "Half"
+      if  (bladeModel == "Half" and server_nic_type["#{fabric_name}"] == 2)
         intLoc = "0/#{slot}"
         interfaceLoc = "Tengigabitethernet#{intLoc}"
         interfaceLocationList = interfaceLocationList.push(interfaceLoc)

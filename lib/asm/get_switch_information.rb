@@ -19,7 +19,7 @@ class Get_switch_information
     #@switchinformation = switchinfo
   end
 
-  def get_info(ser_info,sw_info,logger)
+  def get_info(ser_info,sw_info,logger,server_nic_type=nil)
     switchinfolist = []
     switchinfohash = {}
     ser_info.each do |nodename,sinfo|
@@ -29,7 +29,7 @@ class Get_switch_information
           if bladetype == "rack"
             switchinfohash = rack_server_switch_info(nodename,sinfo,sw_info,logger)
           else
-            switchinfohash = blade_server_switch_info(nodename,sinfo,sw_info,logger)
+            switchinfohash = blade_server_switch_info(nodename,sinfo,sw_info,logger,server_nic_type)
             if switchinfohash.length() > 0
               switchinfohash.keys().each do |macaddress|
               end
@@ -55,9 +55,9 @@ class Get_switch_information
   end
   
 
-  def blade_server_switch_info(nname,server,swinfo,logger)
+  def blade_server_switch_info(nname,server,swinfo,logger,server_nic_type)
     bladeObj=Blade_server_switch_information.new(nname,server,swinfo)
-    serverinformation=bladeObj.identify_switch_ports(swinfo,logger)
+    serverinformation=bladeObj.identify_switch_ports(swinfo,logger,server_nic_type)
     pp serverinformation
     return serverinformation
   end
