@@ -118,7 +118,7 @@ module ASM
     class Server
       def self.create(value)
         if value.include? 'asm::server'
-          value['asm::server'].collect{|server| ASM::Resource::Mash.new(cleanup(server))}
+          value['asm::server'].collect{|serial_no, server| ASM::Resource::Mash.new(cleanup(server))}
         else
           []
         end

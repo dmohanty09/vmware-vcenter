@@ -1850,7 +1850,10 @@ class ASM::ServiceDeployment
     cluster_name, cluster_params = clusters.first.shift
 
     vm.process!(certname, server, cluster_params)
-    hostname = vm.hostname
+    hostname = vm.hostname || server.os_host_name
+    unless hostname
+      raise(ArgumentError, 'VM hostname not specified, missing server os_host_name value')
+    end
 
     resource_hash = vm.to_puppet
 
