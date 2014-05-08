@@ -2621,15 +2621,11 @@ end
       interface_names = []
       interface_count = fabric['interfaces'].count
       fabric['interfaces'].each do |interface|
-        interface_names << interface['name'] 
+        interface_names << interface['name']
       end
       fabric_id = fabric['name'].match(/Fabric\s+(\S+)/)[1]
       fabric_interface_names= interface_names.collect{|x| x.match(/Interface #{fabric_id}/)}
-      if redundancy
-        network_fabric_info["#{fabric['name']}"] = ( interface_count * 2) / fabric_interface_names.count 
-      else
-        network_fabric_info["#{fabric['name']}"] = interface_count / fabric_interface_names.count
-      end
+      network_fabric_info["#{fabric['name']}"] = ( interface_count * 2) / fabric_interface_names.count
     end
     logger.debug"network_info: #{network_fabric_info}"
     return network_fabric_info
