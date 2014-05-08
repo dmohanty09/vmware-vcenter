@@ -1,4 +1,5 @@
 require 'io/wait'
+require 'hashie'
 require 'json'
 require 'open3'
 require 'ostruct'
@@ -240,11 +241,7 @@ module ASM
     # [TODO] merge with find_equallogic_iscsi_ip
     def self.find_equallogic_iscsi_netmask(cert_name)
       cmd = "sudo puppet facts find '#{cert_name}' "
-      result = run_command_simple(cmd)
-      unless result['exit_status'] == 0
-        msg = "Failed to find puppet facts for certificate name #{cert_name}"
-        raise(Exception, "#{msg}: #{cmd}: returned #{result.inspect}")
-      end
+      result = run_command_success(cmd)
       facts = (JSON.parse(result['stdout']) || {})['values']
       unless facts['netmask']  # [XXX] there is also a netmask_eth0, using this one for now
         raise(Exception, "Could not find ISCSI netmask for #{cert_name}")
@@ -327,12 +324,8 @@ module ASM
       # where jruby gems were being pulled into MRI that were causing
       # decryption failures.
       cmd = "env --ignore-environment /opt/puppet/bin/ruby /opt/asm-deployer/lib/asm/encode_asm.rb #{encoded_password}"
-      ret = ASM::Util.run_command_with_args(cmd)
-      if ret['exit_status'] != 0
-        raise(Exception, "Executing #{cmd} failed: #{ret.inspect}")
-      else
-        URI.decode(ret['stdout'].strip)
-      end
+      results = run_command_success(cmd)
+      URI.decode(results.stdout.strip)
     end
     
     def self.parse_device_config(cert_name)
@@ -465,61 +458,31 @@ module ASM
     end
 
     def self.run_command_simple(cmd)
-      result = {}
-      Open3.popen3(cmd) do |stdin, stdout, stderr, wait_thr|
-        stdin.close
-        result['stdout']      = stdout.read
-        result['stderr']      = stderr.read
-        result['pid']         = wait_thr[:pid]
-        result['exit_status'] = wait_thr.value.exitstatus
-      end
-      result
+      self.run_command(cmd)
     end
 
     def self.run_command_with_args(cmd, *args)
-      result = {}
-      # WARNING: jruby-1.7.8 popen3 does not accept optional env argument
-      # http://jira.codehaus.org/browse/JRUBY-6966
-      Open3.popen3(cmd, *args) do |stdin, stdout, stderr, wait_thr|
-        stdin.close
-        result['stdout']      = stdout.read
-        result['stderr']      = stderr.read
-        result['pid']         = wait_thr[:pid]
-        result['exit_status'] = wait_thr.value.exitstatus
-      end
+      self.run_command(cmd, *args)
+    end
+
+    def self.run_command_success(cmd, *args)
+      result = self.run_command(cmd, *args)
+      raise(RuntimeError, "Command failed: #{cmd}\n#{result.stdout}\n#{result.stderrr}") unless result.exit_status == 0
       result
     end
 
-    def self.run_command(cmd, outfile)
-      # Need to update the content of the file while creating
-      # multiple manifest files
-      #if File.exists?(outfile)
-      #  raise(Exception, "Cowardly refusing to overwrite #{outfile}")
-      #end
-      File.open(outfile, 'a') do |fh|
-        Open3.popen3(cmd) do |stdin, stdout, stderr, wait_thr|
-          stdin.close
+    def self.run_command(cmd, *args)
+      result = Hashie::Mash.new
 
-          # Drain stdout
-          while line = stdout.gets
-            fh.puts(line)
-            # Interleave stderr if available
-            while stderr.ready?
-              if err = stderr.gets
-                fh.puts(err)
-              end
-            end
-          end
-
-          # Drain stderr
-          while line = stderr.gets
-            fh.puts(line)
-          end
-
-          fh.close
-          raise(Exception, "#{cmd} failed; output in #{outfile}") unless wait_thr.value.exitstatus == 0
-        end
+      Open3.popen3(cmd, *args) do |stdin, stdout, stderr, wait_thr|
+        stdin.close
+        result.stdout      = stdout.read
+        result.stderr      = stderr.read
+        result.pid         = wait_thr[:pid]
+        result.exit_status = wait_thr.value.exitstatus
       end
+
+      result
     end
 
     def self.block_and_retry_until_ready(timeout, exceptions=nil, max_sleep=nil, logger=nil, &block)
@@ -645,19 +608,14 @@ module ASM
     # Call to puppet returns list of hots which look like 
     #  + "dell_iom-172.17.15.234" (SHA256) CF:EE:DB:CD:2A:45:17:99:E9:C0:4D:6D:5C:C4:F0:4F:9D:F1:B9:E5:1B:69:3D:99:C2:45:49:5B:0F:F0:08:83
     # this strips all the information and just returns array of host names: "dell_iom-172.17.15.234", "dell_...."
-    def self.get_puppet_certs()
-      certs_list = []
-      results = ASM::Util.run_command_simple("sudo puppet cert list --all")
-      unless results['exit_status'] == 0
-        raise(Exception, "Call to puppet cert list all failed: \nstdout:#{results['stdout']}\nstderr:#{results['stderr']}\n")
-      end
-      rslt_str = results['stdout']
-      cert_list_array = rslt_str.split('+')
-      cert_list_array.delete_at(0)
-      cert_list_array.each do |cert|
-        certs_list.push(cert.slice(0..(cert.index('(SHA256)')-1)).gsub(/"/,'').strip)
-      end
-      certs_list
+    def self.get_puppet_certs
+      exec = run_command_success("sudo puppet cert list --all")
+      output = exec.stdout
+      result = output.split('+')
+      result.reject!{|x| x.empty?}
+      result.collect do |cert|
+        cert.slice(0..(cert.index('(SHA256)')-1)).gsub(/"/,'').strip
+      end.compact
     end
 
     def self.check_host_list_against_previous_deployments(hostlist)
@@ -716,12 +674,8 @@ module ASM
                              )
       report_file = File.join(report_dir, 'last_run_report.yaml')
       out_file    = File.join(report_dir, 'last_run_report_summary.yaml')
-      result = run_command_simple("sudo puppet asm summarize_report --infile #{report_file} --outfile #{out_file}")
-      unless result['exit_status'] == 0
-        raise(Exception, "Command failed: stdout #{result['stdout']} stderr:#{result['stderr']}")
-      end     
+      result = run_command_success("sudo puppet asm summarize_report --infile #{report_file} --outfile #{out_file}")
       YAML.load_file(out_file)
-
     end
 
     def self.get_puppet_log(id, certname)
