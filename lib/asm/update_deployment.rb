@@ -53,16 +53,16 @@ module ASM
       
       deployment_file = File.join(backup, 'deployment.json')
       if debug_deployment == true
-        deployment['Deployment']['debug'] = 'true'
+        deployment['debug'] = 'true'
       end
-      deployment['Deployment']['retry'] = 'true'
+      deployment['retry'] = 'true'
       
       # Release reserved network IPs; hopefully on retry we will get the same
       ASM.logger.info("Releasing reserved network IPs from previous deployment ...")
       ASM::Util.release_network_ips(deployment_id)
 
       ASM.logger.info("Re-running deployment; this will take awhile ...")
-      ASM.process_deployment(deployment['Deployment'])
+      ASM.process_deployment(deployment)
     end
   end
 end

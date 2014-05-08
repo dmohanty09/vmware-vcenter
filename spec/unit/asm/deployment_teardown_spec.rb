@@ -13,7 +13,7 @@ describe ASM::DeploymentTeardown do
     )
     file = File.join(File.dirname(__FILE__), '..', '..', 'fixtures', 'deployment_teardown_test.json')
     dt = JSON.parse(File.read(file))
-    @data = dt['Deployment'] || {}
+    @data = dt
   end
 
   after do

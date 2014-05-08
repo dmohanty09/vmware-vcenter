@@ -1,5 +1,4 @@
 {
-  "Deployment": {
     "deploymentDescription": "Service deployment for dell world.",
     "deploymentName": "Dell World Service 15",
     "id": "ff808081439baf7101439cbe937f0965",
@@ -17,7 +16,7 @@
           "name": "EqualLogic Chap 1",
           "type": "STORAGE",
           "asmGUID": "equallogic-172.17.15.10",
-          "relatedComponents": "",
+          "relatedComponents": {},
           "resources": {
             "id": "equallogic::create_vol_chap_user_access",
             "displayName": "Storage Settings",
@@ -139,16 +138,8 @@
           "name": "Server 1",
           "type": "SERVER",
           "relatedComponents": {
-            "entry": [
-              {
-                "key": "component-compellent-1",
-                "value": "Compellent"
-              },
-              {
-                "key": "component-equallogic-chap-1",
-                "value": "EqualLogic Chap 1"
-              }
-            ]
+              "component-compellent-1": "Compellent",
+              "component-equallogic-chap-1": "EqualLogic Chap 1"
           },
           "resources": [
             {
@@ -317,16 +308,8 @@
           "name": "Server 2",
           "type": "SERVER",
           "relatedComponents": {
-            "entry": [
-              {
-                "key": "component-compellent-1",
-                "value": "Compellent"
-              },
-              {
-                "key": "component-equallogic-chap-1",
-                "value": "EqualLogic Chap 1"
-              }
-            ]
+              "component-compellent-1": "Compellent",
+              "component-equallogic-chap-1": "EqualLogic Chap 1"
           },
           "resources": [
             {
@@ -495,20 +478,9 @@
           "name": "Cluster 1",
           "type": "CLUSTER",
           "relatedComponents": {
-            "entry": [
-              {
-                "key": "7368dbd6-4950-4d6a-99c4-4c915311b91b",
-                "value": "Server"
-              },
-              {
-                "key": "6e02299f-e909-4f73-96f8-a5948ef4269a",
-                "value": "Server 2"
-              },
-              {
-                "key": "8d28b0c7-7c96-4408-a5bc-6d9850cd3beb",
-                "value": "Server 1"
-              }
-            ]
+              "7368dbd6-4950-4d6a-99c4-4c915311b91b": "Server",
+              "6e02299f-e909-4f73-96f8-a5948ef4269a": "Server 2",
+              "8d28b0c7-7c96-4408-a5bc-6d9850cd3beb": "Server 1"
           },
           "resources": {
             "id": "asm::cluster",
@@ -557,5 +529,4 @@
         }
       ]
     }
-  }
 }

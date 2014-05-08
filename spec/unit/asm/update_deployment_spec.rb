@@ -66,10 +66,10 @@ describe ASM::UpdateDeployment do
     deployment_id = 'ff808081452c813b01453c4b14e80751'
     dir = File.join(ASM::base_dir, deployment_id)
     deployment = JSON.parse(File.new(dir + "/deployment.json").read)
-    deployment['Deployment']['debug'] = 'true'
+    deployment['debug'] = 'true'
     ASM.retry_deployment('ff808081452c813b01453c4b14e80751', deployment)
     deployment = JSON.parse(File.new(dir + "/deployment.json").read)
-    deployment['Deployment']['jobStatus'].should eq('SUCCESSFUL')
+    deployment['jobStatus'].should eq('SUCCESSFUL')
   end
 
   it 'should be able to find previous deployments' do

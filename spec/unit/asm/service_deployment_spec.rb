@@ -157,10 +157,7 @@ describe ASM::ServiceDeployment do
           @sd.debug = true
           component['resources'].push(resource1)
 
-          component['relatedComponents'] = { 'entry'  => {
-              'key'   => 'k1',
-              'value' => 'v1'
-          }}
+          component['relatedComponents'] = { 'k1' => 'v1' }
           @sd.set_components_by_type('STORAGE',
           [
             {'id' => 'k1',
@@ -338,14 +335,22 @@ describe ASM::ServiceDeployment do
     before do
       sample_file = File.join(File.dirname(__FILE__), '..', '..', 
                               'fixtures', 'find_related_components.json')
-      data = JSON.parse(File.read(sample_file))['Deployment']
+      data = JSON.parse(File.read(sample_file))
       comp_by_type = @sd.components_by_type(data)
       @sd.set_components_by_type('CLUSTER',  comp_by_type['CLUSTER'] )
       @sd.set_components_by_type('VIRTUALMACHINE',  comp_by_type['VIRTUALMACHINE'] )
       @components = data['serviceTemplate']['components']
     end
     it 'should return related component based on componentID' do
-       @sd.find_related_components('CLUSTER', @components[0]).should ==  [{"id"=>"ID1", "componentID"=>"COMPID1", "type"=>"CLUSTER", "relatedComponents"=>{"entry"=>{"key"=>"ID1", "value"=>"Virtual Machine 1"}}, "resources"=>{"id"=>"asm::cluster", "parameters"=>[{"id"=>"datacenter"}]}}]
+      expected = [{"id" => "ID1",
+                   "componentID" => "COMPID1",
+                   "type" => "CLUSTER",
+                   "relatedComponents" => {"ID1" => "Virtual Machine 1"},
+                   "resources" => {
+                       "id" => "asm::cluster",
+                       "parameters" => [{"id" => "datacenter"}]}
+                  }]
+      @sd.find_related_components('CLUSTER', @components[0]).should == expected
     end
     it 'should fail to related component based on ID' do
        @sd.find_related_components('VIRTUALMACHINE', @components[1]).should == []
