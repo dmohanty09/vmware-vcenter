@@ -38,11 +38,14 @@ module ASM
 
       class VMware < VM_Mash
         def process!(certname, server, cluster)
+          self.hostname = self.hostname || server.hostname
+          raise(ArgumentError, 'VM hostname not specified and missing server hostname value') unless self.hostname
+
           case server['os_image_type']
           when 'windows'
             self.os_type = 'windows'
             self.os_guest_id = 'windows8Server64Guest'
-            self.scsci_controller_type = 'LSI Logic SAS'
+            self.scsi_controller_type = 'LSI Logic SAS'
           else
             self.os_type = 'linux'
             self.os_guest_id = 'rhel6_64Guest'
@@ -118,7 +121,10 @@ module ASM
     class Server
       def self.create(value)
         if value.include? 'asm::server'
-          value['asm::server'].collect{|serial_no, server| ASM::Resource::Mash.new(cleanup(server))}
+          value['asm::server'].collect do |uuid, data| 
+            data['uuid'] = uuid
+            ASM::Resource::Mash.new(cleanup(data))
+          end
         else
           []
         end
