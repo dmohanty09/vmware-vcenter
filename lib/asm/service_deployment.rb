@@ -587,6 +587,9 @@ class ASM::ServiceDeployment
       if size_param.include?('MB')
         resource_hash['netapp::create_nfs_export'][title]['size'] = size_param.gsub(/MB/,'m')
       end
+      if size_param.include?('TB')
+        resource_hash['netapp::create_nfs_export'][title]['size'] = size_param.gsub(/TB/,'t')
+      end
    
       resource_hash['netapp::create_nfs_export'][title].delete('path')
       snapresv = resource_hash['netapp::create_nfs_export'][title]['snapresv']
