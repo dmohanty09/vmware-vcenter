@@ -505,7 +505,7 @@ class ASM::ServiceDeployment
               logger.debug "Network array : #{net_array.inspect}"
               if name == 'hypervisor_network' or name == 'converged_network' or name == 'nfs_network'
                 first_net = net_array.first
-                nfs_ip_addresses.push(first_net['staticNetworkConfiguration']['ip_address'])
+                nfs_ip_addresses.push(first_net['staticNetworkConfiguration']['ipAddress'])
               end
             end
           end
@@ -2562,7 +2562,7 @@ end
           parameters.each do |param|
             if param['id'] == "nfs_network"
               nfsip=param['value']
-              netappip = nfsip if !nfsip.nil?
+              netappip = nfsip if !(nfsip.nil? || nfsip.length == 0)
               break
             end
           end
