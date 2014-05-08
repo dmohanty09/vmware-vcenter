@@ -2122,8 +2122,7 @@ class ASM::ServiceDeployment
     # get fabric information
     network_fabric_info = {}
     if network_params
-      network_configuration=network_params['network_configuration']
-      network_info = JSON.parse(network_configuration)
+      network_info = network_params['network_configuration']
       fabrics = network_info['fabrics']
       if fabrics
         fabrics.each do |fabric|
@@ -2133,10 +2132,11 @@ class ASM::ServiceDeployment
             networks = []
             fabic_interfaces.each do |fabic_interface|
               partitions = fabic_interface['partitions']
-              fabric_networks.concat(get_partitions_networks(partitions))
+              networks = partitions.collect { |partition| partition['networkObjects'] }.flatten
+              fabric_networks.concat(networks)
             end
           end
-          network_fabric_info["#{fabric['name']}"] = fabric_networks.uniq.compact
+          network_fabric_info["#{fabric['name']}"] = fabric_networks
         end
       end
       logger.debug"network_info: #{network_fabric_info}"
@@ -2565,35 +2565,23 @@ end
     netappip
   end
   
-  def get_partitions_networks(partition_info)
-    networks = []
-    if partition_info
-      partition_info.each do |partition|
-        networks.concat(partition['networks'])
-      end
-    end
-    logger.debug("networks returned from partition method: #{networks.uniq.compact}")
-    networks = networks.uniq.compact
-  end
-  
   def get_fabric_vlan_info(network_fabric_info)
     fabric_vlan_info = {}
     ["Fabric A", "Fabric B", "Fabric C"].each do |fabric|
-      vlan_tagged = []
-      vlan_untagged = []
       fabric_vlan_info["#{fabric}"] = {}
       if network_fabric_info["#{fabric}"]
+        vlan_tagged = []
+        vlan_untagged = []
         logger.debug("Processing fabric : #{fabric}")
-        network_fabric_info["#{fabric}"].each do |net|
-          network_info = ASM::Util.fetch_network_settings(net)
+        network_fabric_info["#{fabric}"].each do |network_info|
           if network_info['type'].to_s != "PXE"
             vlan_tagged.push(network_info['vlanId'])
           else
             vlan_untagged.push(network_info['vlanId'])
           end
         end
-        fabric_vlan_info["#{fabric}"]['tagged_vlan'] = vlan_tagged
-        fabric_vlan_info["#{fabric}"]['untagged_vlan'] = vlan_untagged
+        fabric_vlan_info["#{fabric}"]['tagged_vlan'] = vlan_tagged.uniq
+        fabric_vlan_info["#{fabric}"]['untagged_vlan'] = vlan_untagged.uniq
         logger.debug("fabric_vlan_info: #{fabric_vlan_info.inspect}")
       end
     end
@@ -2606,8 +2594,7 @@ end
     network_params = (server_conf['asm::esxiscsiconfig'] || {})[server_cert]
     # get fabric information
     network_fabric_info = {}
-    network_configuration=network_params['network_configuration']
-    network_info = JSON.parse(network_configuration)
+    network_info = network_params['network_configuration']
     fabrics = network_info['fabrics']
     fabrics.each do |fabric|
       redundancy =  fabric['redundancy']
