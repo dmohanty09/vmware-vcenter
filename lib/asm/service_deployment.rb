@@ -505,7 +505,7 @@ class ASM::ServiceDeployment
               logger.debug "Network array : #{net_array.inspect}"
               if name == 'hypervisor_network' or name == 'converged_network' or name == 'nfs_network'
                 first_net = net_array.first
-                nfs_ip_addresses.push(first_net['staticNetworkConfiguration']['ip_address'])
+                nfs_ip_addresses.push(first_net['staticNetworkConfiguration']['ipAddress'])
               end
             end
           end
