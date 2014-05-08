@@ -1,5 +1,4 @@
 {
-  "Deployment": {
     "deploymentName": "devmultif0oz",
     "serviceTemplate": {
       "id": "unit-test",
@@ -10,10 +9,7 @@
           "componentID": "COMPID1",
           "type": "CLUSTER",
           "relatedComponents": {
-            "entry": {
-              "key": "ID1",
-              "value": "Virtual Machine 1"
-            }
+              "ID1": "Virtual Machine 1"
           },
           "resources": {
             "id": "asm::cluster",
@@ -29,10 +25,7 @@
           "componentID": "COMPID2",
           "type": "VIRTUALMACHINE",
           "relatedComponents": {
-            "entry": {
-              "key": "COMPID2",
-              "value": "Cluster 1"
-            }
+              "COMPID2": "Cluster 1"
           },
           "resources": [
             {
@@ -58,5 +51,4 @@
         }
       ]
     }
-  }
 }

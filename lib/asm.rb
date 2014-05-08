@@ -74,7 +74,7 @@ module ASM
   def self.process_deployment_request(request)
     payload = request.body.read
     data = JSON.parse(payload)
-    deployment = data['Deployment']
+    deployment = data
     ASM.process_deployment(deployment)
   end
 

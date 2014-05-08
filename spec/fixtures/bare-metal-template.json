@@ -1,5 +1,4 @@
 {
-  "Deployment": {
     "id": 8181,
     "deploymentName": "Server bare metal test",
     "serviceTemplate": {
@@ -8,10 +7,7 @@
                 "id": "bd36856d-ce88-4538-acdd-131e9f00c874",
                 "name": "Server",
                 "relatedComponents": {
-                    "entry": {
-                        "key": "c9ac7879-9752-40f9-b2a0-b9107a708a82",
-                        "value": "Storage"
-                    }
+                    "c9ac7879-9752-40f9-b2a0-b9107a708a82": "Storage"
                 },
                 "resources": [
                     {
@@ -132,5 +128,4 @@
         "templateName": "Default Template Name",
         "updatedBy": "Administrator"
     }
-  }
 }

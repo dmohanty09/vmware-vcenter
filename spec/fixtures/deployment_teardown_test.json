@@ -1,5 +1,4 @@
 {
-  "Deployment": {
     "deploymentDescription": "",
     "deploymentName": "Demo",
     "id": "ff808081446f9463014476543ff4097b",
@@ -19,16 +18,8 @@
           "type": "SERVER",
           "asmGUID": "ff808081446f946301446f9bd0b9067e",
           "relatedComponents": {
-            "entry": [
-              {
-                "key": "vcenter-vcenter-as800r.aidev.com",
-                "value": "Cluster 1"
-              },
-              {
-                "key": "equallogic-as800-eql-1510",
-                "value": "EqualLogic Chap 1"
-              }
-            ]
+              "vcenter-vcenter-as800r.aidev.com": "Cluster 1",
+              "equallogic-as800-eql-1510": "EqualLogic Chap 1"
           },
           "resources": [
             {
@@ -216,16 +207,8 @@
           "type": "SERVER",
           "asmGUID": "ff808081446f946301446f9bcc740558",
           "relatedComponents": {
-            "entry": [
-              {
-                "key": "vcenter-vcenter-as800r.aidev.com",
-                "value": "Cluster 1"
-              },
-              {
-                "key": "equallogic-as800-eql-1510",
-                "value": "EqualLogic Chap 1"
-              }
-            ]
+              "vcenter-vcenter-as800r.aidev.com": "Cluster 1",
+              "equallogic-as800-eql-1510": "EqualLogic Chap 1"
           },
           "resources": [
             {
@@ -413,32 +396,12 @@
           "type": "CLUSTER",
           "asmGUID": "ff808081446f946301446f960b4d000b",
           "relatedComponents": {
-            "entry": [
-              {
-                "key": "316ea60f-e59f-41af-9dc9-b02ed7393cd0",
-                "value": "Windows VM 1 - Copy 1"
-              },
-              {
-                "key": "bladeserver-ch870w1",
-                "value": "ESXi 1 - Copy 1"
-              },
-              {
-                "key": "07c1e8d6-bd80-4cb7-8a77-dbcb610ecc1e",
-                "value": "Linux VM 3"
-              },
-              {
-                "key": "9972d058-450d-48e5-b86d-be1a7250ccb7",
-                "value": "Windows VM 1"
-              },
-              {
-                "key": "bladeserver-hh870w1",
-                "value": "ESXi 1"
-              },
-              {
-                "key": "863d1789-4df3-4889-9c38-0753a32e4860",
-                "value": "Linux VM 3 - Copy 1"
-              }
-            ]
+              "316ea60f-e59f-41af-9dc9-b02ed7393cd0": "Windows VM 1 - Copy 1",
+              "bladeserver-ch870w1": "ESXi 1 - Copy 1",
+              "07c1e8d6-bd80-4cb7-8a77-dbcb610ecc1e": "Linux VM 3",
+              "9972d058-450d-48e5-b86d-be1a7250ccb7": "Windows VM 1",
+              "bladeserver-hh870w1": "ESXi 1",
+              "863d1789-4df3-4889-9c38-0753a32e4860": "Linux VM 3 - Copy 1"
           },
           "resources": {
             "id": "asm::cluster",
@@ -494,16 +457,8 @@
           "name": "Windows VM 1",
           "type": "VIRTUALMACHINE",
           "relatedComponents": {
-            "entry": [
-              {
-                "key": "vcenter-vcenter-as800r.aidev.com",
-                "value": "Cluster 1"
-              },
-              {
-                "key": "c2ba3f9c-8eb0-476f-965e-45f6a6cce4e3",
-                "value": "citrix_xd7 1"
-              }
-            ]
+              "vcenter-vcenter-as800r.aidev.com": "Cluster 1",
+              "c2ba3f9c-8eb0-476f-965e-45f6a6cce4e3": "citrix_xd7 1"
           },
           "resources": [
             {
@@ -640,16 +595,8 @@
           "name": "Windows VM 1 - Copy 1",
           "type": "VIRTUALMACHINE",
           "relatedComponents": {
-            "entry": [
-              {
-                "key": "vcenter-vcenter-as800r.aidev.com",
-                "value": "Cluster 1"
-              },
-              {
-                "key": "c2ba3f9c-8eb0-476f-965e-45f6a6cce4e3",
-                "value": "citrix_xd7 1"
-              }
-            ]
+              "vcenter-vcenter-as800r.aidev.com": "Cluster 1",
+              "c2ba3f9c-8eb0-476f-965e-45f6a6cce4e3": "citrix_xd7 1"
           },
           "resources": [
             {
@@ -786,10 +733,7 @@
           "name": "Linux VM 3",
           "type": "VIRTUALMACHINE",
           "relatedComponents": {
-            "entry": {
-              "key": "vcenter-vcenter-as800r.aidev.com",
-              "value": "Cluster 1"
-            }
+              "vcenter-vcenter-as800r.aidev.com": "Cluster 1"
           },
           "resources": [
             {
@@ -926,10 +870,7 @@
           "name": "Linux VM 3 - Copy 1",
           "type": "VIRTUALMACHINE",
           "relatedComponents": {
-            "entry": {
-              "key": "vcenter-vcenter-as800r.aidev.com",
-              "value": "Cluster 1"
-            }
+              "vcenter-vcenter-as800r.aidev.com": "Cluster 1"
           },
           "resources": [
             {
@@ -1062,5 +1003,4 @@
         }
       ]
     }
-  }
 }

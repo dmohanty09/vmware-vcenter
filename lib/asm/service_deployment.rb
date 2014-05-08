@@ -74,7 +74,7 @@ class ASM::ServiceDeployment
       # Write the deployment to filesystem for ease of debugging / reuse
       File.write(
         deployment_file('deployment.json'),
-        JSON.pretty_generate({ "Deployment" => service_deployment })
+        JSON.pretty_generate(service_deployment)
       )
       
       hostlist = ASM::DeploymentTeardown.get_deployment_certs(service_deployment)
@@ -1347,15 +1347,9 @@ class ASM::ServiceDeployment
 
   # Find components of the given type which are related to component
   def find_related_components(type, component)
+    related_hash = component['relatedComponents']
     all = (@components_by_type[type] || [])
-    relatedComponents = component['relatedComponents']
-    if !relatedComponents || (relatedComponents.is_a?(String) && relatedComponents.empty?)
-      related = []
-    else
-      related = ASM::Util.asm_json_array(relatedComponents['entry'])
-    end
-    related_ids = related.map { |elem|  elem['key'] }
-    all.select { |component| related_ids.include?(component['id']) }
+    all.select { |component| related_hash.keys.include?(component['id']) }
   end
 
   def build_portgroup(vswitch, path, hostip, portgroup_name, network,
@@ -1559,7 +1553,7 @@ class ASM::ServiceDeployment
 
               network_array = [ 'hypervisor_network', 'vmotion_network', 'workload_network' ] 
               nfs_networks = network_params['nfs_network']
-              if nfs_networks
+              if nfs_networks && nfs_networks.size > 0
                 network_array << 'nfs_network'
               else
                 network_array << 'storage_network'

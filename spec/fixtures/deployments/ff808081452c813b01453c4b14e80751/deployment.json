@@ -1,5 +1,4 @@
 {
-  "Deployment": {
     "deploymentDescription": "",
     "deploymentName": "devlinuxserv1",
     "id": "ff808081452c813b01453c4b14e80751",
@@ -19,7 +18,7 @@
           "name": "Server 1",
           "type": "SERVER",
           "asmGUID": "ff808081452c813b01452cf8c01c065a",
-          "relatedComponents": "",
+          "relatedComponents": {},
           "resources": [
             {
               "id": "asm::idrac",
@@ -181,7 +180,7 @@
           "name": "Server 3",
           "type": "SERVER",
           "asmGUID": "ff808081452c813b01452cf8b13b025d",
-          "relatedComponents": "",
+          "relatedComponents": {},
           "resources": [
             {
               "id": "asm::idrac",
@@ -366,5 +365,4 @@
     },
     "retry": "true",
     "debug": "true"
-  }
 }

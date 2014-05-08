@@ -82,7 +82,7 @@ END
     it 'should produce component configuration data' do
       sample_file = File.join(File.dirname(__FILE__), '..', '..', 
                               'fixtures', 'dellworld_template.json')
-      deployment = JSON.parse(File.open(sample_file, 'rb').read)['Deployment']['serviceTemplate']
+      deployment = JSON.parse(File.open(sample_file, 'rb').read)['serviceTemplate']
 
       # Check a server component
       component = deployment['components'][1]

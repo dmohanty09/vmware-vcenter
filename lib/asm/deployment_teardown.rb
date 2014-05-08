@@ -6,7 +6,7 @@ module ASM
 
     def self.clean_deployment (id, logger=nil)
       data = JSON.parse(File.read(deployment_json_file(id)))
-      names = self.get_deployment_certs((data['Deployment'] || {}))
+      names = self.get_deployment_certs(data)
       if names !=[]
         ASM.unblock_hostlist(names)
         self.clean_deployment_certs(names)
@@ -64,7 +64,7 @@ module ASM
       old_certs = []
       previous_dirs = Dir.entries(File.join(ASM.base_dir, deployment_id)).select{ |dir| dir.match(/^[0-9]+$/) }
       previous_dirs.each do |pd|
-        old_deployment = JSON.parse(File.read(deployment_json_file("#{deployment_id}/#{pd}")))['Deployment']
+        old_deployment = JSON.parse(File.read(deployment_json_file("#{deployment_id}/#{pd}")))
         old_certs << get_deployment_certs(old_deployment)
       end
       old_certs.flatten.uniq
