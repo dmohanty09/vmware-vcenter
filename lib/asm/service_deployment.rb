@@ -2559,7 +2559,7 @@ end
           parameters.each do |param|
             if param['id'] == "nfs_network"
               nfsip=param['value']
-              netappip = nfsip if !nfsip.nil?
+              netappip = nfsip if !(nfsip.nil? || nfsip.length == 0)
               break
             end
           end
