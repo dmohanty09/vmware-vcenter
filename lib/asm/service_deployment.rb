@@ -731,7 +731,7 @@ class ASM::ServiceDeployment
       untagged_vlans = server_vlan_info["#{fabric}"]['untagged_vlan']
       logger.debug "In configure_tor tagged vlan list found #{tagged_vlans}"
       logger.debug "In configure_tor untagged vlan list found #{untagged_vlans}"
-      if (tagged_vlans.length == 0 and untagged_vlans.length == 0)
+      if (!server_vlan_info["#{fabric}"].empty? and tagged_vlans.length == 0 and untagged_vlans.length == 0)
         logger.debug("No tagged / untagged VLANS for fabric #{fabric}")
         next
       end
@@ -2095,7 +2095,7 @@ class ASM::ServiceDeployment
     network_fabric_info = {}
     if network_params
       network_info = network_params['network_configuration']
-      fabrics = network_info['fabrics']
+      fabrics = network_info['fabrics'].find_all{|fabric| ASM::Util.to_boolean(fabric['enabled'])}
       if fabrics
         fabrics.each do |fabric|
           fabric_networks = []
@@ -2545,7 +2545,7 @@ end
         vlan_tagged = []
         vlan_untagged = []
         logger.debug("Processing fabric : #{fabric}")
-        network_fabric_info["#{fabric}"].each do |network_info|
+        network_fabric_info["#{fabric}"].compact.each do |network_info|
           if network_info['type'].to_s != "PXE"
             vlan_tagged.push(network_info['vlanId'])
           else
