@@ -23,10 +23,11 @@ describe ASM::ServiceDeployment do
     }
     ASM::Util.stubs(:fetch_network_settings).returns(network)
     ASM::Util.stubs(:reserve_network_ips).returns(['172.28.118.1'])
-    mock_command_result = { 
-      'stdout' => '', 'stderr' => '', 'exit_status' => 0, 'pid' => 0,
-    }
+    mock_command_result = Hashie::Mash.new({ 
+      'stdout' => '', 'stderr' => '', 'exit_status' => 0, 'pid' => 0
+    })
     ASM::Util.stubs(:run_command_simple).returns(mock_command_result)
+    ASM::Util.stubs(:run_command_success).returns(mock_command_result)
   end
 
   after do
