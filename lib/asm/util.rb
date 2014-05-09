@@ -563,6 +563,10 @@ module ASM
       end
     end
 
+    def self.to_boolean(b)
+      b == 'true' || b == 'TRUE' || b == true
+    end
+
     def self.append_resource_configuration!(resource, resources={}, options = {})
       options = { 
         :title => nil, 
