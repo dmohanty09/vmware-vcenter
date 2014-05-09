@@ -1632,7 +1632,6 @@ class ASM::ServiceDeployment
                   storage_hash['equallogic::create_vol_chap_user_access'].each do |storage_title, storage_params|
 
                     storage_titles.push storage_title
-
                     asm_datastore = {
                       'data_center' => params['datacenter'],
                       'cluster' => params['cluster'],
@@ -1647,6 +1646,7 @@ class ASM::ServiceDeployment
                       'vmknics' => "vmk#{storage_network_vmk_index}",
                       'vmknics1' => "vmk#{storage_network_vmk_index + 1}",
                       'decrypt' => decrypt?,
+                      'round_robin_pathing' => !server_params['esx_mem'],  
                       'require' => storage_network_require,
                     }
                     # We are not using IQN auth? Then add chapname and chapsecret
