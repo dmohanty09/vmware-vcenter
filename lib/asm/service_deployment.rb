@@ -1670,7 +1670,7 @@ class ASM::ServiceDeployment
                     }
 
                     # Esx_mem configuration is below
-                    if server_params.has_key? 'esx_mem' and server_params['esx_mem'] 
+                    if ASM::Util.to_boolean(server_params['esx_mem'])
                       vnics = resource_hash['esx_vswitch']["#{hostip}:#{storage_network_vswitch}"]['nics'].map do|n|
                         n.strip
                       end
