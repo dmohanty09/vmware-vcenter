@@ -1,6 +1,7 @@
 require 'asm'
 require 'asm/util'
 require 'asm/processor/server'
+require 'asm/razor'
 require 'fileutils'
 require 'json'
 require 'logger'
@@ -65,6 +66,10 @@ class ASM::ServiceDeployment
     true
   end
 
+  def razor
+    @razor ||= ASM::Razor.new
+  end
+
   def process(service_deployment)
     begin
       ASM.logger.info("Deploying #{service_deployment['deploymentName']} with id #{service_deployment['id']}")
@@ -108,10 +113,13 @@ class ASM::ServiceDeployment
       process_san_switches()
       process_components()
     rescue Exception => e
-      backtrace = (e.backtrace || []).join('\n')
+      if e.class == ASM::UserException
+        logger.error(e.to_s)
+      end
+      backtrace = (e.backtrace || []).join("\n")
       File.write(
-        deployment_file('exception.log'),
-        "#{e.inspect}\n#{backtrace}"
+          deployment_file('exception.log'),
+          "#{e.inspect}\n\n#{backtrace}"
       )
       log("Status: Error")
       raise(e)
@@ -1261,9 +1269,9 @@ class ASM::ServiceDeployment
     skip_deployment = nil
     unless @debug
       begin
-        node = (find_node(serial_number) || {})
+        node = (razor.find_node(serial_number) || {})
         if node['policy'] && node['policy']['name']
-          policy = get('policies', node['policy']['name'])
+          policy = razor.get('policies', node['policy']['name'])
           razor_params = resource_hash['asm::server'][cert_name]
           if policy &&
               (policy['repo'] || {})['name'] == razor_params['razor_image'] &&
@@ -1287,9 +1295,11 @@ class ASM::ServiceDeployment
       unless @debug
         (resource_hash['asm::server'] || []).each do |title, params|
           type = params['os_image_type']
+          node = razor.block_until_task_complete(serial_number,
+                                                 params['policy_name'], type)
           if type == 'vmware_esxi'
             raise(Exception, "Static management IP address was not specified for #{serial_number}") unless static_ip
-            block_until_esxi_ready(title, params, static_ip, timeout=3600)
+            block_until_esxi_ready(title, params, static_ip, timeout = 900)
           else
             deployment_status = await_agent_run_completion(ASM::Util.hostname_to_certname(os_host_name), timeout = 3600)
             if (deployment_status and os_image_type == 'hyperv')
@@ -1498,7 +1508,7 @@ class ASM::ServiceDeployment
 
             # Determine host IP
             log("Finding host ip for serial number #{serial_number}")
-            hostip = find_host_ip(serial_number)
+            hostip = razor.find_host_ip(serial_number)
             if @debug && !hostip
               hostip = "DEBUG-IP-ADDRESS"
             end
@@ -1885,43 +1895,15 @@ class ASM::ServiceDeployment
       process_generic(vm_certname, resource_hash, 'apply')
 
       unless @debug
+        # Wait for O/S install to complete; not really necessary but doing
+        # it for consistency with bare-metal installs
+        razor.block_until_task_complete(serial_number, server['policy_name'],
+                                        server['os_image_type'])
+
+        # Wait for first agent run to complete
         await_agent_run_completion(ASM::Util.hostname_to_certname(hostname))
       end
     end
-  end
-
-  def find_node(serial_num)
-    ret = nil
-    results = get('nodes').each do |node|
-      results = get('nodes', node['name'])
-      # Facts will be empty for a period until server checks in
-      serial  = (results['facts'] || {})['serialnumber']
-      if serial == serial_num
-        ret = results
-      end
-    end
-    ret
-  end
-
-  def find_host_ip(serial_num)
-    node = find_node(serial_num)
-    if node && node['facts'] && node['facts']['ipaddress']
-      node['facts']['ipaddress']
-    else
-      nil
-    end
-  end
-
-  def find_host_ip_blocking(serial_num, timeout)
-    ipaddress = nil
-    max_sleep = 30
-    ASM::Util.block_and_retry_until_ready(timeout, CommandException, max_sleep) do
-      ipaddress = find_host_ip(serial_num)
-      unless ipaddress
-        raise(CommandException, "Did not find our node by its serial number. Will try again")
-      end
-    end
-    ipaddress
   end
 
   def await_agent_run_completion(certname, timeout = 3600)
@@ -2009,7 +1991,7 @@ class ASM::ServiceDeployment
 
   # converts from an ASM style server resource into
   # a method call to check if the esx host is up
-  def block_until_esxi_ready(title, params, static_ip, timeout=3600)
+  def block_until_esxi_ready(title, params, static_ip, timeout = 3600)
     serial_num = params['serial_number'] || raise(Exception, "resource #{title} is missing required server attribute admin_password")
     password = params['admin_password'] || raise(Exception, "resource #{title} is missing required server attribute admin_password")
     if decrypt?
@@ -2019,11 +2001,8 @@ class ASM::ServiceDeployment
     hostname = params['os_host_name'] || raise(Exception, "resource #{title} is missing required server attribute os_host_name")
     hostdisplayname = "#{serial_num} (#{hostname})"
 
-    log("Waiting until #{hostdisplayname} has checked in with Razor")
-    dhcp_ip = find_host_ip_blocking(serial_num, timeout)
-    log("#{hostdisplayname} has checked in with Razor with ip address #{dhcp_ip}")
-
-    log("Waiting until #{hostdisplayname} is ready")
+    log("Waiting until ESXi management services available on #{hostdisplayname}")
+    start_time = Time.now
     ASM::Util.block_and_retry_until_ready(timeout, CommandException, 150) do
       esx_command =  "system uuid get"
       cmd = "esxcli --server=#{static_ip} --username=root --password=#{password} #{esx_command}"
@@ -2034,13 +2013,22 @@ class ASM::ServiceDeployment
       end
     end
 
-    # Still cases where ESXi is not available to be added to the cluster
-    # in the process_cluster method even after the uuid has been
-    # obtained above; trying a 5 minute sleep... Seems to happen more
-    # frequently when only one ESXi host is in the deployment.
-    sleep(450)
+    elapsed = Time.now - start_time
+    if elapsed > 60
+      # Still cases where ESXi is not available to be added to the cluster
+      # in the process_cluster method even after the uuid has been
+      # obtained above; trying a 5 minute sleep... Seems to happen more
+      # frequently when only one ESXi host is in the deployment.
+      #
+      # NOTE: Only doing this additional sleep if it appears that the host was
+      # not already online when this method was called, e.g. if it took more
+      # than 60 seconds to complete.
+      sleep_secs = 450
+      logger.debug("Sleeping an additional #{sleep_secs} waiting for ESXi host #{hostdisplayname} to come online")
+      sleep(sleep_secs)
+    end
 
-    log("ESXi server #{hostname} is available")
+    log("ESXi server #{hostdisplayname} is available")
   end
 
   #
@@ -2090,22 +2078,6 @@ class ASM::ServiceDeployment
     id_log_file = deployment_file("#{cert_name}.cfg")
     File.write(id_log_file, file_content)
     id_log_file
-  end
-
-  def get(type, name=nil)
-    begin
-      response = nil
-      url = ['http://localhost:8081/api/collections', type, name].compact.join('/')
-      response = RestClient.get(url)
-    rescue RestClient::ResourceNotFound => e
-      raise(CommandException, "Rest call to #{url} failed: #{e}")
-    end
-    if response.code == 200
-      result = JSON.parse(response)
-      result.include?('items') ? result['items'] : result
-    else
-      raise(CommandException, "Bad http code: #{response.code}:\n#{response.to_str}")
-    end
   end
 
   def empty_guid?(guid)
