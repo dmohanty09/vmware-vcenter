@@ -38,7 +38,7 @@ module ASM
 
       class VMware < VM_Mash
         def process!(certname, server, cluster)
-          self.hostname = self.hostname || server.hostname
+          self.hostname = self.hostname || server.hostname || server.os_host_name
           raise(ArgumentError, 'VM hostname not specified and missing server hostname value') unless self.hostname
 
           case server['os_image_type']
