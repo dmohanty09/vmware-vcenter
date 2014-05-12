@@ -1501,6 +1501,7 @@ class ASM::ServiceDeployment
 
         (server_conf['asm::server'] || []).each do |server_cert, server_params|
           if server_params['os_image_type'] == 'vmware_esxi'
+            install_mem = ASM::Util.to_boolean(server_params['esx_mem'])
             serial_number = cert_name_to_service_tag(server_cert)
             unless serial_number
               serial_number = server_cert
@@ -1642,7 +1643,6 @@ class ASM::ServiceDeployment
                   storage_hash['equallogic::create_vol_chap_user_access'].each do |storage_title, storage_params|
 
                     storage_titles.push storage_title
-
                     asm_datastore = {
                       'data_center' => params['datacenter'],
                       'cluster' => params['cluster'],
@@ -1657,6 +1657,7 @@ class ASM::ServiceDeployment
                       'vmknics' => "vmk#{storage_network_vmk_index}",
                       'vmknics1' => "vmk#{storage_network_vmk_index + 1}",
                       'decrypt' => decrypt?,
+                      'round_robin_pathing' => !install_mem,  
                       'require' => storage_network_require,
                     }
                     # We are not using IQN auth? Then add chapname and chapsecret
@@ -1680,7 +1681,7 @@ class ASM::ServiceDeployment
                     }
 
                     # Esx_mem configuration is below
-                    if ASM::Util.to_boolean(server_params['esx_mem'])
+                    if install_mem
                       vnics = resource_hash['esx_vswitch']["#{hostip}:#{storage_network_vswitch}"]['nics'].map do|n|
                         n.strip
                       end
