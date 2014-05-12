@@ -1,5 +1,7 @@
 source 'https://rubygems.org'
 
+# WARNING: Gems added here probably need to be added to asm-deployer.gemspec
+
 platforms :ruby do
   gem 'pg'
 end
