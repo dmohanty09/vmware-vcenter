@@ -19,7 +19,7 @@ class Get_switch_information
     #@switchinformation = switchinfo
   end
 
-  def get_info(ser_info,sw_info,logger,server_nic_type=nil)
+  def get_info(ser_info,sw_info,logger,server_nic_type=nil,server_vlan_info=nil)
     switchinfolist = []
     switchinfohash = {}
     ser_info.each do |nodename,sinfo|
@@ -27,7 +27,7 @@ class Get_switch_information
         if key == 'bladetype'
           bladetype = value
           if bladetype == "rack"
-            switchinfohash = rack_server_switch_info(nodename,sinfo,sw_info,logger)
+            switchinfohash = rack_server_switch_info(nodename,sinfo,sw_info,logger,server_nic_type,server_vlan_info)
           else
             switchinfohash = blade_server_switch_info(nodename,sinfo,sw_info,logger,server_nic_type)
             if switchinfohash.length() > 0
@@ -69,13 +69,17 @@ class Get_switch_information
     return servermacaddress
   end
 
-  def rack_server_switch_info(nname,sinfo,switchinfo,logger)
+  def rack_server_switch_info(nname,sinfo,switchinfo,logger,server_nic_type,server_vlan_info)
     rackObj=Rack_server_switch_information.new(nname,sinfo,switchinfo)
     serverinformation=rackObj.identify_switch_ports(logger)
-    servermacaddress=rackObj.search_server_Macaddress(logger)
+    
+    configured_interfaces = get_configured_interfaces(server_nic_type,server_vlan_info,sinfo['mac_addresses'],logger)
+    servermacaddress=rackObj.search_server_Macaddress(logger,configured_interfaces)
+    logger.debug("Server MAC Address: #{servermacaddress}")
+    
     # Check if all the
-    server_mac_address_count=sinfo["mac_addresses"].length()
-    if servermacaddress.keys.count != server_mac_address_count
+    server_mac_address_count = servermacaddress.count
+    if configured_interfaces.count != server_mac_address_count
       logger.debug "Server #{nname} is not updated, need to run the discovery for these"
       # Reboot the server
       endpoint = { 
@@ -91,15 +95,54 @@ class Get_switch_information
       logger.debug "resp :: #{resp}"
       # Need to run the fact search once again
       serverinfo=rackObj.identify_switch_ports(logger)
-      servermacaddress=rackObj.search_server_Macaddress(logger)
+      servermacaddress=rackObj.search_server_Macaddress(logger,configured_interfaces)
       server_mac_address_count=sinfo["mac_addresses"].length()
-      if servermacaddress.keys.count != server_mac_address_count
-        logger.debug "#{nname}:Not able to identify the server information on any switch, seems it is not connected"
+      if configured_interfaces.count != server_mac_address_count
+        logger.debug "#{nname}:Not able to identify the server information for all interfaces, seems it is not connected"
       end
     end
 
     return servermacaddress
   end
+  
+  def get_configured_interfaces(server_nic_type,server_vlan_info,macArray,logger)
+    # Using server vlan info, get fabrics where vlans needs to be configured
+    fabrics = []
+    configured_interfaces = []
+    ["Fabric A", "Fabric B", "Fabric C"].each do |fabric|
+      if server_vlan_info["#{fabric}"]['tagged_vlan'].length == 0 and server_vlan_info["#{fabric}"]['untagged_vlan'].length == 0
+        logger.debug "Fabric #{fabric} do not have vlans"
+      else
+        logger.debug "Fabric #{fabric} needs to be configured"
+        fabrics.push(fabric)
+      end
+    end
+    
+    logger.debug "Fabrics that needs to be configured: #{fabrics}"
+    interfaces = macArray.keys.sort
+    slots = []
+    interfaces.each do |interface|
+      logger.debug("interface: #{interface}")
+      if interface.match(/NIC.Integrated/).length >= 0
+        next
+      end
+      interface_info = interface.match(/NIC.Slot.(\d+)-(\d+)-(\d+)/)
+      slots.push(interface_info[1])
+    end
+    slots = slots.uniq.sort
+    logger.debug("Slots where MAC address is retrieved :#{slots}")
+    
+    fabrics.each_with_index do |fabric,index|
+      slot_name = slots[index]
+      nic_count = server_nic_type["#{fabric}"]
+      (1..nic_count).each do |count|
+        int_name = "NIC.Slot.#{slot_name}-#{count}-1"
+        configured_interfaces.push(int_name)
+      end
+    end
+    configured_interfaces
+  end
+  
 
 end
 
@@ -110,3 +153,4 @@ end
 #swobject =  Get_switch_information.new(serverinfo,switchinfo)
 #switchinfodetail = swobject.get_info
 ###pp switchinfodetail
+

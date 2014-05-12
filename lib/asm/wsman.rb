@@ -123,23 +123,14 @@ module ASM
       end.compact
     end
 
+    # Return all the server MAC Address along with the interface location
+    # in a hash format
     def self.get_mac_addresses(endpoint, servermodel, logger = nil)
-      servermodel = servermodel.downcase
-      if servermodel == 'r720'
-        nicNames = [ 'NIC.Slot.2-1-1', 'NIC.Slot.2-2-1' ]
-      elsif [ 'm620', 'm420', 'm820', 'r620' ].include?(servermodel)
-        nicNames = [ 'NIC.Integrated.1-1-1', 'NIC.Integrated.1-2-1' ]
-      else
-        logger.debug("Unsupported server model #{servermodel}") if logger
-        nicNames = nil
-      end
-      
-      ret = []
-      if nicNames
-        resp = invoke(endpoint, 'enumerate', 
-                      'http://schemas.dmtf.org/wbem/wscim/1/cim-schema/2/root/dcim/DCIM_NICView',
-                      :logger => logger)
-        
+      mac_info = {}
+        resp = invoke(endpoint, 'enumerate',
+        'http://schemas.dmtf.org/wbem/wscim/1/cim-schema/2/root/dcim/DCIM_NICView',
+        :logger => logger)
+
         mac_address = nil
         resp.split("\n").each do |line|
           # Expect to find alternating lines of CurrentMacAddress and FQDD
@@ -147,22 +138,13 @@ module ASM
           if line =~ /<n1:CurrentMACAddress>(\S+)\<\/n1:CurrentMACAddress>/
             mac_address = $1
           elsif line =~ /<n1:FQDD>(\S+)<\/n1:FQDD>/
-            nicName = $1
-            if (nicNames.include?(nicName))
-              if mac_address
-                logger.debug "MAC to be pushed #{mac_address}" if logger
-                ret.push(mac_address)
-              else
-                logger.debug("No mac address set when nic #{nicName} seen") if logger
-              end
-            end
-            mac_address = nil
+            nic_name = $1
+            mac_info["#{nic_name}"] = mac_address
           end
-        end
       end
-      
-      logger.debug("********* MAC Address List is #{ret} **************") if logger
-      ret
+
+      logger.debug("********* MAC Address List is #{mac_info.inspect} **************") if logger
+      mac_info
     end
 
   end

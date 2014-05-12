@@ -147,7 +147,7 @@ class ASM::ServiceDeployment
           logger.debug "Configuring rack server"
           if @configured_rack_switches.length() > 0
             logger.debug "Configuring ToR configuration for server #{server_cert_name}"
-            configure_tor(server_cert_name, server_vlan_info)
+            configure_tor(server_cert_name, server_vlan_info,server_nic_type)
           else
             logger.debug "INFO: There are no RACK ToR Switches in the ASM Inventory"
           end
@@ -616,92 +616,103 @@ class ASM::ServiceDeployment
     process_generic(component['puppetCertName'], config, 'device')
   end
 
-  def configure_tor(server_cert_name,server_vlan_info)
+  def configure_tor(server_cert_name,server_vlan_info,server_nic_type)
+    device_conf = nil
     inv = nil
     switchhash = {}
-    serverhash =  {}
-
+    serverhash = {}
+    deviceConfDir ='/etc/puppetlabs/puppet/devices'
     serverhash = get_server_inventory(server_cert_name)
-    logger.debug "******** In process_tor after getServerInventory serverhash is  #{ASM::Util.sanitize(serverhash)} **********\n"
+    logger.debug "******** In process_tor after getServerInventory serverhash is #{ASM::Util.sanitize(serverhash)} **********\n"
     switchinfoobj = Get_switch_information.new()
-    switchportdetail = switchinfoobj.get_info(serverhash,@rack_server_switchhash,logger)
+    switchportdetail = switchinfoobj.get_info(serverhash,@rack_server_switchhash,logger,server_nic_type,server_vlan_info)
     logger.debug "******** In process_tor switchportdetail :: #{switchportdetail} *********\n"
-    tagged_vlaninfo = server_vlan_info["#{server_cert_name}_taggedvlanlist"]
-    tagged_workloadvlaninfo = server_vlan_info["#{server_cert_name}_taggedworkloadvlanlist"]
-    untagged_vlaninfo = server_vlan_info["#{server_cert_name}_untaggedvlanlist"]
-    tagged_vlanlist = tagged_vlaninfo + tagged_workloadvlaninfo
-    tagged_vlanlist = tagged_vlanlist.uniq
-    common_vlanlist = tagged_vlanlist & untagged_vlaninfo
-    tagged_vlanlist = tagged_vlanlist - common_vlanlist
-    logger.debug "In configure_tor tagged vlan list found #{tagged_vlanlist}"
-    logger.debug "In configure_tor untagged vlan list found #{untagged_vlaninfo}"
-    resource_hash = Hash.new
-    switchportdetail.each do |switchportdetailhash|
-      switchportdetailhash.each do |macaddress,intfhash|
-        logger.debug "macaddress :: #{macaddress}    intfhash :: #{intfhash}"
-        switchcertname = intfhash[0][0]
-        interface = intfhash[0][1][0]
-        interfaces = get_interfaces(interface)
-        portchannels = get_portchannel(interface)
-        logger.debug "switchcertname :: #{switchcertname} interface :: #{interface}"
-        tagged_vlanlist.each do |vlanid|
-          logger.debug "vlanid :: #{vlanid}"
-          if switchcertname =~ /dell_ftos/
-            switch_resource_type = "asm::force10"
-            resource_hash[switch_resource_type] = {
-              "#{vlanid}" => {
-              'vlan_name' => '',
-              'desc' => '',
-              'tagged_tengigabitethernet' => interfaces.strip,
-              'tagged_portchannel' => portchannels.strip,
-              'mtu' => 1500,
-              }
-            }
-            logger.debug("*** resource_hash is #{resource_hash} ******")
-          elsif switchcertname =~ /dell_powerconnect/
-            switch_resource_type = "asm::powerconnect"
-            resource_hash[switch_resource_type] = {
-              "#{vlanid}" => {
-              'vlan_name' => '',
-              'portchannel' => portchannels.strip,
-              'interface' => interfaces.strip,
-              'mode' => 'general'
-              }
-            }
-          elsif switchcertname =~ /dell_iom/
-            switch_resource_type = "asm::iom"
 
-          else
-            logger.debug "Non-supported switch type"
-            return
-          end
-          process_generic(switchcertname, resource_hash, 'device', true, server_cert_name)
-        end
-        untagged_vlaninfo.each do |vlanid|
-          logger.debug "vlanid :: #{vlanid}"
-          if switchcertname =~ /dell_ftos/
-            switch_resource_type = "asm::force10"
-            resource_hash[switch_resource_type] = {
-              "#{vlanid}" => {
-              'vlan_name' => '',
-              'desc' => '',
-              'untagged_tengigabitethernet' => interfaces.strip,
-              'mtu' => 1500,
-              }
-            }
-            logger.debug("*** resource_hash is #{resource_hash} ******")
-          elsif switchcertname =~ /dell_iom/
-            switch_resource_type = "asm::iom"
+    # Need to process for the ToR Switches for each Fabric
+    ["Fabric A", "Fabric B", "Fabric C"].each do |fabric|
+      logger.debug "Configuring IOM for fabric : #{fabric}"
+      tagged_vlans = server_vlan_info["#{fabric}"]['tagged_vlan']
+      untagged_vlans = server_vlan_info["#{fabric}"]['untagged_vlan']
+      logger.debug "In configure_tor tagged vlan list found #{tagged_vlans}"
+      logger.debug "In configure_tor untagged vlan list found #{untagged_vlans}"
+      if (tagged_vlans.length == 0 and untagged_vlans.length == 0)
+        logger.debug("No tagged / untagged VLANS for fabric #{fabric}")
+        next
+      end
 
-          else
-            logger.debug "Non-supported switch type"
-            return
+      ioaslots = []
+      case fabric
+      when "Fabric A"
+        ioaslots = ["A1", "A2"]
+      when "Fabric B"
+        ioaslots = ["B1", "B2"]
+      when "Fabric C"
+        ioaslots = ["C1", "C2"]
+      end
+
+      resource_hash = Hash.new
+      switchportdetail.each do |switchportdetailhash|
+        switchportdetailhash.each do |macaddress,intfhash|
+          logger.debug "macaddress :: #{macaddress}    intfhash :: #{intfhash}"
+          switchcertname = intfhash[0][0]
+          interface = intfhash[0][1][0]
+          interfaces = get_interfaces(interface)
+          portchannels = get_portchannel(interface)
+          logger.debug "switchcertname :: #{switchcertname} interface :: #{interface}"
+          tagged_vlanlist.each do |vlanid|
+            logger.debug "vlanid :: #{vlanid}"
+            if switchcertname =~ /dell_ftos/
+              switch_resource_type = "asm::force10"
+            resource_hash[switch_resource_type] ||= {}
+              resource_hash[switch_resource_type]["#{vlanid}"] = {
+                'vlan_name' => '',
+                'desc' => '',
+                'tagged_tengigabitethernet' => interfaces.strip,
+                'tagged_portchannel' => portchannels.strip
+              }
+              logger.debug("*** resource_hash is #{resource_hash} ******")
+            elsif switchcertname =~ /dell_powerconnect/
+              switch_resource_type = "asm::powerconnect"
+              resource_hash[switch_resource_type] ||= {}
+              resource_hash[switch_resource_type]["#{vlanid}"] = {
+                'vlan_name' => '',
+                'portchannel' => portchannels.strip,
+                'interface' => interfaces.strip,
+                'mode' => 'general'
+              }
+            elsif switchcertname =~ /dell_iom/
+              switch_resource_type = "asm::iom"
+
+            else
+              logger.debug "Non-supported switch type"
+              return
+            end
+            #process_generic(switchcertname, resource_hash, 'device', true, server_cert_name)
           end
+          untagged_vlaninfo.each do |vlanid|
+            logger.debug "vlanid :: #{vlanid}"
+            if switchcertname =~ /dell_ftos/
+              switch_resource_type = "asm::force10"
+              resource_hash[switch_resource_type] ||= {}
+              resource_hash[switch_resource_type]["#{vlanid}"] = {
+                'vlan_name' => '',
+                'desc' => '',
+                'untagged_tengigabitethernet' => interfaces.strip,
+              }
+              logger.debug("*** resource_hash is #{resource_hash} ******")
+            elsif switchcertname =~ /dell_iom/
+              switch_resource_type = "asm::iom"
+            else
+              logger.debug "Non-supported switch type"
+              return
+            end
+            #process_generic(switchcertname, resource_hash, 'device', true, server_cert_name)
+          end
+          logger.debug("Switch #{switchcertname}, Resource hash: #{resource_hash}")
           process_generic(switchcertname, resource_hash, 'device', true, server_cert_name)
         end
       end
     end
-
   end
 
   def configure_tor_blade(server_cert_name, server_vlan_info,server_nic_type)
@@ -968,7 +979,13 @@ class ASM::ServiceDeployment
   end
 
   def get_all_switches()
-    certs = ASM::Util.get_puppet_certs
+    # Ignore the certs which are not in the managed device list
+    managed_devices = ASM::Util.fetch_managed_inventory()
+    certs = []
+    managed_devices.each do |managed_device|
+      certs.push(managed_device['refId']) if managed_device['deviceType'] == "dellswitch"
+    end
+    
     @configured_rack_switches = certs.find_all do |x|
       x.start_with?('dell_ftos') or x.start_with?('dell_powerconnect')
     end

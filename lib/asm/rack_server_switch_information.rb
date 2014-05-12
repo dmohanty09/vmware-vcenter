@@ -48,7 +48,7 @@ def search_server_Macaddress_force10(certname,mac,logger)
   cert_port=[]
   intfLoc1=[]
   ports=[]
-    cert_ports=[]
+  cert_ports=[]
   @mainremotehash[certname].keys.each do |intf|
     newremotehash1=@mainremotehash[certname]
     intfHash = newremotehash1[intf]
@@ -113,17 +113,21 @@ end
 
 public
 
-def search_server_Macaddress(logger)
+def search_server_Macaddress(logger,configured_interfaces)
   serviceTag=@ServiceTag
-  #serviceTag=@ServiceTag
   dataHash= @serverinfo
   macArray= dataHash["mac_addresses"]
-  #@remote_mac=""
-
-  macArray.each do |mac|
+  logger.debug "Mac Array: #{macArray.inspect}"
+  logger.debug("Interfaces that needs to be configured: #{configured_interfaces}")
+  
+  configured_interfaces.each do |interface|
+    logger.debug("Interface for which MAC address needs to be searched : #{interface}")
+    mac = macArray["#{interface}"]
+    logger.debug("mac address : #{mac}")
     @interface_found="false"
     @cert_ports=[]
     @mainremotehash.keys.each do |certname|
+      logger.debug("Searching for switch #{certname}")
       match = certname.match(/powerconnect/)
       if match
         search_server_Macaddress_powerconnect(certname,mac,logger)
@@ -135,57 +139,7 @@ def search_server_Macaddress(logger)
   return @matchedHash
 end
 
-public
-
-#def search_server_Macaddress(logger)
-#  serviceTag=@ServiceTag
-#
-#  dataHash= @serverinfo
-#  macArray= dataHash["mac_addresses"]
-#  logger.debug "********* macArray :: #{macArray} ********"
-#  remote_mac=""
-#  macArray.each do |mac|
-#    interface_found="false"
-#    cert_ports=[]
-#    logger.debug "****** mac :: #{mac} *****"
-#    logger.debug "****** #{@mainremotehash} *****"
-#    @mainremotehash.keys.each do |certname|
-#      interface_found="false"
-#      cert_port=[]
-#      intfLoc1=[]
-#      ports=[]
-#      @mainremotehash[certname].keys.each do |intf|
-#        newremotehash1=@mainremotehash[certname]
-#        intfHash = newremotehash1[intf]
-#        remote_mac = intfHash["remote_mac"]
-#        if !remote_mac
-#          remote_mac = intfHash["mac_address"]
-#        end
-#
-#        intfLoc=intf
-#        logger.debug "remote_mac :: #{remote_mac}"
-#        if mac.include?(remote_mac.upcase)
-#          lag=getLAGFromIntf(intf,certname)
-#          if !lag.empty?
-#            ports=intfLoc1.push(lag)
-#          else
-#            ports=intfLoc1.push(intfLoc)
-#          end
-#          interface_found="true"
-#        end
-#      end
-#      if interface_found == "true"
-#        cert_port.push(certname)
-#        cert_port.push(ports)
-#        cert_ports.push(cert_port)
-#        @matchedHash.store(mac.upcase,cert_ports)
-#      end
-#    end
-#  end
-#  return @matchedHash
-#end
-
-public
+private
 
 def getLAGFromIntf(intf,certname)
   ports=[]
