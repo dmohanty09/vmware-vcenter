@@ -52,7 +52,7 @@ describe ASM::ServiceDeployment do
       File.open( "#{@tmp_dir}/8000/cert.out", 'w') do |fh|
         fh.write('Results: For 0 resources. 0 from our run failed. 0 not from our run failed. 0 updated successfully.')
       end
-      ASM::Util.expects(:run_command).with(
+      ASM::Util.expects(:run_command_streaming).with(
         "sudo puppet asm process_node --debug --trace --filename #{@r_file} --run_type apply --statedir #{@tmp_dir}/8000/resources  --always-override cert", "#{@o_file}")
       @data['serviceTemplate']['components'][0]['type'] = 'TEST'
       @data['serviceTemplate']['components'][0]['resources'].push(
@@ -79,7 +79,7 @@ describe ASM::ServiceDeployment do
         end.to raise_error(Exception, 'Did not expect rule_number in asm::server')
       end
       it 'should configure a server' do
-        ASM::Util.expects(:run_command).with(
+        ASM::Util.expects(:run_command_streaming).with(
           "sudo -i puppet asm process_node --filename #{@r_file} --run_type apply --always-override cert", "#{@o_file}") do |cmd|
           File.open(@o_file, 'w') do |fh|
             fh.write('Results: For 0 resources. 0 from our run failed. 0 not from our run failed. 0 updated successfully.')
