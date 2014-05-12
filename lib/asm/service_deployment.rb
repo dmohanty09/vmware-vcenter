@@ -348,7 +348,7 @@ class ASM::ServiceDeployment
           if @debug
             logger.info("[DEBUG MODE] puppet execution skipped")
           else
-            ASM::Util.run_command(cmd, puppet_out)
+            ASM::Util.run_command_streaming(cmd, puppet_out)
           end
 
           if puppet_run_type == 'device'

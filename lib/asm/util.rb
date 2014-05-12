@@ -485,6 +485,32 @@ module ASM
       result
     end
 
+    # Run cmd by passing it to the shell and stream stdout and stderr
+    # to the specified outfile
+    def self.run_command_streaming(cmd, outfile)
+      File.open(outfile, 'a') do |fh|
+        Open3.popen3(cmd) do |stdin, stdout, stderr, wait_thr|
+          stdin.close
+
+          # Drain stdout
+          while line = stdout.gets
+            fh.puts(line)
+            # Interleave stderr if available
+            while stderr.ready?
+              if err = stderr.gets
+                fh.puts(err)
+              end
+            end
+          end
+
+          # Drain stderr
+          while line = stderr.gets
+            fh.puts(line)
+          end
+        end
+      end
+    end
+
     def self.block_and_retry_until_ready(timeout, exceptions=nil, max_sleep=nil, logger=nil, &block)
       failures = 0
       sleep_time = 0
