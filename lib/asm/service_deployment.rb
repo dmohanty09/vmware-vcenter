@@ -1887,12 +1887,11 @@ class ASM::ServiceDeployment
 
       serial_number = @debug ? "vmware_debug_serial_no" : ASM::Util.vm_uuid_to_serial_number(uuid)
 
-      #Get the list of related services to this virtual machine, and combine them into one hash
+      # Get the list of related services to this virtual machine, and combine them into one hash
+      # TODO: move the massage_asm_server_params stuff into ASM::Resource::Server
       classes_config = get_classification_data(component, hostname)
-
       massage_asm_server_params(serial_number, server, classes_config)
-
-      resource_hash['asm::server'] = { hostname => server }
+      resource_hash['asm::server'] = { hostname => server.to_hash }
       process_generic(vm_certname, resource_hash, 'apply')
 
       unless @debug
