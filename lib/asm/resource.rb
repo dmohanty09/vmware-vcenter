@@ -99,7 +99,7 @@ module ASM
           }
 
           networks = {}
-          self.network_interfaces.reject{|net| net['vlanId'].empty?}.each_with_index do |i, net|
+          self.network_interfaces.each_with_index do |i, net|
             network = network_default.clone
             vlan_id = net['vlanId']
             raise(ArgumentError, "Missing VLAN id #{vlan}") unless vlan_id
