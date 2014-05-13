@@ -121,7 +121,6 @@ module ASM
       def self.create(value)
         if value.include? 'asm::server'
           value['asm::server'].collect do |uuid, data| 
-            data['uuid'] = uuid
             ASM::Resource::Mash.new(cleanup(data))
           end
         else
