@@ -75,6 +75,7 @@ class Get_switch_information
     
     configured_interfaces = get_configured_interfaces(server_nic_type,server_vlan_info,sinfo['mac_addresses'],logger)
     servermacaddress=rackObj.search_server_Macaddress(logger,configured_interfaces)
+    
     logger.debug("Server MAC Address: #{servermacaddress}")
     
     # Check if all the
@@ -121,13 +122,15 @@ class Get_switch_information
     logger.debug "Fabrics that needs to be configured: #{fabrics}"
     interfaces = macArray.keys.sort
     slots = []
+    slot_interface = {}
     interfaces.each do |interface|
       logger.debug("interface: #{interface}")
-      if interface.match(/NIC.Integrated/).length >= 0
-        next
-      end
-      interface_info = interface.match(/NIC.Slot.(\d+)-(\d+)-(\d+)/)
-      slots.push(interface_info[1])
+      #if !interface.match(/NIC.Integrated/).nil?
+      #  next
+      #end
+      interface_info = interface.match(/NIC.(Slot|Integrated).(\d+)-(\d+)-(\d+)/)
+      slots.push(interface_info[2])
+      slot_interface["#{interface_info[2]}"] = interface_info[1]
     end
     slots = slots.uniq.sort
     logger.debug("Slots where MAC address is retrieved :#{slots}")
@@ -136,21 +139,53 @@ class Get_switch_information
       slot_name = slots[index]
       nic_count = server_nic_type["#{fabric}"]
       (1..nic_count).each do |count|
-        int_name = "NIC.Slot.#{slot_name}-#{count}-1"
+        int_name = "NIC.#{slot_interface["#{slot_name}"]}.#{slot_name}-#{count}-1"
         configured_interfaces.push(int_name)
       end
     end
     configured_interfaces
   end
   
+def get_fabic_configured_interfaces(server_nic_type,server_vlan_info,macArray,logger)
+  # Using server vlan info, get fabrics where vlans needs to be configured
+  fabrics = []
+  configured_interfaces = []
+  ('A'..'Z').each do |fabric_sufix|
+    fabric = "Fabric #{fabric_sufix}"
+    logger.debug("Checking fabric :#{fabric}")
+    if !server_vlan_info["#{fabric}"].nil?
+        if server_vlan_info["#{fabric}"]['tagged_vlan'].length == 0 and server_vlan_info["#{fabric}"]['untagged_vlan'].length == 0
+          logger.debug "Fabric #{fabric} do not have vlans"
+        else
+          logger.debug "Fabric #{fabric} needs to be configured"
+          fabrics.push(fabric)
+        end
+      end
+  end
+  
+  logger.debug "Fabrics that needs to be configured: #{fabrics}"
+  interfaces = macArray.keys.sort
+  slots = []
+  slot_interface = {}
+  slot_interfaces = {}
+  interfaces.each do |interface|
+    interface_info = interface.match(/NIC.(Slot|Integrated).(\d+)-(\d+)-(\d+)/)
+    slots.push(interface_info[2])
+    slot_interface["#{interface_info[2]}"] = interface_info[1]
+    slot_interfaces["#{interface_info[2]}"] ||= []
+    slot_interfaces["#{interface_info[2]}"].push(macArray[interface])
+  end
+  slots = slots.uniq.sort
+  logger.debug("Slot interfaces :#{slot_interfaces}")
+  
+  interface_info = {}
+  fabrics.each_with_index do |fabric,index|
+    slot_name = slots[index]
+    interface_info[fabric] = slot_interfaces[slot_name]
+  end
+  logger.debug("Interface info : #{interface_info}")
+  interface_info
+end
+  
 
 end
-
-#serverinfo={ "7DF8ZV1" => { "mac_addresses" => '00:0A:F7:06:BC:C0,00:0A:F7:06:BC:C2', "bladetype" => 'rack' , "servermodel" => 'R720', "idrac_ip" => '10.128.46.107', "idrac_username" => 'root', "idrac_password" => 'calvin'} }
-#
-#switchinfo={ "dell_ftos-10.128.46.101" => { "device_type" => "dell_ftos", "connection_url" => "ssh://admin:password@10.128.46.101"}, "dell_ftos-10.128.46.102" => { "device_type" => "dell_ftos", "connection_url" => "ssh://admin:password@10.128.46.102"}               }
-#
-#swobject =  Get_switch_information.new(serverinfo,switchinfo)
-#switchinfodetail = swobject.get_info
-###pp switchinfodetail
-

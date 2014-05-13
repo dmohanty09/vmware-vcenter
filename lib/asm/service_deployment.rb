@@ -105,6 +105,7 @@ class ASM::ServiceDeployment
       # Changing the ordering of SAN and LAN configuration
       # To ensure that the server boots with razor image
       process_tor_switches()
+      return true
       process_san_switches()
       process_components()
     rescue Exception => e
@@ -627,6 +628,10 @@ class ASM::ServiceDeployment
     switchinfoobj = Get_switch_information.new()
     switchportdetail = switchinfoobj.get_info(serverhash,@rack_server_switchhash,logger,server_nic_type,server_vlan_info)
     logger.debug "******** In process_tor switchportdetail :: #{switchportdetail} *********\n"
+    sinfo = serverhash[cert_name_to_service_tag(server_cert_name)]
+    macArray = sinfo['mac_addresses']
+    fabric_interfaces = switchinfoobj.get_fabic_configured_interfaces(server_nic_type,server_vlan_info,macArray,logger)
+    logger.debug("Fabric Interface: #{fabric_interfaces}")
 
     # Need to process for the ToR Switches for each Fabric
     ["Fabric A", "Fabric B", "Fabric C"].each do |fabric|
@@ -640,30 +645,25 @@ class ASM::ServiceDeployment
         next
       end
 
-      ioaslots = []
-      case fabric
-      when "Fabric A"
-        ioaslots = ["A1", "A2"]
-      when "Fabric B"
-        ioaslots = ["B1", "B2"]
-      when "Fabric C"
-        ioaslots = ["C1", "C2"]
-      end
-
       resource_hash = Hash.new
       switchportdetail.each do |switchportdetailhash|
         switchportdetailhash.each do |macaddress,intfhash|
           logger.debug "macaddress :: #{macaddress}    intfhash :: #{intfhash}"
           switchcertname = intfhash[0][0]
           interface = intfhash[0][1][0]
+          # Check if interface needs to be configured for this fabric
+          if !fabric_interfaces[fabric].include?(macaddress)
+            logger.debug "Interface #{interface} not required to be configured for fabric #{fabric}"
+            next
+          end
           interfaces = get_interfaces(interface)
           portchannels = get_portchannel(interface)
           logger.debug "switchcertname :: #{switchcertname} interface :: #{interface}"
-          tagged_vlanlist.each do |vlanid|
+          tagged_vlans.each do |vlanid|
             logger.debug "vlanid :: #{vlanid}"
             if switchcertname =~ /dell_ftos/
               switch_resource_type = "asm::force10"
-            resource_hash[switch_resource_type] ||= {}
+              resource_hash[switch_resource_type] ||= {}
               resource_hash[switch_resource_type]["#{vlanid}"] = {
                 'vlan_name' => '',
                 'desc' => '',
@@ -689,7 +689,7 @@ class ASM::ServiceDeployment
             end
             #process_generic(switchcertname, resource_hash, 'device', true, server_cert_name)
           end
-          untagged_vlaninfo.each do |vlanid|
+          untagged_vlans.each do |vlanid|
             logger.debug "vlanid :: #{vlanid}"
             if switchcertname =~ /dell_ftos/
               switch_resource_type = "asm::force10"
@@ -979,6 +979,8 @@ class ASM::ServiceDeployment
   end
 
   def get_all_switches()
+    #certs = ASM::Util.get_puppet_certs
+    
     # Ignore the certs which are not in the managed device list
     managed_devices = ASM::Util.fetch_managed_inventory()
     certs = []
