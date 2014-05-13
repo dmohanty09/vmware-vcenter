@@ -64,9 +64,9 @@ module ASM
               'nic_type' => 'vmxnet3'}
           ]
 
-          self.network_interfaces.split(',').compact do |portgroup|
+          self.network_interfaces.each do |net|
             network << { 
-              'portgroup' => portgroup, 
+              'portgroup' => net['name'],
               'nic_type' => 'vmxnet3'
             }
           end
@@ -99,10 +99,9 @@ module ASM
           }
 
           networks = {}
-          self.network_interfaces.split(',').reject{|x| x.empty?}.each_with_index do |vlan,i|
+          self.network_interfaces.reject{|net| net['vlanId'].empty?}.each_with_index do |i, net|
             network = network_default.clone
-            vlan =~ /VLAN(\d+)$/
-            vlan_id = $1
+            vlan_id = net['vlanId']
             raise(ArgumentError, "Missing VLAN id #{vlan}") unless vlan_id
             network['vlan_id'] = vlan_id
             networks["#{hostname}:#{i}"] = network
