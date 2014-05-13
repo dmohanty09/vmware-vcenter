@@ -67,7 +67,7 @@ class ASM::ServiceDeployment
   end
 
   def razor
-    @razor ||= ASM::Razor.new
+    @razor ||= ASM::Razor.new(:logger => logger)
   end
 
   def process(service_deployment)
