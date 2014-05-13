@@ -121,6 +121,18 @@ describe ASM::Razor do
       end
     end
 
+    describe 'when boot_wim event exists' do
+      it 'should return :boot_install' do
+        @logs['items'] = @logs['items'].slice(0, 4)
+
+        # Doctor up boot_install entry to look like boot_wim (seen with Windows)
+        @logs['items'][3]['template'] = 'boot_wim'
+
+        RestClient.stubs(:get).with(@node_url).returns(mock_response(200, @logs))
+        @razor.task_status(@node_name, @policy_name).should == :boot_install
+      end
+    end
+
     describe 'when most recent interesting event is boot_install' do
       it 'should return :boot_install' do
         @logs['items'] = @logs['items'].slice(0, 7)
@@ -188,7 +200,7 @@ describe ASM::Razor do
 
       describe 'when node not found' do
         it 'should raise UserException' do
-          @razor.stubs(:find_node_blocking).with('fail_serial_no', 300).returns(nil)
+          @razor.stubs(:find_node_blocking).with('fail_serial_no', 600).returns(nil)
           expect do
             @razor.block_until_task_complete('fail_serial_no', 'policy', 'task')
           end.to raise_error(ASM::UserException)
@@ -225,6 +237,12 @@ describe ASM::Razor do
         it 'should wait for :boot_local_2 when task is vmware' do
           ASM::Util.stubs(:block_and_retry_until_ready).returns(:boot_local_2)
           @razor.block_until_task_complete('serial_no', 'policy', 'vmware-esxi').
+              should == @node
+        end
+
+        it 'should wait for :boot_local_2 when task is windows' do
+          ASM::Util.stubs(:block_and_retry_until_ready).returns(:boot_local_2)
+          @razor.block_until_task_complete('serial_no', 'policy', 'windows').
               should == @node
         end
       end
