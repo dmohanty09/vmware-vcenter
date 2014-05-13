@@ -507,6 +507,9 @@ module ASM
           while line = stderr.gets
             fh.puts(line)
           end
+
+          fh.close
+          raise(Exception, "#{cmd} failed; output in #{outfile}") unless wait_thr.value.exitstatus == 0
         end
       end
     end
