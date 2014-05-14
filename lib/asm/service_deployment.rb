@@ -2591,8 +2591,8 @@ end
     server_conf = ASM::Util.build_component_configuration(server_component, :decrypt => decrypt?)
     network_params = (server_conf['asm::esxiscsiconfig'] || {})[server_cert]
     # get fabric information
-    network_fabric_info = {}
     if network_params
+      network_fabric_info = {}
       network_info = network_params['network_configuration']
       fabrics = network_info['fabrics']
       if fabrics
@@ -2611,14 +2611,14 @@ end
         end
       end
       logger.debug"network_info: #{network_fabric_info}"
+
+      fabric_iscsi_info = get_iscsi_fabric_vlan_info(network_fabric_info)
+      logger.debug("Found Fabric VLAN INFO: #{fabric_iscsi_info}")
+    else
+      fabric_iscsi_info = ['Fabric A']
+      logger.debug("Defaulted to Fabric VLAN INFO: #{fabric_iscsi_info}")
     end
 
-    fabric_iscsi_info = "Fabric A"
-    if network_fabric_info
-      fabric_iscsi_info = get_iscsi_fabric_vlan_info(network_fabric_info)
-      logger.debug("Fabric VLAN INFO: #{fabric_iscsi_info}")
-    end
-    
     unless fabric_iscsi_info.uniq.size == 1
       raise(Exception, "Expected to find only one iscsi fabric, found #{fabric_iscsi_info.uniq.size}")
     end
