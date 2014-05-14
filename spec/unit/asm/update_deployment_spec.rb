@@ -12,6 +12,7 @@ describe ASM::UpdateDeployment do
     FileUtils.cp_r(File.expand_path("../../../fixtures/deployments", __FILE__), @test_dir)
     ASM.stubs(:base_dir).returns("#{@test_dir}/deployments")
     ASM::Util.stubs(:reserve_network_ips).returns(["172.23.119.2"])
+    ASM::Util.stubs(:fetch_managed_inventory).returns([])
     ASM::Util.stubs(:release_network_ips)
     mock_command_result = { 
       'stdout' => '', 'stderr' => '', 'exit_status' => 0, 'pid' => 0,

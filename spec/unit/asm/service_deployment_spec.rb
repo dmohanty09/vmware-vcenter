@@ -22,6 +22,7 @@ describe ASM::ServiceDeployment do
       }
     }
     ASM::Util.stubs(:fetch_network_settings).returns(network)
+    ASM::Util.stubs(:fetch_managed_inventory).returns([])
     ASM::Util.stubs(:reserve_network_ips).returns(['172.28.118.1'])
     mock_command_result = { 
       'stdout' => '', 'stderr' => '', 'exit_status' => 0, 'pid' => 0,
@@ -371,6 +372,9 @@ describe ASM::ServiceDeployment do
         'dell_iom-3', 'brocade_bar-4', 'dell_powerconnect-5',
         'dell_powerconnect-6' ]
       ASM::Util.stubs(:get_puppet_certs).returns(certs)
+      ASM::Util.stubs(:fetch_managed_inventory).returns(certs.map do |cert|
+        { 'refId' => cert, 'deviceType' => 'dellswitch' }
+      end)
       ASM::Util.get_puppet_certs.should == certs
       @sd.get_all_switches
       @sd.configured_rack_switches.should == [ 'dell_ftos-1', 'dell_ftos-2', 
