@@ -14,6 +14,7 @@ module ASM
     SERVER_RA_URL='http://localhost:9080/ServerRA/Server'
     NETWORKS_RA_URL='http://localhost:9080/VirtualServices/Network'
     CHASSIS_RA_URL='http://localhost:9080/ChassisRA/Chassis'
+    MANAGED_DEVICE_URL='http://localhost:9080/AsmManager/ManagedDevice'
     # TODO: give razor user access to this directory
     PUPPET_CONF_DIR='/etc/puppetlabs/puppet'
     DEVICE_CONF_DIR="#{PUPPET_CONF_DIR}/devices"
@@ -53,6 +54,16 @@ module ASM
       n_retrieved = !ret ? 0 : ret.size
       if n_retrieved != n_ips
         raise(Exception, "Retrieved invalid response to network reservation request: #{ret}")
+      end
+      ret
+    end
+    
+    def self.fetch_managed_inventory()
+      url = "#{MANAGED_DEVICE_URL}"
+      data = RestClient.get(url, {:accept => :json})
+      ret = JSON.parse(data)
+      if !ret 
+        raise(Exception, "Failed to get managed devices list")
       end
       ret
     end
