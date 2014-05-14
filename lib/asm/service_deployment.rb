@@ -1679,7 +1679,6 @@ class ASM::ServiceDeployment
                       'vmknics' => "vmk#{storage_network_vmk_index}",
                       'vmknics1' => "vmk#{storage_network_vmk_index + 1}",
                       'decrypt' => decrypt?,
-                      'round_robin_pathing' => !install_mem,  
                       'require' => storage_network_require,
                     }
                     # We are not using IQN auth? Then add chapname and chapsecret
@@ -1741,6 +1740,16 @@ class ASM::ServiceDeployment
                       end
                       resource_hash['esx_mem'] ||= {}
                       resource_hash['esx_mem'][hostip] = esx_mem
+                    else # We will set up round robin pathing here
+                      resource_hash['esx_iscsi_multiple_path_config'] ||= {}
+                      resource_hash['esx_iscsi_multiple_path_config'][hostip] = {
+                        'ensure'        => 'present',
+                        'host'          => hostip,
+                        'policyname'    => 'VMW_PSP_RR',
+                        'path'          => "/#{params['datacenter']}/#{params['cluster']}",
+                        'transport'     => 'Transport[vcenter]',
+                        'require'       => "Esx_datastore[#{hostip}:#{storage_title}]"
+                      }
                     end
                   end
                 end
