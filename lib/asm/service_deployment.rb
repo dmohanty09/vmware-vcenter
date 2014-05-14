@@ -1926,10 +1926,15 @@ class ASM::ServiceDeployment
       process_generic(vm_certname, resource_hash, 'apply')
 
       unless @debug
-        # Wait for O/S install to complete; not really necessary but doing
-        # it for consistency with bare-metal installs
+        # Unlike in bare-metal installs we only wait for the :boot_install
+        # log event in razor. At that point the O/S installer has just been
+        # launched, it is not complete. This is done because our VMs have hard
+        # disk earlier in the boot order than PXE. Therefore the nodes do not
+        # check in with razor at all once they have an O/S laid down on hard
+        # disk and we will not see any :boot_local events
+
         razor.block_until_task_complete(serial_number, server['policy_name'],
-                                        server['os_image_type'])
+                                        server['os_image_type'], :boot_install)
 
         # Wait for first agent run to complete
         await_agent_run_completion(ASM::Util.hostname_to_certname(hostname))
