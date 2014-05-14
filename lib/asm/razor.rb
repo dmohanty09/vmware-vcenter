@@ -99,6 +99,8 @@ module ASM
           case log['template']
             when 'boot_install'
               ret = :boot_install
+            when 'boot_wim' # for windows
+              ret = :boot_install
             when 'boot_local'
               if ret != :boot_local
                 ret = :boot_local
@@ -132,14 +134,26 @@ module ASM
 
     def block_until_task_complete(serial_number, policy_name, task_name)
       # The vmware ESXi installer has to reboot twice before being complete
-      terminal_status = task_name.start_with?('vmware') ? :boot_local_2 : :boot_local
-      node = find_node_blocking(serial_number, 300) or
+      terminal_status = if task_name.start_with?('vmware') || task_name.start_with?('windows')
+                          :boot_local_2
+                        else
+                          :boot_local
+                        end
+      logger.debug("Waiting for server #{serial_number} to PXE boot") if logger
+      node = find_node_blocking(serial_number, 600) or
           raise(UserException, "Server #{serial_number} failed to PXE boot")
 
       os_name = os_name(task_name)
-      max_times = {nil => 300, :bind => 300,
-                   :reboot => 300, :boot_install => 2700,
-                   :boot_local => 600, :boot_local_2 => 600}
+
+      # Max time to wait at each stage
+      max_times = {nil => 300,
+                   :bind => 300,
+                   :reboot => 300,
+                   # for esxi / linux most of the install happens in :boot_install
+                   :boot_install => 2700,
+                   # for windows most of the install happens in :boot_local
+                   :boot_local => 2700,
+                   :boot_local_2 => 600}
       status = nil
       while status != terminal_status
         timeout = max_times[status] or raise(Exception, "Invalid status #{status}")
