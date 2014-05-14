@@ -1237,6 +1237,7 @@ class ASM::ServiceDeployment
       target_devices = []
       vol_names      = []
       storage_type = 'iscsi'
+      iscsi_fabric = 'A'
       target_ip = ''
       storage.each do |c|
         target_devices.push(c['puppetCertName'])
@@ -1266,13 +1267,16 @@ class ASM::ServiceDeployment
         raise(Exception, "Expected to find two volumes, found #{vol_names.size}")
       end
       target_ip = ASM::Util.find_equallogic_iscsi_ip(target_devices.first) if storage_type == 'iscsi'
+      iscsi_fabric = get_iscsi_fabric(component,cert_name)[0] if storage_type == 'iscsi'
+      
       resource_hash = ASM::Processor::Server.munge_hyperv_server(
                         title,
                         resource_hash,
                         target_ip,
                         vol_names,
                         get_disk_part_flag(component),
-                        storage_type
+                        storage_type,
+                        iscsi_fabric
                       )
     end
 
@@ -2579,7 +2583,7 @@ end
   end
 
   # Get the count of interfaces
-  def get_server_nic_type(server_component,server_cert)
+  def get_server_nic_type(server_component)
     server_conf = ASM::Util.build_component_configuration(server_component, :decrypt => decrypt?)
     network_params = (server_conf['asm::esxiscsiconfig'] || {})[server_cert]
     # get fabric information
@@ -2601,5 +2605,60 @@ end
     return network_fabric_info
   end
   
+  def get_iscsi_fabric(server_component,server_cert)
+    server_conf = ASM::Util.build_component_configuration(server_component, :decrypt => decrypt?)
+    network_params = (server_conf['asm::esxiscsiconfig'] || {})[server_cert]
+    # get fabric information
+    if network_params
+      network_fabric_info = {}
+      network_info = network_params['network_configuration']
+      fabrics = network_info['fabrics']
+      if fabrics
+        fabrics.each do |fabric|
+          fabric_networks = []
+          fabic_interfaces = fabric['interfaces']
+          if fabic_interfaces
+            networks = []
+            fabic_interfaces.each do |fabic_interface|
+              partitions = fabic_interface['partitions']
+              networks = partitions.collect { |partition| partition['networkObjects'] }.flatten
+              fabric_networks.concat(networks)
+            end
+          end
+          network_fabric_info["#{fabric['name']}"] = fabric_networks
+        end
+      end
+      logger.debug"network_info: #{network_fabric_info}"
+
+      fabric_iscsi_info = get_iscsi_fabric_vlan_info(network_fabric_info)
+      logger.debug("Found Fabric VLAN INFO: #{fabric_iscsi_info}")
+    else
+      fabric_iscsi_info = ['Fabric A']
+      logger.debug("Defaulted to Fabric VLAN INFO: #{fabric_iscsi_info}")
+    end
+
+    unless fabric_iscsi_info.uniq.size == 1
+      raise(Exception, "Expected to find only one iscsi fabric, found #{fabric_iscsi_info.uniq.size}")
+    end
+      
+    fabric_iscsi_info.compact.uniq
+  end
+  
+  def get_iscsi_fabric_vlan_info(network_fabric_info)
+    iscsi_fabric = []
+    fabric_vlan_info = {}
+    ["Fabric A", "Fabric B", "Fabric C"].each do |fabric|
+      fabric_vlan_info["#{fabric}"] = {}
+      if network_fabric_info["#{fabric}"]
+        logger.debug("Processing fabric : #{fabric}")
+        network_fabric_info["#{fabric}"].each do |network_info|
+          if network_info['type'].to_s == "STORAGE_ISCSI_SAN"
+            iscsi_fabric.push(fabric)
+          end
+        end
+      end
+    end
+    iscsi_fabric.uniq.compact
+  end
 end
 

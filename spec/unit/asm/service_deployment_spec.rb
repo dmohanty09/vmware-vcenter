@@ -195,7 +195,8 @@ describe ASM::ServiceDeployment do
             '127.0.1.1',
             ['vol1', 'vol2'],
             false,
-            'iscsi'
+            'iscsi',
+            'Fabric A'
           ).returns({})
           @sd.process_server(component)
           @sd.debug = false
