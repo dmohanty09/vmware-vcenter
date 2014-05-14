@@ -2628,20 +2628,19 @@ end
   
   def get_iscsi_fabric_vlan_info(network_fabric_info)
     iscsi_fabric = []
+    fabric_vlan_info = {}
     ["Fabric A", "Fabric B", "Fabric C"].each do |fabric|
       fabric_vlan_info["#{fabric}"] = {}
       if network_fabric_info["#{fabric}"]
-        vlan_tagged = []
-        vlan_untagged = []
         logger.debug("Processing fabric : #{fabric}")
         network_fabric_info["#{fabric}"].each do |network_info|
-          if network_info['type'].to_s != "STORAGE_ISCSI_SAN"
+          if network_info['type'].to_s == "STORAGE_ISCSI_SAN"
             iscsi_fabric.push(fabric)
           end
         end
       end
     end
-    iscsi_fabric
+    iscsi_fabric.uniq.compact
   end
 end
 
