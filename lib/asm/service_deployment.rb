@@ -2597,7 +2597,7 @@ end
   end
 
   # Get the count of interfaces
-  def get_server_nic_type(server_component)
+  def get_server_nic_type(server_component, server_cert)
     server_conf = ASM::Util.build_component_configuration(server_component, :decrypt => decrypt?)
     network_params = (server_conf['asm::esxiscsiconfig'] || {})[server_cert]
     # get fabric information
