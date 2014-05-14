@@ -132,9 +132,9 @@ module ASM
       end
     end
 
-    def block_until_task_complete(serial_number, policy_name, task_name)
+    def block_until_task_complete(serial_number, policy_name, task_name, terminal_status = nil)
       # The vmware ESXi installer has to reboot twice before being complete
-      terminal_status = if task_name.start_with?('vmware') || task_name.start_with?('windows')
+      terminal_status ||= if task_name.start_with?('vmware') || task_name.start_with?('windows')
                           :boot_local_2
                         else
                           :boot_local
