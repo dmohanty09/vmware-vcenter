@@ -110,12 +110,18 @@ class Get_switch_information
     # Using server vlan info, get fabrics where vlans needs to be configured
     fabrics = []
     configured_interfaces = []
-    ["Fabric A", "Fabric B", "Fabric C"].each do |fabric|
-      if server_vlan_info["#{fabric}"]['tagged_vlan'].length == 0 and server_vlan_info["#{fabric}"]['untagged_vlan'].length == 0
-        logger.debug "Fabric #{fabric} do not have vlans"
-      else
-        logger.debug "Fabric #{fabric} needs to be configured"
-        fabrics.push(fabric)
+    ('A'..'Z').each do |fabric_prefix|
+      fabric = "Fabric #{fabric_prefix}"
+      if server_vlan_info[fabric]
+        tagged_vlan = server_vlan_info["#{fabric}"]['tagged_vlan']
+        untagged_vlan = server_vlan_info["#{fabric}"]['untagged_vlan']
+          
+        if (tagged_vlan.nil? or tagged_vlan.length == 0) and ( untagged_vlan.nil? or untagged_vlan.length == 0)
+          logger.debug "Fabric #{fabric} do not have vlans"
+        else
+          logger.debug "Fabric #{fabric} needs to be configured"
+          fabrics.push(fabric)
+        end
       end
     end
     
@@ -123,69 +129,113 @@ class Get_switch_information
     interfaces = macArray.keys.sort
     slots = []
     slot_interface = {}
+    integrated_slot = []
+    additional_slot = []
+    integrated_slot_interface = {}
+    additional_slot_interface = {}
+      
     interfaces.each do |interface|
       logger.debug("interface: #{interface}")
-      #if !interface.match(/NIC.Integrated/).nil?
-      #  next
-      #end
       interface_info = interface.match(/NIC.(Slot|Integrated).(\d+)-(\d+)-(\d+)/)
-      slots.push(interface_info[2])
-      slot_interface["#{interface_info[2]}"] = interface_info[1]
+      integrated_slot.push("#{interface_info[2]}") if interface_info[1] == "Integrated"
+      additional_slot.push("#{interface_info[2]}") if interface_info[1] == "Slot"
+      
+      #slots.push(interface_info[2])
+      #slot_interface["#{interface_info[2]}"] = interface_info[1]
+      integrated_slot_interface["#{interface_info[2]}"] = interface_info[1] if interface_info[1] == "Integrated"
+      additional_slot_interface["#{interface_info[2]}"] = interface_info[1] if interface_info[1] == "Slot"
     end
-    slots = slots.uniq.sort
-    logger.debug("Slots where MAC address is retrieved :#{slots}")
+    #slots = slots.uniq.sort
+    integrated_slot = integrated_slot.uniq.sort
+    additional_slot = additional_slot.uniq.sort
+    
+    # Integrated NICS first and then then additional slot
+    logger.debug("Integrated slots where MAC address is retrieved :#{integrated_slot}")
+    logger.debug("Additional slots where MAC address is retrieved :#{additional_slot}")
+    
+    slots = integrated_slot.concat(additional_slot).first(fabrics.length)
     
     fabrics.each_with_index do |fabric,index|
       slot_name = slots[index]
       nic_count = server_nic_type["#{fabric}"]
+      suffix = "Slot"
       (1..nic_count).each do |count|
-        int_name = "NIC.#{slot_interface["#{slot_name}"]}.#{slot_name}-#{count}-1"
+        if !integrated_slot_interface["#{slot_name}"].nil?
+          suffix = "Integrated"
+          integrated_slot_interface.delete("#{slot_name}")
+        end
+        int_name = "NIC.#{suffix}.#{slot_name}-#{count}-1"
         configured_interfaces.push(int_name)
       end
     end
+    logger.debug "Configured Interfaces: #{configured_interfaces}"
     configured_interfaces
   end
   
-def get_fabic_configured_interfaces(server_nic_type,server_vlan_info,macArray,logger)
-  # Using server vlan info, get fabrics where vlans needs to be configured
-  fabrics = []
-  configured_interfaces = []
-  ('A'..'Z').each do |fabric_sufix|
-    fabric = "Fabric #{fabric_sufix}"
-    logger.debug("Checking fabric :#{fabric}")
-    if !server_vlan_info["#{fabric}"].nil?
-        if server_vlan_info["#{fabric}"]['tagged_vlan'].length == 0 and server_vlan_info["#{fabric}"]['untagged_vlan'].length == 0
+  def get_fabic_configured_interfaces(server_nic_type,server_vlan_info,macArray,logger)
+    # Using server vlan info, get fabrics where vlans needs to be configured
+    fabrics = []
+    configured_interfaces = []
+    ('A'..'Z').each do |fabric_sufix|
+      fabric = "Fabric #{fabric_sufix}"
+      if server_vlan_info[fabric]
+        tagged_vlan = server_vlan_info["#{fabric}"]['tagged_vlan']
+        untagged_vlan = server_vlan_info["#{fabric}"]['untagged_vlan']
+
+        if (tagged_vlan.nil? or tagged_vlan.length == 0) and ( untagged_vlan.nil? or untagged_vlan.length == 0)
           logger.debug "Fabric #{fabric} do not have vlans"
         else
           logger.debug "Fabric #{fabric} needs to be configured"
           fabrics.push(fabric)
         end
       end
+    end
+
+    logger.debug "Fabrics that needs to be configured: #{fabrics}"
+    interfaces = macArray.keys.sort
+    slots = []
+    intergrated_slots = []
+    additional_slots = []
+    integrated_slot_interface = {}
+    additional_slot_interface = {}
+    integrated_slot_interfaces = {}
+    additional_slot_interfaces = {}
+      
+    interfaces.each do |interface|
+      interface_info = interface.match(/NIC.(Slot|Integrated).(\d+)-(\d+)-(\d+)/)
+      intergrated_slots.push(interface_info[2]) if interface_info[1] == "Integrated"
+      additional_slots.push(interface_info[2]) if interface_info[1] == "Slot"
+      
+      integrated_slot_interface["#{interface_info[2]}"] = interface_info[1] if interface_info[1] == "Integrated"
+      additional_slot_interface["#{interface_info[2]}"] = interface_info[1] if interface_info[1] == "Slot"  
+        
+      integrated_slot_interfaces["#{interface_info[2]}"] ||= []
+      additional_slot_interfaces["#{interface_info[2]}"] ||= []
+        
+      integrated_slot_interfaces["#{interface_info[2]}"].push(macArray[interface]) if interface_info[1] == "Integrated"
+      additional_slot_interfaces["#{interface_info[2]}"].push(macArray[interface]) if interface_info[1] == "Slot"
+    end
+    
+    intergrated_slots = intergrated_slots.uniq.sort
+    additional_slots = additional_slots.uniq.sort
+    slots = intergrated_slots.concat(additional_slots).first(fabrics.length)
+
+    logger.debug("Integrated slot interfaces :#{integrated_slot_interfaces}")
+    logger.debug("Additional slot interfaces :#{additional_slot_interfaces}")
+
+    interface_info = {}
+    fabrics.each_with_index do |fabric,index|
+      slot_name = slots[index]
+      if integrated_slot_interfaces[slot_name]
+        interface_info[fabric] = integrated_slot_interfaces[slot_name]
+        integrated_slot_interfaces.delete(slot_name)
+      else
+        interface_info[fabric] = additional_slot_interfaces[slot_name]
+      end
+    end
+    logger.debug("Interface info : #{interface_info}")
+    interface_info
   end
-  
-  logger.debug "Fabrics that needs to be configured: #{fabrics}"
-  interfaces = macArray.keys.sort
-  slots = []
-  slot_interface = {}
-  slot_interfaces = {}
-  interfaces.each do |interface|
-    interface_info = interface.match(/NIC.(Slot|Integrated).(\d+)-(\d+)-(\d+)/)
-    slots.push(interface_info[2])
-    slot_interface["#{interface_info[2]}"] = interface_info[1]
-    slot_interfaces["#{interface_info[2]}"] ||= []
-    slot_interfaces["#{interface_info[2]}"].push(macArray[interface])
-  end
-  slots = slots.uniq.sort
-  logger.debug("Slot interfaces :#{slot_interfaces}")
-  
-  interface_info = {}
-  fabrics.each_with_index do |fabric,index|
-    slot_name = slots[index]
-    interface_info[fabric] = slot_interfaces[slot_name]
-  end
-  logger.debug("Interface info : #{interface_info}")
-  interface_info
-end
   
 
 end

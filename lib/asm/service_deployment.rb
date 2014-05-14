@@ -105,7 +105,6 @@ class ASM::ServiceDeployment
       # Changing the ordering of SAN and LAN configuration
       # To ensure that the server boots with razor image
       process_tor_switches()
-      return true
       process_san_switches()
       process_components()
     rescue Exception => e
@@ -640,7 +639,7 @@ class ASM::ServiceDeployment
       untagged_vlans = server_vlan_info["#{fabric}"]['untagged_vlan']
       logger.debug "In configure_tor tagged vlan list found #{tagged_vlans}"
       logger.debug "In configure_tor untagged vlan list found #{untagged_vlans}"
-      if (tagged_vlans.length == 0 and untagged_vlans.length == 0)
+      if ((tagged_vlans.nil? or tagged_vlans.length == 0) and ( untagged_vlans.nil? or untagged_vlans.length == 0))
         logger.debug("No tagged / untagged VLANS for fabric #{fabric}")
         next
       end
