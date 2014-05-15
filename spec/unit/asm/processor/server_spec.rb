@@ -38,7 +38,7 @@ describe ASM::Processor::Server do
 
       server_data['razor_image'].should    == 'hyperV2'
       idrac_data['enable_npar'].should == false
-      idrac_data['sysprofile'].should  == 'PerfOptimized'
+      idrac_data['system_profile'].should  == 'PerfOptimized'
       
       class_data   = server_data['puppet_classification_data']['hyperv::config']
       install_data = server_data['installer_options']
