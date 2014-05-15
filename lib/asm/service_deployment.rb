@@ -737,8 +737,10 @@ class ASM::ServiceDeployment
     # Need to process for the ToR Switches for each Fabric
     ["Fabric A", "Fabric B", "Fabric C"].each do |fabric|
       logger.debug "Configuring IOM for fabric : #{fabric}"
-      tagged_vlans = server_vlan_info["#{fabric}"]['tagged_vlan']
-      untagged_vlans = server_vlan_info["#{fabric}"]['untagged_vlan']
+      tagged_vlans = []
+      untagged_vlans = []  
+      tagged_vlans = server_vlan_info["#{fabric}"]['tagged_vlan'] if !server_vlan_info["#{fabric}"].empty?
+      untagged_vlans = server_vlan_info["#{fabric}"]['untagged_vlan'] if !server_vlan_info["#{fabric}"].empty?
       logger.debug "In configure_tor tagged vlan list found #{tagged_vlans}"
       logger.debug "In configure_tor untagged vlan list found #{untagged_vlans}"
       if (!server_vlan_info["#{fabric}"].empty? and tagged_vlans.length == 0 and untagged_vlans.length == 0)
@@ -2659,20 +2661,25 @@ end
   end
   
   def get_iscsi_fabric_vlan_info(network_fabric_info)
+    logger.debug "Inside get_iscsi_fabric_vlan_info"
     iscsi_fabric = []
     fabric_vlan_info = {}
     ["Fabric A", "Fabric B", "Fabric C"].each do |fabric|
+      logger.debug "Process fabric: #{fabric}"
       fabric_vlan_info["#{fabric}"] = {}
       if network_fabric_info["#{fabric}"]
-        logger.debug("Processing fabric : #{fabric}")
         network_fabric_info["#{fabric}"].each do |network_info|
-          if network_info['type'].to_s == "STORAGE_ISCSI_SAN"
-            iscsi_fabric.push(fabric)
+          logger.debug "network info: #{network_info}"
+          if network_info
+            if network_info['type'].to_s == "STORAGE_ISCSI_SAN"
+              iscsi_fabric.push(fabric)
+            end
           end
         end
       end
     end
     iscsi_fabric.uniq.compact
   end
+
 end
 
