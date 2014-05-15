@@ -1568,6 +1568,7 @@ class ASM::ServiceDeployment
               'username' => ESXI_ADMIN_USER,
               'password' => server_params['admin_password'],
               'decrypt'  => decrypt?,
+              'timeout'  => 90,
               'require' => "Asm::Cluster[#{title}]"
             }
 
