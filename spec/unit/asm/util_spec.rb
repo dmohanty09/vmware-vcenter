@@ -188,4 +188,12 @@ vMotion                 vSwitch1                     1       23
     ASM::Util.get_puppet_certs.should == ["dell_ftos-172.17.15.234", "dell_ftos-172.17.15.237", "dellasm", "equallogic-172.17.15.10"]
   end
 
+  describe 'when requesting related server ips' do
+    it 'should return ips of related servers' do
+      ASM.init
+      deployment = JSON.parse(File.read('/opt/Dell/ASM/deployments/ff8080814618eabd01461a41f1f60006/deployment.json'))
+      ASM.retry_deployment(deployment['id'],deployment)
+    end
+  end
+
 end

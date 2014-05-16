@@ -486,6 +486,70 @@ class ASM::ServiceDeployment
     end
   end
 
+  # Get the iSCSI IP Address reserved for each of the server
+  # and return the list of IP Addresses
+  def get_dell_server_iscsi_ipaddresses()
+    iscsi_ip_addresses = []
+    if components = @components_by_type['SERVER']
+      components.collect do |comp|
+        cert_name = comp['puppetCertName']
+        # service_tag is only set for Dell servers
+        next unless ASM::Util.dell_cert?(cert_name)
+        logger.debug "Getting iSCSI IP Address for #{cert_name}"
+        server_conf = ASM::Util.build_component_configuration(comp, :decrypt => decrypt?)
+        (server_conf['asm::server'] || []).each do |server_cert, server_params|
+          net_params = (server_conf['asm::esxiscsiconfig'] || {})[server_cert]
+          (net_params || {}).each do |name, net_array|
+            if name == 'storage_network'
+              unless net_array.size == 2
+                raise("Expected 2 iscsi interfaces for hyperv, only found #{net_array.size}")
+              end
+              first_net = net_array.first
+              iscsi_ip_addresses.push(first_net['staticNetworkConfiguration']['ipAddress'])
+              iscsi_ip_addresses.push(net_array.last['staticNetworkConfiguration']['ipAddress'])
+            end
+          end
+        end
+      end
+    end
+    iscsi_ip_addresses.compact.flatten.uniq
+  end
+
+  def get_iscsi_ips(network_configuration)
+    nc = ASM::NetworkConfiguration.new(network_configuration)
+    iscsi_networks = nc.get_networks('STORAGE_ISCSI_SAN')
+    iscsi_networks.map{|i|(i['staticNetworkConfiguration']||{})['ipAddress']}
+  end
+  
+  def get_dell_server_nfs_ipaddresses()
+    nfs_ip_addresses = []
+    if components = @components_by_type['SERVER']
+      components.collect do |comp|
+        cert_name   = comp['puppetCertName']
+        next unless ASM::Util.dell_cert?(cert_name)
+        logger.debug "Getting Management and Storage IP Address for server #{cert_name}"
+        server_conf = ASM::Util.build_component_configuration(comp, :decrypt => decrypt?)
+        (server_conf['asm::server'] || []).each do |server_cert, server_params|
+          net_params = (server_conf['asm::esxiscsiconfig'] || {})[server_cert]
+          (net_params || {}).each do |name, net_array|
+            logger.debug "Network name: #{name}"
+            logger.debug "Network array : #{net_array.inspect}"
+            if name == 'hypervisor_network' or name == 'converged_network' or name == 'nfs_network'
+              first_net = net_array.first
+              nfs_ip_addresses.push(first_net['staticNetworkConfiguration']['ipAddress'])
+            end
+          end
+        end
+      end
+    end
+    logger.debug "NFS IP Address in host processing: #{nfs_ip_addresses}"
+    if nfs_ip_addresses.empty?
+      nfs_ip_addresses = ['all_hosts']
+      logger.debug "NFS IP Address list is empty: #{nfs_ip_addresses}"
+    end
+    nfs_ip_addresses.compact.flatten.uniq
+  end
+  
   def get_specific_dell_server_wwpns(comp)
     wwpninfo=nil
     cert_name   = comp['puppetCertName']
@@ -573,14 +637,29 @@ class ASM::ServiceDeployment
         logger.debug "server_template_iqnorip : #{server_template_iqnorip}"
         if !server_template_iqnorip.nil?
           logger.debug "Value of IP or IQN provided"
-          new_iscsi_iporiqn = server_template_iqnorip.split(',') + iscsi_ipaddresses
+          new_iscsi_iporiqn = server_template_iqnorip.split(',') + iscsi_ipaddresses + iscsi_ips
         else
           logger.debug "Value of IP or IQN not provided in service template"
-          new_iscsi_iporiqn = iscsi_ipaddresses
+          new_iscsi_iporiqn = iscsi_ipaddresses + iscsi_ips
         end
         new_iscsi_iporiqn = new_iscsi_iporiqn.compact.map {|s| s.gsub(/ /, '')}
         resource_hash['equallogic::create_vol_chap_user_access'][title]['iqnorip'] = new_iscsi_iporiqn
       end
+      ####################################################################################### BFS
+      logger.debug "finding related servers configured with iSCSI networking"
+      servers = ASM::Util.asm_json_array(find_related_components('SERVER', component))
+      iscsi_ips = []
+      servers.each do |server|
+        net_conf = server['resources'].detect{|s|s['id'] == 'asm::esxiscsiconfig'}['parameters'].detect{|p|p['id'] == 'network_configuration'}
+        iscsi_boot_ips = get_iscsi_ips(net_conf['networkConfiguration'])
+        iscsi_boot_ips.each{|ip| iscsi_ips.push(ip)}
+      end
+      if !iscsi_ips.empty?
+        resource_hash['equallogic_volume_access_iqn'] = { 
+          title => {'iqnorip'=>iscsi_ips.join(','), 'ensure' => 'present', 'require' => "Equallogic_volume[#{title}]" }
+        }
+      end
+      ######################################################################################
     end
 
     (resource_hash['netapp::create_nfs_export'] || {}).each do |title, params|
@@ -1093,8 +1172,15 @@ class ASM::ServiceDeployment
       logger.debug "ASM-1588: Stripping it out."
       resource_hash.delete('asm::idrac')
     end
+
+    #Flag an iSCSI boot from san deployment
+    if is_dell_server and resource_hash['asm::idrac'][resource_hash['asm::idrac'].keys[0]]['target_boot_device'] == 'iSCSI'
+      @bfs = true
+    else
+      @bfs = false
+    end
     
-    if resource_hash['asm::server']
+    if resource_hash['asm::server'] and !@bfs
       if resource_hash['asm::server'].size != 1
         msg = "Only one O/S configuration allowed per server; found #{resource_hash['asm::server'].size} for #{serial_number}"
         logger.error(msg)
@@ -1127,7 +1213,7 @@ class ASM::ServiceDeployment
     # from the vmware ks.cfg
     static_ip = nil
     network_config = nil
-    if resource_hash['asm::esxiscsiconfig']
+    if resource_hash['asm::esxiscsiconfig'] and !@bfs
       if resource_hash['asm::esxiscsiconfig'].size != 1
         msg = "Only one ESXi networking configuration allowed per server; found #{resource_hash['asm::esxiscsiconfig'].size} for #{serial_number}"
         logger.error(msg)
@@ -1194,6 +1280,32 @@ class ASM::ServiceDeployment
         params['network_configuration'] = network_config.to_hash
       end
       params['before'] = []
+
+      #Process a BFS Server Component
+      if params['target_boot_device'] == 'iSCSI'
+                  	
+        logger.debug "Processing iSCSI Boot From San configuration"
+      
+        #Flag Server Component as BFS
+        @bfs = true          	                              				
+        
+        #Get Network Configuration
+        params['network_configuration'] = resource_hash['asm::esxiscsiconfig'][title]['network_configuration']           	                              				                      
+        #Find first related storage component
+        storage_component = find_related_components('STORAGE',component)[0]
+        #Identify Boot Volume
+        boot_volume = storage_component['resources'].detect{|r|r['id']=='equallogic::create_vol_chap_user_access'}['parameters'].detect{|p|p['id']=='title'}['value']
+        #Reinventory/Get Storage Facts
+        ASM::Util.run_command_simple("sudo puppet device --deviceconfig #{ASM::Util::DEVICE_CONF_DIR}/#{storage_component['asmGUID']}.conf")
+        storage_facts = ASM::Util.facts_find(storage_component['asmGUID'])
+        #Get target iscsi / storage
+        params['target_iscsi'] = JSON.parse(JSON.parse(storage_facts['VolumesProperties'])[boot_volume])['TargetIscsiName']
+        params['target_ip'] = JSON.parse(storage_facts['General Settings'])['IP Address']
+
+        params['network_configuration'] = resource_hash['asm::esxiscsiconfig'][title]['network_configuration'].to_json
+        resource_hash.delete("asm::server")
+      end
+
       if resource_hash['asm::server']
         params['before'].push("Asm::Server[#{cert_name}]")
       end
@@ -1265,7 +1377,7 @@ class ASM::ServiceDeployment
     # O/S. Don't bother doing this if we are @debug since we do not
     # actually execute any puppet commands in that case any way.
     skip_deployment = nil
-    unless @debug
+    unless @debug || @bfs
       begin
         node = (razor.find_node(serial_number) || {})
         if node['policy'] && node['policy']['name']
@@ -1290,7 +1402,7 @@ class ASM::ServiceDeployment
       log("Skipping deployment of #{cert_name}; already complete.")
     else
       process_generic(component['puppetCertName'], resource_hash, 'apply', 'true')
-      unless @debug
+      unless @debug || @bfs
         (resource_hash['asm::server'] || []).each do |title, params|
           type = params['os_image_type']
           version = params['os_image_version'] || params['os_image_type']
