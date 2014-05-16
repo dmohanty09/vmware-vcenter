@@ -567,7 +567,11 @@ module ASM
     end
 
     def self.to_boolean(b)
-      b == 'true' || b == 'TRUE' || b == true
+      if(b.is_a?(String))
+        b.downcase == "true"
+      else
+        b
+      end
     end
 
     def self.append_resource_configuration!(resource, resources={}, options = {})
@@ -589,7 +593,12 @@ module ASM
         value_keys = ['networkConfiguration', 'networks', 'value']
         resource['parameters'].each do |param|
           key = value_keys.reject { |key| param[key].nil? }.first
-          param_hash[param['id'].downcase] = param[key]
+          if !param['value'].nil? and param['type'] == 'BOOLEAN'
+            val_to_write = to_boolean(param[key])
+          else
+            val_to_write = param[key]
+          end
+          param_hash[param['id'].downcase] = val_to_write
           if param['value'] and param['type'] == 'PASSWORD'
             param_hash['decrypt'] = options[:decrypt]
           end

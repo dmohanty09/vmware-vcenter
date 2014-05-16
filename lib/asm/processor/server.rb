@@ -20,7 +20,7 @@ module ASM
             raise(Exception, 'HyperV does not work with target boot device SD')
           end
           idrac_params['enable_npar'] = false
-          idrac_params['sysprofile']  = 'PerfOptimized'
+          idrac_params['system_profile']  = 'PerfOptimized'
         end
 
         # now munge some params!
