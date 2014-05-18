@@ -1,4 +1,5 @@
 require 'pathname'
+require 'asm/util'
 require 'rexml/document'
 
 module ASM
@@ -39,7 +40,9 @@ module ASM
       result = ASM::Util.run_command_with_args(cmd, *args)
       options[:logger].debug("Result = #{result}") if options[:logger]
 
-      unless result['exit_status'] == 0
+      # The wsman cli does not set exit_status properly on failure, so we
+      # have to check stderr as well...
+      unless result.exit_status == 0 && result.stderr.empty?
         if result['stdout'] =~ /Authentication failed/
           msg = "Authentication failed, please retry with correct credentials after resetting the iDrac at #{endpoint[:host]}."
         elsif result['stdout'] =~ /Connection failed./
@@ -108,10 +111,6 @@ module ASM
     end
 
     def self.get_wwpns(endpoint, logger = nil)
-      # TODO do we need to specify this external link?
-      # it makes it seem this has an external dependency
-      # on network connectivity which we know is not
-      # true
       wsmanCmdResponse = invoke(endpoint, 'enumerate',
       'http://schemas.dmtf.org/wbem/wscim/1/cim-schema/2/root/DCIM/DCIM_FCView',
       :logger => logger)
@@ -124,7 +123,7 @@ module ASM
 
     # Return all the server MAC Address along with the interface location
     # in a hash format
-    def self.get_mac_addresses(endpoint, servermodel, logger = nil)
+    def self.get_mac_addresses(endpoint, logger = nil)
       mac_info = {}
         resp = invoke(endpoint, 'enumerate',
         'http://schemas.dmtf.org/wbem/wscim/1/cim-schema/2/root/dcim/DCIM_NICView',
@@ -145,48 +144,6 @@ module ASM
 
       logger.debug("********* MAC Address List is #{mac_info.inspect} **************") if logger
       mac_info
-    end
-
-    def self.get_mac_addresses1(endpoint, servermodel, logger = nil)
-      servermodel = servermodel.downcase
-      if servermodel == 'r720'
-        nicNames = [ 'NIC.Slot.2-1-1', 'NIC.Slot.2-2-1' ]
-      elsif [ 'm620', 'm420', 'm820', 'r620' ].include?(servermodel)
-        nicNames = [ 'NIC.Integrated.1-1-1', 'NIC.Integrated.1-2-1' ]
-      else
-        logger.debug("Unsupported server model #{servermodel}") if logger
-        nicNames = nil
-      end
-
-      ret = []
-      if nicNames
-        resp = invoke(endpoint, 'enumerate',
-        'http://schemas.dmtf.org/wbem/wscim/1/cim-schema/2/root/dcim/DCIM_NICView',
-        :logger => logger)
-
-        mac_address = nil
-        resp.split("\n").each do |line|
-          # Expect to find alternating lines of CurrentMacAddress and FQDD
-          # where FQDD is the nic name. Only include macs from known nicNames.
-          if line =~ /<n1:CurrentMACAddress>(\S+)\<\/n1:CurrentMACAddress>/
-            mac_address = $1
-          elsif line =~ /<n1:FQDD>(\S+)<\/n1:FQDD>/
-            nicName = $1
-            if (nicNames.include?(nicName))
-              if mac_address
-                logger.debug "MAC to be pushed #{mac_address}" if logger
-                ret.push(mac_address)
-              else
-                logger.debug("No mac address set when nic #{nicName} seen") if logger
-              end
-            end
-            mac_address = nil
-          end
-        end
-      end
-
-      logger.debug("********* MAC Address List is #{ret} **************") if logger
-      ret
     end
 
   end

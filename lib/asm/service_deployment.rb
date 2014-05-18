@@ -980,7 +980,7 @@ class ASM::ServiceDeployment
     serverpropertyhash['idrac_username'] =  dracusername
     serverpropertyhash['idrac_password'] = dracpassword
 
-    serverpropertyhash['mac_addresses'] = ASM::WsMan.get_mac_addresses(device_conf, model, logger)
+    serverpropertyhash['mac_addresses'] = ASM::WsMan.get_mac_addresses(device_conf, logger)
     logger.debug "******* In getServerInventory server property hash is #{ASM::Util.sanitize(serverpropertyhash)} ***********\n"
     serverhash["#{servicetag}"] = serverpropertyhash
     logger.debug "********* In getServerInventory server Hash is #{ASM::Util.sanitize(serverhash)}**************\n"
