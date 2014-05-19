@@ -27,14 +27,14 @@ describe ASM::DeploymentTeardown do
 
   it 'should be able to clean certs' do
 
-    ASM::Util.expects(:run_command_simple)\
+    ASM::Util.expects(:run_command_success)\
       .with('sudo puppet cert clean agent-winbaremetal agent-gs1vmwin1 agent-gs1vmwin2 agent-gs1vmlin1 agent-gs1vmlin2')\
         .returns({'exit_status' => 0})
     ASM::DeploymentTeardown.clean_deployment_certs(@names)
   end
 
   it 'should raise an exception when cert clean fails' do
-    ASM::Util.expects(:run_command_simple)\
+    ASM::Util.expects(:run_command_success)\
       .with('sudo puppet cert clean agent-winbaremetal agent-gs1vmwin1 agent-gs1vmwin2 agent-gs1vmlin1 agent-gs1vmlin2')\
         .returns({'exit_status' => 1, 'stderr' => 'err', 'stdout' => 'out'})
     expect do
@@ -44,7 +44,7 @@ describe ASM::DeploymentTeardown do
 
 
   it 'should be able to deactivate nodes' do 
-    ASM::Util.expects(:run_command_simple)\
+    ASM::Util.expects(:run_command_success)\
       .with('sudo puppet node deactivate agent-winbaremetal agent-gs1vmwin1 agent-gs1vmwin2 agent-gs1vmlin1 agent-gs1vmlin2')\
         .returns({'exit_status' => 0})
     ASM::DeploymentTeardown.clean_puppetdb_nodes(@names)
