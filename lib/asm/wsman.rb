@@ -1,6 +1,7 @@
 require 'pathname'
 require 'asm/util'
 require 'rexml/document'
+require 'hashie'
 
 module ASM
   module WsMan
