@@ -346,7 +346,8 @@ module ASM
       host = uri.host
       user = URI.decode(uri.user)
       enc_password = URI.decode(uri.password)
-      { :host => host,
+      { :cert_name => cert_name,
+        :host => host,
         :user => user,
         :enc_password => enc_password,
         :password => get_plain_password(enc_password),
