@@ -1774,7 +1774,7 @@ class ASM::ServiceDeployment
 
                     logger.debug("Volume's LUN ID: #{lun_id}")
 
-                    
+                    resource_hash['asm::fcdatastore'] ||= {}
                     resource_hash['asm::fcdatastore']["#{hostip}:#{volume}"] = {
                       'data_center' => params['datacenter'],
                       'datastore' => volume,
@@ -2403,9 +2403,20 @@ class ASM::ServiceDeployment
       :password => password,
     }
 
-    cmd = 'storage core path list'.split
-    storage_path = ASM::Util.esxcli(cmd, endpoint, logger, true)
-    storage_info = storage_path.scan(/Device:\s+naa.#{compellent_deviceid}.*?LUN:\s+(\d+)/m)
+    storage_info = []
+    (1..5).each do |counter|
+      cmd = 'storage core path list'.split
+      storage_path = ASM::Util.esxcli(cmd, endpoint, logger, true)
+      storage_info = storage_path.scan(/Device:\s+naa.#{compellent_deviceid}.*?LUN:\s+(\d+)/m)
+      if storage_info.empty?
+        logger.debug("Attempt:#{counter}: Failed to get storage information")
+        sleep(60)
+      else
+        logger.debug("Got the response in attempt: #{counter}")
+        break
+      end
+    end
+
     if storage_info.empty?
       msg = "Compellent lunid not found for hostip = #{hostip}, deviceid = #{compellent_deviceid}"
       logger.error(msg)
@@ -2413,6 +2424,7 @@ class ASM::ServiceDeployment
     end
     storage_info[0][0]
   end
+
 
   def configure_hyperv_cluster(component, cluster_resource_hash,title)
 
