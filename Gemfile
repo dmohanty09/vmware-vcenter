@@ -18,6 +18,9 @@ gem 'hashie'
 gem 'rest-client'
 gem 'sequel'
 gem 'sinatra'
+gem 'trollop'
+gem 'nokogiri', '1.5.10'
+gem 'rbvmomi', '1.6.0'
 
 group :development, :test do
   gem 'rake'

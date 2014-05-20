@@ -1985,9 +1985,7 @@ class ASM::ServiceDeployment
     resource_hash = vm.to_puppet
 
     log("Creating VM #{hostname}")
-    # Puppet cert names must be lower-case
-    vm_certname = "vm-#{hostname.downcase}"
-    process_generic(vm_certname, resource_hash, 'apply')
+    process_generic(vm.certname, resource_hash, 'apply')
 
     if server
       uuid = nil
@@ -2011,7 +2009,7 @@ class ASM::ServiceDeployment
       classes_config = get_classification_data(component, hostname)
       massage_asm_server_params(serial_number, server, classes_config)
       resource_hash['asm::server'] = { hostname => server.to_hash }
-      process_generic(vm_certname, resource_hash, 'apply')
+      process_generic(vm.certname, resource_hash, 'apply')
 
       unless @debug
         # Unlike in bare-metal installs we only wait for the :boot_install
@@ -2025,7 +2023,7 @@ class ASM::ServiceDeployment
                                         server['os_image_type'], :boot_install)
 
         # Wait for first agent run to complete
-        await_agent_run_completion(ASM::Util.hostname_to_certname(hostname))
+        await_agent_run_completion(vm.certname)
       end
     end
   end

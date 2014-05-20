@@ -31,6 +31,11 @@ module ASM
           !any?
         end
 
+        # This is purely for testing:
+        def conf(certname)
+          @conf ||= ASM::Util.parse_device_config(certname)
+        end
+
         def to_puppet
           raise NotImplementedError, 'VM_Mash is a not a puppet resource'
         end
@@ -52,6 +57,7 @@ module ASM
             self.scsi_controller_type = 'VMware Paravirtual'
           end
 
+          conf(cluster['puppetCertName'])
           self.cluster = cluster.cluster
           self.datacenter = cluster.datacenter
           self.vcenter_id = certname
@@ -78,6 +84,60 @@ module ASM
           hostname = self.delete 'hostname'
           { 'asm::vm::vcenter' => { hostname => self.to_hash }}
         end
+
+        def certname
+          if self.source
+            "vm#{macaddress.downcase}"
+          elsif self.hostname
+            ASM::Util.hostname_to_certname(self.hostname)
+          else
+            raise Exception, "Unable to determine certname without source or hostname"
+          end
+        end
+
+        def macaddress
+          vm.guest.net.first.macAddress
+        end
+
+        def vm
+          @vm ||= findvm(datacenter.vmFolder, self.hostname) 
+        end
+
+        def findvm(folder, name)
+          folder.children.each do |subfolder|
+            break if @vm_obj
+            case subfolder 
+            when RbVmomi::VIM::Folder
+              findvm(subfolder,name)
+            when RbVmomi::VIM::VirtualMachine
+              @vm_obj = subfolder if subfolder.name == name
+            when RbVmomi::VIM::VirtualApp
+              @vm_obj = subfolder.vm.find{|vm| vm.name == name }
+            else
+              raise(Exception, "Unknown child type: #{subfolder.class}")
+            end
+          end
+          @vm_obj
+        end
+
+        def dc
+          @dc||= vim.serviceInstance.find_datacenter(self.datacenter)
+        end
+
+        def vim
+          @vim ||= begin
+            require 'rbvmomi'
+            raise(Exception, "Resource has not been processed.") unless @conf
+
+            options = {
+              :host => @conf.host,
+              :user => @conf.user,
+              :password => @conf.password,
+              :insecure => true,
+            }
+            RbVmomi::VIM.connect(options)
+          end
+        end
       end
 
       class Scvmm < VM_Mash
@@ -86,6 +146,7 @@ module ASM
           raise(ArgumentError, 'VM hostname not specified, missing server os_host_name value') unless hostname
           self.hostname = hostname
 
+          conf(cluster['puppetCertName'])
           self.scvmm_server = certname
           self.vm_cluster = cluster.name
           self.ensure = 'present'
@@ -113,6 +174,25 @@ module ASM
           hostname = self.delete 'hostname'
           { 'asm::vm::scvmm' => { hostname => self.to_hash }}
         end
+
+        def certname
+          if self.template
+            "vm#{macaddress.downcase}"
+          elsif self.hostname
+            ASM::Util.hostname_to_certname(self.hostname)
+          else
+            raise Exception, "Unable to determine certname without source or hostname"
+          end
+        end
+
+        def macaddress
+          raise(Exception, "Resource has not been processed.") unless @conf
+          result = ASM::Util.run_command_success("./scvmm_macaddress.rb -u '#{@conf.user}' -p '#{@conf.password}' -s '#{@conf.host}' -v '#{self.hostname}'")
+          result = result.stdout.each_line.collect{|line| line.chomp.rstrip.gsub(':', '')}
+          macaddress = result.find{|x| x =~ /^[0-9a-fA-F]{12}$/}
+          raise(Exception, 'Virtual machine needs to power on first.') if macaddress == '00000000000000'
+          macaddress
+        end
       end
 
     end
@@ -131,6 +211,9 @@ module ASM
       def self.cleanup(server)
         if server.include? 'os_type'
           server['os_image_type'] = server.delete('os_type')
+          if server['os_image_type'] == 'Windows'
+            server['os_image_type'] == server.delete('os_image_version')
+          end
           # TODO: migrate logger
           #@logger.warn('Server configuration contains deprecated param name os_type')
         end

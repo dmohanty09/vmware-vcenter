@@ -4,8 +4,8 @@ require 'asm/util'
 module ASM
   module DeploymentTeardown
 
-    def self.clean_deployment (id, logger=nil)
-      data = JSON.parse(File.read(deployment_json_file(id)))
+    def self.clean_deployment(id, logger=nil)
+      data = deployment_data(id)
       names = self.get_deployment_certs(data)
       if names !=[]
         ASM.unblock_hostlist(names)
@@ -18,18 +18,12 @@ module ASM
 
     def self.clean_deployment_certs(certs)
       certs_string = certs.join(' ')
-      results = ASM::Util.run_command_simple("sudo puppet cert clean #{certs_string}")
-      unless results['exit_status'] == 0
-        raise(Exception, "Call to puppet cert clean failed: \nstdout:#{results['stdout']}\nstderr:#{results['stderr']}\n")
-      end
+      ASM::Util.run_command_success("sudo puppet cert clean #{certs_string}")
     end
 
     def self.clean_puppetdb_nodes(names)
       names_string = names.join(' ')
-      results = ASM::Util.run_command_simple("sudo puppet node deactivate #{names_string}")
-      unless results['exit_status'] == 0
-        raise(Exception, "Call to puppet deactivate nodes failed: \nstdout:#{results['stdout']}\nstderr:#{results['stderr']}\n")
-      end
+      ASM::Util.run_command_success("sudo puppet node deactivate #{names_string}")
     end
 
     def self.get_deployment_certs(data)
@@ -64,16 +58,16 @@ module ASM
       old_certs = []
       previous_dirs = Dir.entries(File.join(ASM.base_dir, deployment_id)).select{ |dir| dir.match(/^[0-9]+$/) }
       previous_dirs.each do |pd|
-        old_deployment = JSON.parse(File.read(deployment_json_file("#{deployment_id}/#{pd}")))
+        old_deployment = deployment_data("#{deployment_id}/#{pd}")
         old_certs << get_deployment_certs(old_deployment)
       end
       old_certs.flatten.uniq
     end
 
-    def self.deployment_json_file(id)
-      deployment_dir = File.join(ASM.base_dir, id.to_s, 'deployment.json')
+    def self.deployment_data(id)
+      file_name = File.join(ASM.base_dir, id.to_s, 'deployment.json')
+      JSON.parse(File.read(file_name))
     end
-
 
   end
 end
