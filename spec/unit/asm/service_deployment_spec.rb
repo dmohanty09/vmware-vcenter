@@ -191,7 +191,7 @@ describe ASM::ServiceDeployment do
           ASM::Util.expects(:find_equallogic_iscsi_ip).with('k1').returns('127.0.1.1')
           ASM::Processor::Server.expects(:munge_hyperv_server).with(
             'bladeserver-serialno',
-             {'asm::server' => {'bladeserver-serialno' => {'os_image_type' => 'hyperv', 'os_host_name' => 'foo', 'rule_number' => 1, 'broker_type' => 'puppet', 'serial_number' => 'SERIALNO', 'policy_name' => 'policy-foo-8000', 'cert_name' => 'agent-foo'}}},
+             {'asm::server' => {'bladeserver-serialno' => {'os_image_type' => 'hyperv', 'os_image_version' => 'hyperv', 'os_host_name' => 'foo', 'rule_number' => 1, 'broker_type' => 'puppet', 'serial_number' => 'SERIALNO', 'policy_name' => 'policy-foo-8000', 'cert_name' => 'agent-foo'}}},
             '127.0.1.1',
             ['vol1', 'vol2'],
             false,
