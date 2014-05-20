@@ -117,7 +117,7 @@ module ASM
         server_params['puppet_classification_data'] = puppet_classification_data
 
         server_params.delete('domain_admin_password_confirm')
-        server_params['os_image_type']  = 'windows'
+        server_params['os_image_type']  = server_params['os_image_version'] || 'windows'
 
         (resources['asm::server'] || {})[title] = server_params
         (resources['asm::idrac'] || {})[title]  = idrac_params

@@ -148,6 +148,7 @@ module ASM
       # Max time to wait at each stage
       max_times = {nil => 300,
                    :bind => 300,
+                   :reinstall => 300,
                    :reboot => 300,
                    # for esxi / linux most of the install happens in :boot_install
                    :boot_install => 2700,
