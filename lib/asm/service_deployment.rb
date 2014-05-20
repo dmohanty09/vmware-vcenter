@@ -431,6 +431,9 @@ class ASM::ServiceDeployment
       params['broker_type'] = 'puppet'
     end
 
+    # Use real windows version
+    params['os_image_version'] ||= params['os_image_type']
+
     params['serial_number'] = serial_number
     params['policy_name'] = "policy-#{params['os_host_name']}-#{@id}"
 
@@ -1147,6 +1150,7 @@ class ASM::ServiceDeployment
       os_host_name  = params['os_host_name']
       classes_config = get_classification_data(component, os_host_name)
       massage_asm_server_params(serial_number, params, classes_config)
+      os_image_version = params['os_image_version']
     end
 
     # Create a vmware ks.cfg include file containing esxcli command line
@@ -1300,7 +1304,7 @@ class ASM::ServiceDeployment
           razor_params = resource_hash['asm::server'][cert_name]
           if policy &&
               (policy['repo'] || {})['name'] == razor_params['razor_image'] &&
-              (policy['task'] || {})['name'] == razor_params['os_image_type']
+              (policy['task'] || {})['name'] =~ /^(#{razor_params['os_image_version']}|#{razor_params['os_image_type']}){1}$/
             skip_deployment = true
           end
         end
@@ -1320,8 +1324,9 @@ class ASM::ServiceDeployment
       unless @debug
         (resource_hash['asm::server'] || []).each do |title, params|
           type = params['os_image_type']
+          version = params['os_image_version'] || params['os_image_type']
           node = razor.block_until_task_complete(serial_number,
-                                                 params['policy_name'], type)
+                                                 params['policy_name'], version)
           if type == 'vmware_esxi'
             raise(Exception, "Static management IP address was not specified for #{serial_number}") unless static_ip
             block_until_esxi_ready(title, params, static_ip, timeout = 900)
@@ -2019,8 +2024,9 @@ class ASM::ServiceDeployment
         # check in with razor at all once they have an O/S laid down on hard
         # disk and we will not see any :boot_local events
 
+        version = server['os_image_version'] || server['os_image_type']
         razor.block_until_task_complete(serial_number, server['policy_name'],
-                                        server['os_image_type'], :boot_install)
+                                        version, :boot_install)
 
         # Wait for first agent run to complete
         await_agent_run_completion(vm.certname)
