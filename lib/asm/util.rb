@@ -341,6 +341,7 @@ module ASM
     
     def self.parse_device_config(cert_name)
       conf_file = File.join(DEVICE_CONF_DIR, "#{cert_name}.conf")
+      return nil unless File.exists?(conf_file)
       conf_file_data = parse_device_config_file(conf_file)
       uri = URI.parse(conf_file_data[cert_name].url)
       host = uri.host

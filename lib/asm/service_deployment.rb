@@ -626,12 +626,7 @@ class ASM::ServiceDeployment
   end
 
   def configure_tor(server_cert_name,server_vlan_info,server_nic_type)
-    device_conf = nil
-    inv = nil
-    switchhash = {}
-    serverhash = {}
-    deviceConfDir ='/etc/puppetlabs/puppet/devices'
-    serverhash = get_server_inventory(server_cert_name)
+    serverhash = get_server_inventory(server_cert_name) || {}
     logger.debug "******** In process_tor after getServerInventory serverhash is #{ASM::Util.sanitize(serverhash)} **********\n"
     switchinfoobj = Get_switch_information.new()
     switchportdetail = switchinfoobj.get_info(serverhash,@rack_server_switchhash,logger,server_nic_type,server_vlan_info)
@@ -900,9 +895,6 @@ class ASM::ServiceDeployment
     end
   end
 
-
-
-
   def get_interfaces(interfaceList)
     logger.debug "Entering get_interfaces #{interfaceList}"
     interfacelist = ""
@@ -951,7 +943,6 @@ class ASM::ServiceDeployment
     serverpropertyhash = Hash.new
     puts "******** In getServerInventory certname is #{certname} **********\n"
     resourcehash = {}
-    device_conf = nil
     inv = nil
     device_conf ||= ASM::Util.parse_device_config(certname)
     inv  ||= ASM::Util.fetch_server_inventory(certname)
@@ -1012,104 +1003,55 @@ class ASM::ServiceDeployment
     logger.debug "Brocade SAN Switches certificate name list is #{@configured_brocade_san_switches}"
   end
 
-  def populate_rack_switch_hash
-    deviceConfDir ='/etc/puppetlabs/puppet/devices'
+  def process_switch(type)
     switchhash = {}
-    @configured_rack_switches.each do |certname|
-      logger.debug "****************** certname :: #{certname} ********************"
-      conf_file = File.join(deviceConfDir, "#{certname}.conf")
-      if !File.exist?(conf_file)
-        next
-      end
-      device_conf = nil
-      switchpropertyhash = {}
-      switchpropertyhash = Hash.new
-      device_conf ||= ASM::Util.parse_device_config(certname)
-      logger.debug "******* In process_tor device_conf is #{ASM::Util.sanitize(device_conf)}***********\n"
-      torip = device_conf[:host]
-      torusername = device_conf[:user]
-      torpassword = device_conf['password']
-      torurl = device_conf['url']
-      logger.debug "******  #{ASM::Util.sanitize(device_conf)} ******"
-      logger.debug "tor url :: #{torurl}\n"
-      switchpropertyhash['connection_url'] = torurl
-      if certname =~ /dell_ftos/
-        switchpropertyhash['device_type'] = "dell_ftos"
-      else
-        switchpropertyhash['device_type'] = "dell_powerconnect"
-      end
-      logger.debug "********* switch property hash is #{switchpropertyhash} *************\n"
-      switchhash["#{certname}"] = switchpropertyhash
+    switches = instance_variable_get("@configured_#{type}_switches") || []
+    switches.each do |certname|
+      logger.debug "***** certname :: #{certname} *****\n"
+      conf = {}
+      device_conf = ASM::Util.parse_device_config(certname)
+      next unless device_conf
+      logger.debug "*****  #{ASM::Util.sanitize(device_conf)} *****\n"
+      url = device_conf['url']
+      logger.debug "Top of Rack URL:: #{url}\n"
+      conf['connection_url'] = url
+      yield certname, conf
+      logger.debug "********* switch property hash is #{conf} *************\n"
+      switchhash[certname] = conf
       logger.debug "********* switch hash is #{switchhash} *************\n"
     end
     switchhash
   end
 
-  def populate_brocade_san_switch_hash
-    deviceConfDir ='/etc/puppetlabs/puppet/devices'
-    switchhash = {}
-    @configured_brocade_san_switches.each do |certname|
-      logger.debug "****************** certname :: #{certname} ********************"
-      conf_file = File.join(deviceConfDir, "#{certname}.conf")
-      if !File.exist?(conf_file)
-        next
+  def populate_rack_switch_hash
+    process_switch('rack_switches') do |certname, conf|
+      if certname =~ /dell_ftos/
+        conf['device_type'] = "dell_ftos"
+      else
+        conf['device_type'] = "dell_powerconnect"
       end
-      device_conf = nil
-      switchpropertyhash = {}
-      switchpropertyhash = Hash.new
-      device_conf ||= ASM::Util.parse_device_config(certname)
-      logger.debug "******* In process_tor device_conf is  #{ASM::Util.sanitize(device_conf)}***********\n"
-      torip = device_conf[:host]
-      torusername = device_conf[:user]
-      torpassword = device_conf['password']
-      torurl = device_conf['url']
-      logger.debug "******  #{ASM::Util.sanitize(device_conf)} ******"
-      logger.debug "tor url :: #{torurl}\n"
-      switchpropertyhash['connection_url'] = torurl
+    end
+  end
+
+  def populate_brocade_san_switch_hash
+    process_switch('brocade_san') do |certname, conf|
       if certname =~ /brocade_fos/
-        switchpropertyhash['device_type'] = "brocade_fos"
+        conf['device_type'] = "brocade_fos"
       else
         logger.debug "non-supported switch type #{certname}"
         next
       end
-      logger.debug "********* switch property hash is #{switchpropertyhash} *************\n"
-      switchhash["#{certname}"] = switchpropertyhash
-      logger.debug "********* Brocade switch hash is #{switchhash} *************\n"
     end
-    switchhash
   end
 
   def populate_blade_switch_hash
-    deviceConfDir ='/etc/puppetlabs/puppet/devices'
-    switchhash = {}
-    @configured_blade_switches.each do |certname|
-      logger.debug "****************** certname :: #{certname} ********************"
-      conf_file = File.join(deviceConfDir, "#{certname}.conf")
-      if !File.exist?(conf_file)
-        next
-      end
-      device_conf = nil
-      switchpropertyhash = {}
-      switchpropertyhash = Hash.new
-      device_conf ||= ASM::Util.parse_device_config(certname)
-      logger.debug "******* In process_tor device_conf is  #{ASM::Util.sanitize(device_conf)} ***********\n"
-      torip = device_conf[:host]
-      torusername = device_conf[:user]
-      torpassword = device_conf['password']
-      torurl = device_conf['url']
-      logger.debug "******  #{ASM::Util.sanitize(device_conf)} ******"
-      logger.debug "tor url :: #{torurl}\n"
-      switchpropertyhash['connection_url'] = torurl
+    process_switch('blade_switch') do |certname, conf|
       if certname =~ /dell_ftos/
-        switchpropertyhash['device_type'] = "dell_ftos"
+        conf['device_type'] = "dell_ftos"
       else
-        switchpropertyhash['device_type'] = "dell_powerconnect"
+        conf['device_type'] = "dell_powerconnect"
       end
-      logger.debug "********* switch property hash is #{switchpropertyhash} *************\n"
-      switchhash["#{certname}"] = switchpropertyhash
-      logger.debug "********* switch hash is #{switchhash} *************\n"
     end
-    switchhash
   end
 
   def process_server(component)
