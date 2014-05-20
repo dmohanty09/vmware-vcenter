@@ -1,5 +1,6 @@
 require 'asm'
 require 'asm/util'
+require 'asm/network_configuration'
 require 'asm/processor/server'
 require 'asm/razor'
 require 'fileutils'
@@ -980,7 +981,7 @@ class ASM::ServiceDeployment
     serverpropertyhash['idrac_username'] =  dracusername
     serverpropertyhash['idrac_password'] = dracpassword
 
-    serverpropertyhash['mac_addresses'] = ASM::WsMan.get_mac_addresses(device_conf, model, logger)
+    serverpropertyhash['mac_addresses'] = ASM::WsMan.get_mac_addresses(device_conf, logger)
     logger.debug "******* In getServerInventory server property hash is #{ASM::Util.sanitize(serverpropertyhash)} ***********\n"
     serverhash["#{servicetag}"] = serverpropertyhash
     logger.debug "********* In getServerInventory server Hash is #{ASM::Util.sanitize(serverhash)}**************\n"
@@ -1394,7 +1395,7 @@ class ASM::ServiceDeployment
       'portgrouptype' => portgrouptype,
       'overridefailoverorder' => 'disabled',
       'failback' => true,
-      'mtu' => network_type == 'storage_network' ? 9000 : 1500,
+      'mtu' => network_type == :storage ? 9000 : 1500,
       'overridefailoverorder' => 'enabled',
       'nicorderpolicy' => {
       'activenic' => active_nics,
@@ -1407,7 +1408,7 @@ class ASM::ServiceDeployment
       'peakbandwidth' => 1000,
       'burstsize' => 1024,
       'vswitch' => vswitch,
-      'vmotion' => network_type == 'vmotion_network' ? 'enabled' : 'disabled',
+      'vmotion' => network_type == :migration ? 'enabled' : 'disabled',
       'path' => path,
       'host' => hostip,
       'vlanid' => network['vlanId'],
@@ -1415,68 +1416,64 @@ class ASM::ServiceDeployment
     }
   end
 
-  def build_vswitch(server_cert, index, networks, hostip, params, server_params, network_type)
-    vswitch_name = "vSwitch#{index}"
-    vmnic1 = "vmnic#{index * 2}"
-    vmnic2 = "vmnic#{(index * 2) + 1}"
+  VSWITCH_TYPES = [ :management, :migration, :workload, :storage ]
+
+  def vswitch_name(vswitch_type)
+    "vSwitch#{VSWITCH_TYPES.find_index(vswitch_type)}"
+  end
+
+  def build_vswitch(type, vmnics, networks, hostip, params)
+    vswitch_name = vswitch_name(type)
     path = "/#{params['datacenter']}/#{params['cluster']}"
 
-    nics = [ vmnic1, vmnic2 ]
     ret = { 'esx_vswitch' => {}, 'esx_portgroup' => {}, }
     vswitch_title = "#{hostip}:#{vswitch_name}"
     ret['esx_vswitch'][vswitch_title] = {
       'ensure' => 'present',
       'num_ports' => 1024,
-      'nics' => [ vmnic1, vmnic2 ],
+      'nics' => vmnics,
       'nicorderpolicy' => {
-      'activenic' => nics,
+      'activenic' => vmnics,
       'standbynic' => [],
       },
       'path' => path,
-      'mtu' => index == 3 ? 9000 : 1500,
+      'mtu' => type == :storage ? 9000 : 1500,
       'checkbeacon' => false,
       'transport' => 'Transport[vcenter]',
     }
 
-    portgrouptype = 'VMkernel'
     next_require = "Esx_vswitch[#{hostip}:#{vswitch_name}]"
 
-    portgroup_names = nil
-    if network_type == 'storage_network'
-      # iSCSI network
-      # NOTE: We have to make sure the ISCSI1 requires ISCSI0 so that
-      # they are created in the "right" order -- the order that will
-      # give ISCSI0 vmk2 and ISCSI1 vmk3 vmknics. The datastore
-      # configuration relies on that.
-      portgroup_names = [ 'ISCSI0', 'ISCSI1' ]
-      raise(Exception, "Exactly two networks expected for storage network") unless networks.size == 2
-    else
-      if network_type == 'workload_network'
-        portgrouptype = 'VirtualMachine'
-      end
-      portgroup_names = networks.map { |network| network['name'] }
-      if index == 0
+    portgrouptype = type == :workload ? 'VirtualMachine' : 'VMkernel'
+    portgroup_names = case type
+      when :storage
+        # iSCSI network
+        # NOTE: We have to make sure the ISCSI1 requires ISCSI0 so that
+        # they are created in the "right" order -- the order that will
+        # give ISCSI0 vmk2 and ISCSI1 vmk3 vmknics. The datastore
+        # configuration relies on that.
+        raise(Exception, "Exactly two networks expected for storage network") unless networks.size == 2
+        ['ISCSI0', 'ISCSI1']
+      when :management
         # Hypervisor network. Currently the static management ip is
         # set in the esxi kickstart and has a name of "Management
         # Network". We have to match that name in order to be able to
         # change the settings for that portgroup since they are
         # configured by name.
-        portgroup_names[0] = 'Management Network'
-      end
+        raise(Exception, "Exactly one networks expected for management network") unless networks.size == 1
+        ['Management Network']
+      else
+        networks.map { |network| network['name'] }
     end
 
     portgroup_names.each_with_index do |portgroup_name, index|
       network = networks[index]
       portgroup_title = "#{hostip}:#{portgroup_name}"
-      active_nics = network_type == 'storage_network' ? [nics[index]] : nics
+      active_nics = type == :storage ? [vmnics[index]] : vmnics
       portgroup = build_portgroup(vswitch_name, path, hostip, portgroup_name,
-      network, portgrouptype, active_nics, network_type)
+                                  network, portgrouptype, active_nics, type)
 
-      static = network['staticNetworkConfiguration']
-
-      if static && (static != "")
-        # TODO: we should consolidate our reservation requests
-        reservation_guid = "#{@id}-#{portgroup_title}"
+      if (static = network['staticNetworkConfiguration']) && !static.empty?
         ip = static['ipAddress'] || raise(Exception, "ipAddress not set")
         raise(Exception, "Subnet not found in configuration #{static.inspect}") unless static['subnet']
 
@@ -1572,6 +1569,13 @@ class ASM::ServiceDeployment
               'require' => "Asm::Cluster[#{title}]"
             }
 
+            esx_endpoint = { :host => hostip,
+                             :user => ESXI_ADMIN_USER,
+                             :password => server_params['admin_password'] }
+            if decrypt?
+              esx_endpoint[:password] = ASM::Cipher.decrypt_string(esx_endpoint[:password])
+            end
+
             if network_params
               # Add vswitch config to esx host
               resource_hash['asm::vswitch'] ||= {}
@@ -1587,61 +1591,56 @@ class ASM::ServiceDeployment
               # from there.
               vmk_index = 0
 
-              network_array = [ 'hypervisor_network', 'vmotion_network', 'workload_network' ] 
-              nfs_networks = network_params['nfs_network']
-              if nfs_networks && nfs_networks.size > 0
-                network_array << 'nfs_network'
-              else
-                network_array << 'storage_network'
-              end
-                
-              network_array.each_with_index do | type, index |
-                networks = network_params[type]
-
-                if networks
-                  # For workload, guid may be a comma-separated list
-                  networks.each_with_index do |network, index|
-                    # Storage network has two duplicate networks for
-                    # iSCSI configuration, only log one message for it
-                    unless type == 'storage_network' && index > 0
-                      log("Configuring #{type} #{network['name']}")
-                    end
+              # TODO: append_resources! should do this automatically
+              network_config = ASM::NetworkConfiguration.new(network_params['network_configuration'], logger)
+              network_config.fabrics.each do |fabric|
+                logger.debug("Found fabric: #{fabric.name}")
+                fabric.interfaces.each do |port|
+                  logger.debug("Found interface: #{port.name}")
+                  port.partitions.each do |partition|
+                    logger.debug("Found partition: #{partition.name} #{partition.fqdd} #{partition.mac_address} #{partition.networkObjects}")
                   end
-                  vswitch_resources = build_vswitch(server_cert, index, networks, hostip, params, server_params, type)
-                  # Should be exactly one vswitch in response
-                  vswitch_title = vswitch_resources['esx_vswitch'].keys[0]
-                  vswitch = vswitch_resources['esx_vswitch'][vswitch_title]
-                  vswitch['require'] = next_require
-
-                  # Set next require to this vswitch so they are all
-                  # ordered properly
-                  next_require = "Esx_vswitch[#{vswitch_title}]"
-                  vswitch_resources['esx_portgroup'].each do |title, portgroup|
-                    # Enforce very strict ordering of each vswitch,
-                    # its portgroups, then the next vswitch, etc.
-                    # This is necessary to guess what vmk the portgroups
-                    # end up on so that the datastore can be configured.
-                    next_require = "Esx_portgroup[#{title}]"
-
-                    # Increment vmk_index except for hypervisor_network which will
-                    # always be vmk0
-                    if portgroup['portgrouptype'] == 'VMkernel' && type != 'hypervisor_network'
-                      vmk_index += 1
-                    end
-
-                    if type == 'storage_network'
-                      storage_network_require ||= []
-                      storage_network_vmk_index ||= vmk_index
-                      storage_network_require.push("Esx_portgroup[#{title}]")
-                      storage_network_vswitch = "vSwitch#{index}"
-                    end
-
-                  end
-
-                  # merge these in
-                  resource_hash['esx_vswitch'] = (resource_hash['esx_vswitch'] || {}).merge(vswitch_resources['esx_vswitch'])
-                  resource_hash['esx_portgroup'] = (resource_hash['esx_portgroup'] || {}).merge(vswitch_resources['esx_portgroup'])
                 end
+              end
+
+              vswitches = get_vmnics_and_networks(esx_endpoint, serverdeviceconf,
+                                                  network_config, network_params)
+              vswitches.keys.each do |vswitch_type|
+                vswitch = vswitches[vswitch_type]
+                vswitch_resources = build_vswitch(vswitch_type, vswitch[:vmnics], vswitch[:networks], hostip, params)
+                # Should be exactly one vswitch in response
+                vswitch_title = vswitch_resources['esx_vswitch'].keys[0]
+                vswitch = vswitch_resources['esx_vswitch'][vswitch_title]
+                vswitch['require'] = next_require
+
+                # Set next require to this vswitch so they are all
+                # ordered properly
+                next_require = "Esx_vswitch[#{vswitch_title}]"
+                vswitch_resources['esx_portgroup'].each do |title, portgroup|
+                  # Enforce very strict ordering of each vswitch,
+                  # its portgroups, then the next vswitch, etc.
+                  # This is necessary to guess what vmk the portgroups
+                  # end up on so that the datastore can be configured.
+                  next_require = "Esx_portgroup[#{title}]"
+
+                  # Increment vmk_index except for hypervisor_network which will
+                  # always be vmk0
+                  if portgroup['portgrouptype'] == 'VMkernel' && vswitch_type != :management
+                    vmk_index += 1
+                  end
+
+                  if vswitch_type == :storage
+                    storage_network_require ||= []
+                    storage_network_vmk_index ||= vmk_index
+                    storage_network_require.push("Esx_portgroup[#{title}]")
+                    storage_network_vswitch = vswitch_title
+                  end
+
+                end
+
+                # merge these in
+                resource_hash['esx_vswitch'] = (resource_hash['esx_vswitch'] || {}).merge(vswitch_resources['esx_vswitch'])
+                resource_hash['esx_portgroup'] = (resource_hash['esx_portgroup'] || {}).merge(vswitch_resources['esx_portgroup'])
               end
 
               logger.debug('Configuring the storage manifest')
@@ -1651,17 +1650,13 @@ class ASM::ServiceDeployment
                 storage_cert = storage_component['puppetCertName']
                 storage_creds = ASM::Util.parse_device_config(storage_cert)
                 storage_hash = ASM::Util.build_component_configuration(storage_component, :decrypt => decrypt?)
-                esx_password = server_params['admin_password']
-                if decrypt?
-                  esx_password = ASM::Cipher.decrypt_string(esx_password)
-                end
 
                 if storage_hash['equallogic::create_vol_chap_user_access']
                   # Configure iscsi datastore
                   if @debug
                     hba_list = [ 'vmhba33', 'vmhba34' ]
                   else
-                    hba_list = parse_hbas(hostip, ESXI_ADMIN_USER, esx_password)
+                    hba_list = parse_hbas(esx_endpoint)
                   end
                   raise(Exception, "Network not setup for #{server_cert}") unless storage_network_vmk_index
 
@@ -1838,13 +1833,103 @@ class ASM::ServiceDeployment
     end
   end
 
-  def parse_hbas(hostip, username, password)
-    log("getting hba information for #{hostip}")
-    endpoint = {
-      :host => hostip,
-      :user => username,
-      :password => password,
+  # From the specified network_config, returns a hash of:
+  #
+  # { vswitch_type => { :vmnics => [vmnicn, ...], :networks => [net1, ...]}}
+  def get_vmnics_and_networks(esx_endpoint, server_device_conf, network_config, network_params)
+    service_tag = cert_name_to_service_tag(server_device_conf[:cert_name])
+    if service_tag
+      is_dell_server = true
+      serial_number = service_tag
+    else
+      is_dell_server = false
+      serial_number = server_device_conf[:cert_name]
+    end
+
+    if is_dell_server
+      network_config.add_nics!(server_device_conf)
+      if network_config.servertype == 'blade'
+        logger.info("Configuring Dell blade server networking...")
+        vmnic_info = ASM::Util.esxcli('network nic list'.split, esx_endpoint, logger)
+        gather_vswitch_info(network_config) do |vswitch_type, partitions|
+          mac_addresses = partitions.collect { |partition| partition.mac_address }
+          logger.debug("Found mac addresses for #{vswitch_type} vswitch: #{mac_addresses}")
+          vmnics_match = vmnic_info.find_all do |info|
+            # NOTE: mac addresses from idrac are upper-case, from esxcli lower-case
+            mac_addresses.include?(info['MAC Address'].upcase)
+          end
+          unless vmnics_match.size == mac_addresses.size
+            logger.debug("Only #{vmnics_match} vmnics found for mac addresses #{mac_addresses}")
+            msg = "Only found #{vmnics_match.size} ESXi vmnics for server #{serial_number}; " +
+                "expected #{mac_addresses.size}. Check your network configuration and retry."
+            raise(ASM::UserException, msg)
+          end
+          vmnics_match.map { |info| info['Name'] }
+        end
+      else
+        logger.info("Configuring Dell rack server networking...")
+        # Rack info not being populated in network_configuration yet,
+        # fall back to original networking scheme
+        storage_network = if network_params['nfs_network'] && network_params['nfs_network'].size > 0
+                            'nfs_network'
+                          else
+                            'storage_network'
+                          end
+        {:management => {:vmnics => ['vmnic0', 'vminc1'], :networks => network_params['hypervisor_network']},
+         :migration => {:vmnics => ['vmnic2', 'vminc3'], :networks => network_params['vmotion_network']},
+         :workload => {:vmnics => ['vmnic4', 'vminc5'], :networks => network_params['workload_network']},
+         :storage => {:vmnics => ['vmnic6', 'vminc7'], :networks => network_params[storage_network]}, }
+      end
+    else
+      logger.info("Configuring generic server networking...")
+      # Non-dell server; assume partitions are in vmnic enumeration order
+      network_config.add_partition_info!
+      gather_vswitch_info(network_config) do |vswitch_type, partitions|
+        partitions.map { |p| "vmnic#{p.partition_index}" }
+      end
+    end
+  end
+
+  # TODO: validate that:
+  #  - same vmnics aren't used for different network types
+  #  - only one type of storage network used
+  def gather_vswitch_info(network_config)
+    network_types_map = {
+        :management => ['HYPERVISOR_MANAGEMENT'],
+        :migration => ['HYPERVISOR_MIGRATION'],
+        :workload => ['PRIVATE_LAN', 'PUBLIC_LAN'],
+        # what about fiber channel?
+        :storage => ['STORAGE_ISCSI_SAN', 'FILESHARE'],
     }
+    vswitches = {}
+    network_types_map.each do |vswitch_type, network_types|
+      partitions = network_config.get_partitions(*network_types)
+      logger.debug("Found #{partitions.size} partitions matching #{network_types}")
+
+      unless partitions.empty?
+        # HACK: currently all of the partitions are teamed together, so we only
+        # take # the networks from the first partition; also filter out PXE
+        # network; not involved in vswitch config
+        networks = if vswitch_type == :storage
+                     # HACK: right now all storage networks are not being sent on first partition
+                     partitions.collect { |partition| partition.networkObjects }.flatten.compact.uniq
+                   else
+                     partitions[0].networkObjects.reject { |n| n.type == 'PXE' }
+                   end
+        logger.debug("Found networks for #{vswitch_type} vswitch: #{networks}")
+        if networks && !networks.empty?
+          vmnics = yield vswitch_type, partitions
+          logger.debug("Found vmnics for #{vswitch_type} vswitch: #{vmnics}")
+          vswitches[vswitch_type] = {:networks => networks, :vmnics => vmnics}
+        end
+      end
+    end
+    vswitches
+  end
+
+  def parse_hbas(endpoint)
+    hostip = endpoint[:host]
+    log("getting hba information for #{hostip}")
     cmd = 'iscsi adapter list'.split
     h_list = ASM::Util.esxcli(cmd, endpoint, logger)
     if h_list.nil? or h_list.empty?
