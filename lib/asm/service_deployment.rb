@@ -877,7 +877,7 @@ class ASM::ServiceDeployment
       logger.debug"switch_port_location: #{switch_port_location}"
 
       if switch_info[2].nil?
-        switch_active_zoneset="ASM-Zoneset"
+        switch_active_zoneset="ASM_Zoneset"
       else
         switch_active_zoneset=switch_info[2]
       end
