@@ -211,9 +211,6 @@ module ASM
       def self.cleanup(server)
         if server.include? 'os_type'
           server['os_image_type'] = server.delete('os_type')
-          if server['os_image_type'] == 'Windows'
-            server['os_image_type'] == server.delete('os_image_version')
-          end
           # TODO: migrate logger
           #@logger.warn('Server configuration contains deprecated param name os_type')
         end
