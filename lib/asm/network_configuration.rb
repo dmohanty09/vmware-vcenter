@@ -120,11 +120,10 @@ module ASM
     # with them such as iSCSI or public/private lan.
     def get_network(network_type)
       ret = get_networks(network_type)
-      uniq_net_name = ret.collect { |n| n.name }.uniq
-      if uniq_net_name.size == 1
+      if ret.size == 1
         ret[0]
       else
-        raise(Exception, "There should be only one #{network_type} network but found #{uniq_net_name.size}: #{uniq_net_name}")
+        raise(Exception, "There should be only one #{network_type} network but found #{ret.size}: #{ret.collect { |n| n.name }}")
       end
     end
 
