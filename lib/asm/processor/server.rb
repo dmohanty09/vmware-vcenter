@@ -1,4 +1,6 @@
 require 'asm/util'
+require 'asm/network_configuration'
+
 module ASM
   module Processor
     module Server
