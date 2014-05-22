@@ -265,6 +265,16 @@ module ASM
       end
     end
 
+    def self.find_equallogic_iscsi_volume(cert_name, volume)
+      facts = facts_find(cert_name)
+      properties = JSON.parse(facts['VolumesProperties'])
+      unless properties[volume]
+        raise(Exception, "Could not find iSCSI volume properties for #{volume}")
+      else
+        JSON.parse(properties[volume])
+      end
+    end
+
     # [TODO] merge with find_equallogic_iscsi_ip
     def self.find_equallogic_iscsi_netmask(cert_name)
       cmd = "sudo puppet facts find '#{cert_name}' "
@@ -746,6 +756,37 @@ module ASM
     def self.get_puppet_log(id, certname)
       log_file = File.join(ASM.base_dir, id.to_s, "#{certname}.out")
       File.read(log_file)
+    end
+    
+    #This function waits for a puppet device to become available
+    def self.wait_until_available(cert_name, timeout = 1800, &block)
+      begin
+        start = Time.now
+        yet_to_run_command = true
+        while(yet_to_run_command)
+          if ASM.block_certname(cert_name)
+            yet_to_run_command = false
+            yield
+          else
+            sleep 2
+            if Time.now - start > timeout
+              raise(SyncException, "Timed out waiting for a lock for device cert #{cert_name}")
+            end
+          end
+        end
+      rescue Exception => e
+        unless e.class == SyncException
+          ASM.unblock_certname(cert_name)
+        end
+        raise(e)
+      end
+      ASM.unblock_certname(cert_name)
+    end
+
+    def self.run_puppet_device!(cert_name)
+      ASM::Util.wait_until_available(cert_name) do
+        ASM::Util.run_command_simple("sudo puppet device --deviceconfig #{ASM::Util::DEVICE_CONF_DIR}/#{cert_name}.conf")
+      end
     end
 
   end

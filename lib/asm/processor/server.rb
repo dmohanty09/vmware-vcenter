@@ -131,10 +131,6 @@ module ASM
         resources
       end
 
-      def self.munge_bfs_server(resource_hash, params)
-        params['network_configuration'] = resource_hash['asm::esxiscsiconfig'][resource_hash['asm::esxiscsiconfig'].keys[0]]['network_configuration']
-      end
-
     end
   end
 
