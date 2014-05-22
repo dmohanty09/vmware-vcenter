@@ -1334,6 +1334,8 @@ class ASM::ServiceDeployment
     all.select { |component| related_hash.keys.include?(component['id']) }
   end
 
+  VSWITCH_TYPES = [ :management, :migration, :workload, :storage ]
+
   def build_portgroup(vswitch, path, hostip, portgroup_name, network,
     portgrouptype, active_nics, network_type)
     ret = {
@@ -1362,8 +1364,6 @@ class ASM::ServiceDeployment
       'transport' => 'Transport[vcenter]'
     }
   end
-
-  VSWITCH_TYPES = [ :management, :migration, :workload, :storage ]
 
   def vswitch_name(vswitch_type)
     "vSwitch#{VSWITCH_TYPES.find_index(vswitch_type)}"
@@ -1795,37 +1795,22 @@ class ASM::ServiceDeployment
 
     if is_dell_server
       network_config.add_nics!(server_device_conf)
-      if network_config.servertype == 'blade'
-        logger.info("Configuring Dell blade server networking...")
-        vmnic_info = ASM::Util.esxcli('network nic list'.split, esx_endpoint, logger)
-        gather_vswitch_info(network_config) do |vswitch_type, partitions|
-          mac_addresses = partitions.collect { |partition| partition.mac_address }
-          logger.debug("Found mac addresses for #{vswitch_type} vswitch: #{mac_addresses}")
-          vmnics_match = vmnic_info.find_all do |info|
-            # NOTE: mac addresses from idrac are upper-case, from esxcli lower-case
-            mac_addresses.include?(info['MAC Address'].upcase)
-          end
-          unless vmnics_match.size == mac_addresses.size
-            logger.debug("Only #{vmnics_match} vmnics found for mac addresses #{mac_addresses}")
-            msg = "Only found #{vmnics_match.size} ESXi vmnics for server #{serial_number}; " +
-                "expected #{mac_addresses.size}. Check your network configuration and retry."
-            raise(ASM::UserException, msg)
-          end
-          vmnics_match.map { |info| info['Name'] }
+      logger.info('Configuring Dell server networking...')
+      vmnic_info = ASM::Util.esxcli('network nic list'.split, esx_endpoint, logger)
+      gather_vswitch_info(network_config) do |vswitch_type, partitions|
+        mac_addresses = partitions.collect { |partition| partition.mac_address }
+        logger.debug("Found mac addresses for #{vswitch_type} vswitch: #{mac_addresses}")
+        vmnics_match = vmnic_info.find_all do |info|
+          # NOTE: mac addresses from idrac are upper-case, from esxcli lower-case
+          mac_addresses.include?(info['MAC Address'].upcase)
         end
-      else
-        logger.info("Configuring Dell rack server networking...")
-        # Rack info not being populated in network_configuration yet,
-        # fall back to original networking scheme
-        storage_network = if network_params['nfs_network'] && network_params['nfs_network'].size > 0
-                            'nfs_network'
-                          else
-                            'storage_network'
-                          end
-        {:management => {:vmnics => ['vmnic0', 'vminc1'], :networks => network_params['hypervisor_network']},
-         :migration => {:vmnics => ['vmnic2', 'vminc3'], :networks => network_params['vmotion_network']},
-         :workload => {:vmnics => ['vmnic4', 'vminc5'], :networks => network_params['workload_network']},
-         :storage => {:vmnics => ['vmnic6', 'vminc7'], :networks => network_params[storage_network]}, }
+        unless vmnics_match.size == mac_addresses.size
+          logger.debug("Only #{vmnics_match} vmnics found for mac addresses #{mac_addresses}")
+          msg = "Only found #{vmnics_match.size} ESXi vmnics for server #{serial_number}; " +
+              "expected #{mac_addresses.size}. Check your network configuration and retry."
+          raise(ASM::UserException, msg)
+        end
+        vmnics_match.map { |info| info['Name'] }
       end
     else
       logger.info("Configuring generic server networking...")
@@ -1845,7 +1830,6 @@ class ASM::ServiceDeployment
         :management => ['HYPERVISOR_MANAGEMENT'],
         :migration => ['HYPERVISOR_MIGRATION'],
         :workload => ['PRIVATE_LAN', 'PUBLIC_LAN'],
-        # what about fiber channel?
         :storage => ['STORAGE_ISCSI_SAN', 'FILESHARE'],
     }
     vswitches = {}
@@ -1854,15 +1838,9 @@ class ASM::ServiceDeployment
       logger.debug("Found #{partitions.size} partitions matching #{network_types}")
 
       unless partitions.empty?
-        # HACK: currently all of the partitions are teamed together, so we only
-        # take # the networks from the first partition; also filter out PXE
-        # network; not involved in vswitch config
-        networks = if vswitch_type == :storage
-                     # HACK: right now all storage networks are not being sent on first partition
-                     partitions.collect { |partition| partition.networkObjects }.flatten.compact.uniq
-                   else
-                     partitions[0].networkObjects.reject { |n| n.type == 'PXE' }
-                   end
+        networks = partitions.collect do |partition|
+          partition.networkObjects.reject { |network| network.type == 'PXE' }
+        end.flatten.compact.uniq
         logger.debug("Found networks for #{vswitch_type} vswitch: #{networks}")
         if networks && !networks.empty?
           vmnics = yield vswitch_type, partitions
@@ -1981,7 +1959,7 @@ class ASM::ServiceDeployment
     function_start = Time.now
 
 
-    ASM::Util.block_and_retry_until_ready(timeout, CommandException, 60) do\
+    ASM::Util.block_and_retry_until_ready(timeout, CommandException, 60) do
       # check if cert is in list of active nodes
       log("Waiting for puppet agent to check in for #{certname}")
       query_str = "[\"and\", [\"=\", [\"node\", \"active\"], true], [\"=\", \"name\", \"#{certname}\"]]]"
@@ -2040,7 +2018,7 @@ class ASM::ServiceDeployment
     log("Agent #{certname} - waiting for 10 minutes before validating the post-installation status")
     sleep(600)
     # Wait for the server to go to power-off state
-    ASM::Util.block_and_retry_until_ready(timeout, CommandException, 60) do\
+    ASM::Util.block_and_retry_until_ready(timeout, CommandException, 60) do
       powerstate = ASM::WsMan.get_power_state(endpoint, logger)
       if powerstate.to_i != 13
         raise(CommandException, "Post installation for Server #{certname} still in progress .  Retrying...")
