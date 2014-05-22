@@ -2374,17 +2374,12 @@ class ASM::ServiceDeployment
     # Run-As-Account
     run_as_account_credentials = run_as_account_credentials(hyperv_hosts[0])
     logger.debug("Run-As Accounf credentials: #{run_as_account_credentials}")
-    host_group = cluster_resource_hash['asm::cluster::scvmm'][title]['path']
-
-    logger.debug "Host-Group : '#{host_group}'"
-    if ( host_group == '__new__')
-      logger.debug "New host-group needs to be created"
-      host_group = cluster_resource_hash['asm::cluster::scvmm'][title]['hostgroup']
-        if !host_group.include?('All Hosts')
-          logger.debug "Host-Group value do not contain All Hosts"
-          host_group = "All Hosts\\#{host_group}"
-        end
+    host_group = cluster_resource_hash['asm::cluster::scvmm'][title]['hostgroup']
+    if !host_group.include?('All Hosts')
+      logger.debug "Host-Group value do not contain All Hosts"
+      host_group = "All Hosts\\#{host_group}"
     end
+    logger.debug "Host-Group : '#{host_group}'"
 
     cluster_name = cluster_resource_hash['asm::cluster::scvmm'][title]['name']
     logger.debug "Cluster name: #{cluster_name}"
