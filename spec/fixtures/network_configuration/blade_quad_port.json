@@ -1,26 +1,50 @@
 {
-  "id": "31d68fd3-b7ff-4ca8-8c35-1d229d20e600",
+  "id": "6a5f39d2-8d5b-47ae-a267-75594a05a93d",
   "servertype": "blade",
   "fabrics": [
     {
-      "id": "07cc1292-f197-4f43-9b3b-25bec971d1b9",
+      "id": "b98ca32d-a56e-4982-9d82-2e834ac3ab6b",
       "name": "Fabric A",
       "redundancy": true,
       "enabled": true,
-      "nictype": "2",
+      "nictype": "4",
       "interfaces": [
         {
-          "id": "f0aff7fd-c1b9-4b2b-9c5a-5eebc272f314",
+          "id": "2e202a65-cdb0-4f52-b9ba-c8816a0d2ab1",
           "name": "Port 1",
-          "partitioned": false,
+          "partitioned": true,
           "partitions": [
             {
-              "id": "b66b10dc-100f-4270-87f2-8ad9c6db48f5",
+              "id": "24546dc1-fbe7-4bbf-9e7a-3220b02e63e7",
               "name": "1",
               "networks": [
+                "ff80808146056aa20146057c08e503a1",
                 "ff80808146056aa2014605840b3303e0"
               ],
               "networkObjects": [
+                {
+                  "id": "ff80808146056aa20146057c08e503a1",
+                  "name": "Hypervisor Management",
+                  "description": null,
+                  "type": "HYPERVISOR_MANAGEMENT",
+                  "vlanId": 28,
+                  "static": true,
+                  "staticNetworkConfiguration": {
+                    "gateway": "172.28.0.1",
+                    "subnet": "255.255.0.0",
+                    "primaryDns": "172.20.0.8",
+                    "secondaryDns": null,
+                    "dnsSuffix": "aidev.net",
+                    "ipRange": [
+                      {
+                        "Id": "ff80808146056aa20146057c08e603a2",
+                        "StartingIp": "172.28.12.115",
+                        "EndingIp": "172.28.12.135"
+                      }
+                    ],
+                    "ipAddress": "172.28.12.118"
+                  }
+                },
                 {
                   "id": "ff80808146056aa2014605840b3303e0",
                   "name": "PXE 2",
@@ -40,11 +64,35 @@
               "wwpn": null
             },
             {
-              "id": "e057823a-27cb-446c-9f9e-2abdcb254606",
+              "id": "c57b21ad-8902-47a8-b594-27316ef65f68",
               "name": "2",
-              "networks": null,
+              "networks": [
+                "ff80808146056aa20146138f3ded0497"
+              ],
               "networkObjects": [
-
+                {
+                  "id": "ff80808146056aa20146138f3ded0497",
+                  "name": "vMotion 2",
+                  "description": "",
+                  "type": "HYPERVISOR_MIGRATION",
+                  "vlanId": 23,
+                  "static": true,
+                  "staticNetworkConfiguration": {
+                    "gateway": "172.23.0.1",
+                    "subnet": "255.255.0.0",
+                    "primaryDns": null,
+                    "secondaryDns": null,
+                    "dnsSuffix": null,
+                    "ipRange": [
+                      {
+                        "Id": "ff80808146056aa20146138f3dee0498",
+                        "StartingIp": "172.23.12.115",
+                        "EndingIp": "172.23.12.145"
+                      }
+                    ],
+                    "ipAddress": "172.23.12.116"
+                  }
+                }
               ],
               "minimum": 0,
               "maximum": 100,
@@ -55,7 +103,7 @@
               "wwpn": null
             },
             {
-              "id": "95a74c5b-0ce4-4360-841e-3c197dc00104",
+              "id": "503e690d-355b-4bff-93e1-f6a56fd1811a",
               "name": "3",
               "networks": null,
               "networkObjects": [
@@ -70,7 +118,7 @@
               "wwpn": null
             },
             {
-              "id": "4867789c-afb9-4300-a993-74bfd07deaa7",
+              "id": "6984e425-24c6-437a-a921-fe12c1221a26",
               "name": "4",
               "networks": null,
               "networkObjects": [
@@ -84,20 +132,49 @@
               "wwnn": null,
               "wwpn": null
             }
-          ]
+          ],
+          "interfaces": null,
+          "enabled": false,
+          "redundancy": false,
+          "usedforfc": false,
+          "nictype": null
         },
         {
-          "id": "8b3f96eb-0429-4584-a4e7-4249a05a4537",
+          "id": "35b42866-9df8-4b6b-8d71-6c3794e931e1",
           "name": "Port 2",
-          "partitioned": false,
+          "partitioned": true,
           "partitions": [
             {
-              "id": "b66b10dc-100f-4270-87f2-8ad9c6db48f5",
+              "id": "24546dc1-fbe7-4bbf-9e7a-3220b02e63e7",
               "name": "1",
               "networks": [
+                "ff80808146056aa20146057c08e503a1",
                 "ff80808146056aa2014605840b3303e0"
               ],
               "networkObjects": [
+                {
+                  "id": "ff80808146056aa20146057c08e503a1",
+                  "name": "Hypervisor Management",
+                  "description": null,
+                  "type": "HYPERVISOR_MANAGEMENT",
+                  "vlanId": 28,
+                  "static": true,
+                  "staticNetworkConfiguration": {
+                    "gateway": "172.28.0.1",
+                    "subnet": "255.255.0.0",
+                    "primaryDns": "172.20.0.8",
+                    "secondaryDns": null,
+                    "dnsSuffix": "aidev.net",
+                    "ipRange": [
+                      {
+                        "Id": "ff80808146056aa20146057c08e603a2",
+                        "StartingIp": "172.28.12.115",
+                        "EndingIp": "172.28.12.135"
+                      }
+                    ],
+                    "ipAddress": "172.28.12.118"
+                  }
+                },
                 {
                   "id": "ff80808146056aa2014605840b3303e0",
                   "name": "PXE 2",
@@ -117,13 +194,35 @@
               "wwpn": null
             },
             {
-              "id": "e057823a-27cb-446c-9f9e-2abdcb254606",
+              "id": "c57b21ad-8902-47a8-b594-27316ef65f68",
               "name": "2",
               "networks": [
-
+                "ff80808146056aa20146138f3ded0497"
               ],
               "networkObjects": [
-
+                {
+                  "id": "ff80808146056aa20146138f3ded0497",
+                  "name": "vMotion 2",
+                  "description": "",
+                  "type": "HYPERVISOR_MIGRATION",
+                  "vlanId": 23,
+                  "static": true,
+                  "staticNetworkConfiguration": {
+                    "gateway": "172.23.0.1",
+                    "subnet": "255.255.0.0",
+                    "primaryDns": null,
+                    "secondaryDns": null,
+                    "dnsSuffix": null,
+                    "ipRange": [
+                      {
+                        "Id": "ff80808146056aa20146138f3dee0498",
+                        "StartingIp": "172.23.12.115",
+                        "EndingIp": "172.23.12.145"
+                      }
+                    ],
+                    "ipAddress": "172.23.12.116"
+                  }
+                }
               ],
               "minimum": 0,
               "maximum": 100,
@@ -134,7 +233,7 @@
               "wwpn": null
             },
             {
-              "id": "95a74c5b-0ce4-4360-841e-3c197dc00104",
+              "id": "503e690d-355b-4bff-93e1-f6a56fd1811a",
               "name": "3",
               "networks": [
 
@@ -151,7 +250,7 @@
               "wwpn": null
             },
             {
-              "id": "4867789c-afb9-4300-a993-74bfd07deaa7",
+              "id": "6984e425-24c6-437a-a921-fe12c1221a26",
               "name": "4",
               "networks": [
 
@@ -167,45 +266,107 @@
               "wwnn": null,
               "wwpn": null
             }
-          ]
+          ],
+          "interfaces": null,
+          "enabled": false,
+          "redundancy": false,
+          "usedforfc": false,
+          "nictype": null
         },
         {
-          "id": "67fc897b-0524-4cd3-ad54-dc1767857cd4",
+          "id": "065582a4-66c4-4647-9409-04d6e5fb49e7",
           "name": "Port 3",
           "partitioned": true,
           "partitions": [
             {
-              "id": "a43e861b-b495-4e68-8ac9-57b07f901574",
+              "id": "4383266e-3415-4246-87f5-0a1df79cb54e",
               "name": "1",
-              "networks": null,
+              "networks": [
+                "ff80808146056aa20146057c0bf003d1"
+              ],
               "networkObjects": [
-
+                {
+                  "id": "ff80808146056aa20146057c0bf003d1",
+                  "name": "Workload",
+                  "description": null,
+                  "type": "PRIVATE_LAN",
+                  "vlanId": 27,
+                  "static": false,
+                  "staticNetworkConfiguration": null
+                }
               ],
               "minimum": 0,
               "maximum": 100,
-              "lanMacAddress": null,
+              "lanMacAddress": "00:0E:AA:CE:00:11",
               "iscsiMacAddress": null,
               "iscsiIQN": null,
               "wwnn": null,
               "wwpn": null
             },
             {
-              "id": "3b8a574b-3e7e-4d42-b390-8cbba279dde0",
+              "id": "734592db-84d7-4cd9-af8c-7d60e9b38039",
               "name": "2",
-              "networks": null,
+              "networks": [
+                "ff80808146056aa20146057c0aad03b9"
+              ],
               "networkObjects": [
-
+                {
+                  "id": "ff80808146056aa20146057c0aad03b9",
+                  "name": "iSCSI",
+                  "description": null,
+                  "type": "STORAGE_ISCSI_SAN",
+                  "vlanId": 16,
+                  "static": true,
+                  "staticNetworkConfiguration": {
+                    "gateway": "172.16.0.1",
+                    "subnet": "255.255.0.0",
+                    "primaryDns": "172.20.0.8",
+                    "secondaryDns": null,
+                    "dnsSuffix": "aidev.net",
+                    "ipRange": [
+                      {
+                        "Id": "ff80808146056aa20146057c0aae03ba",
+                        "StartingIp": "172.16.12.115",
+                        "EndingIp": "172.16.12.135"
+                      }
+                    ],
+                    "ipAddress": "172.16.12.122"
+                  }
+                },
+                {
+                  "id": "ff80808146056aa20146057c0aad03b9",
+                  "name": "iSCSI",
+                  "description": null,
+                  "type": "STORAGE_ISCSI_SAN",
+                  "vlanId": 16,
+                  "static": true,
+                  "staticNetworkConfiguration": {
+                    "gateway": "172.16.0.1",
+                    "subnet": "255.255.0.0",
+                    "primaryDns": "172.20.0.8",
+                    "secondaryDns": null,
+                    "dnsSuffix": "aidev.net",
+                    "ipRange": [
+                      {
+                        "Id": "ff80808146056aa20146057c0aae03ba",
+                        "StartingIp": "172.16.12.115",
+                        "EndingIp": "172.16.12.135"
+                      }
+                    ],
+                    "ipAddress": "172.16.12.122"
+                  }
+                }
               ],
               "minimum": 0,
               "maximum": 100,
-              "lanMacAddress": null,
-              "iscsiMacAddress": null,
-              "iscsiIQN": null,
+              "lanMacAddress": "00:0E:AA:CE:00:15",
+              "iscsiMacAddress": "00:0E:AA:CE:00:12",
+              "iscsiIQN": "iqn.asm:software-asm-01-0000000000:0000000008",
               "wwnn": null,
               "wwpn": null
             },
             {
-              "id": "543f6ab8-46e3-46e8-8b32-88e791ce4747",
+              "id": "112c20bd-3659-4ebb-a26a-12a2c5d3c75c",
               "name": "3",
               "networks": null,
               "networkObjects": [
@@ -220,7 +381,7 @@
               "wwpn": null
             },
             {
-              "id": "41c0fc94-1b27-48f9-a42b-0e21bab85453",
+              "id": "a2973b3b-2301-4b83-b794-00ae724b8bf4",
               "name": "4",
               "networks": null,
               "networkObjects": [
@@ -234,15 +395,20 @@
               "wwnn": null,
               "wwpn": null
             }
-          ]
+          ],
+          "interfaces": null,
+          "enabled": false,
+          "redundancy": false,
+          "usedforfc": false,
+          "nictype": null
         },
         {
-          "id": "7e692c15-1cb0-47b9-b4bb-f1369b427973",
+          "id": "45c09c87-4d3e-4849-baa0-a3d369194830",
           "name": "Port 4",
           "partitioned": true,
           "partitions": [
             {
-              "id": "0b705da0-cec3-4d84-ab7b-85fa12640f24",
+              "id": "2cd75e78-2812-4d26-8dd7-bdff1e10a44f",
               "name": "1",
               "networks": null,
               "networkObjects": [
@@ -257,7 +423,7 @@
               "wwpn": null
             },
             {
-              "id": "ddfd05df-c4f6-4b26-9086-99c7c9f36237",
+              "id": "23d4980a-05f3-43b6-aacc-db6d30fb9de2",
               "name": "2",
               "networks": null,
               "networkObjects": [
@@ -272,7 +438,7 @@
               "wwpn": null
             },
             {
-              "id": "82cb84bd-f561-4805-b59c-fbc1625139b3",
+              "id": "076e0687-7d3f-4283-b910-4cbe074f6022",
               "name": "3",
               "networks": null,
               "networkObjects": [
@@ -287,7 +453,7 @@
               "wwpn": null
             },
             {
-              "id": "6c5dd320-f358-42c1-a211-55a0f8494b66",
+              "id": "54b6aa49-b29b-45fc-9298-a311cd95f1b8",
               "name": "4",
               "networks": null,
               "networkObjects": [
@@ -301,38 +467,33 @@
               "wwnn": null,
               "wwpn": null
             }
-          ]
+          ],
+          "interfaces": null,
+          "enabled": false,
+          "redundancy": false,
+          "usedforfc": false,
+          "nictype": null
         }
       ]
     },
     {
-      "id": "908455f9-efa4-4442-b3d5-d1e3ade7b3f8",
+      "id": "4f891cef-dd94-4dd0-9171-bfccde6c1506",
       "name": "Fabric B",
-      "redundancy": true,
-      "enabled": true,
+      "redundancy": false,
+      "enabled": false,
       "nictype": "2",
       "interfaces": [
         {
-          "id": "3ee8da44-61fc-4bd6-ab75-ef28b8b47125",
+          "id": "fa3e73c6-7d1a-48cf-9e86-7bdc26945f70",
           "name": "Port 1",
-          "partitioned": false,
+          "partitioned": true,
           "partitions": [
             {
-              "id": "c75a5580-4ca3-43e1-b962-f51d21d33b00",
+              "id": "48e24b28-2b4a-4dd7-9834-700dceacbc50",
               "name": "1",
-              "networks": [
-                "ff80808146056aa2014605840b3303e0"
-              ],
+              "networks": null,
               "networkObjects": [
-                {
-                  "id": "ff80808146056aa2014605840b3303e0",
-                  "name": "PXE 2",
-                  "description": "",
-                  "type": "PXE",
-                  "vlanId": 20,
-                  "static": false,
-                  "staticNetworkConfiguration": null
-                }
+
               ],
               "minimum": 0,
               "maximum": 100,
@@ -343,7 +504,7 @@
               "wwpn": null
             },
             {
-              "id": "a0479aaf-53f4-4226-86f2-c3fea4763b7b",
+              "id": "e4fcfd09-4a7a-484a-bfb1-e76425ac13d0",
               "name": "2",
               "networks": null,
               "networkObjects": [
@@ -358,7 +519,7 @@
               "wwpn": null
             },
             {
-              "id": "6a9504c5-4fab-4c4d-8573-b7797bb3fb44",
+              "id": "0a6165ee-ae72-4224-aff0-09042147b074",
               "name": "3",
               "networks": null,
               "networkObjects": [
@@ -373,7 +534,7 @@
               "wwpn": null
             },
             {
-              "id": "ec8dfb22-814d-4b07-bdc8-74e6b2cc0c11",
+              "id": "351ed932-118c-42ab-8bec-8cd2724d5047",
               "name": "4",
               "networks": null,
               "networkObjects": [
@@ -387,29 +548,24 @@
               "wwnn": null,
               "wwpn": null
             }
-          ]
+          ],
+          "interfaces": null,
+          "enabled": false,
+          "redundancy": false,
+          "usedforfc": false,
+          "nictype": null
         },
         {
-          "id": "640f9823-325d-42e6-8920-c2c1705cdf0c",
+          "id": "64eaa322-318d-4636-9e84-12c6f737c9cb",
           "name": "Port 2",
-          "partitioned": false,
+          "partitioned": true,
           "partitions": [
             {
-              "id": "c75a5580-4ca3-43e1-b962-f51d21d33b00",
+              "id": "ce0772b9-8cc8-47b3-9494-40ec562eb789",
               "name": "1",
-              "networks": [
-                "ff80808146056aa2014605840b3303e0"
-              ],
+              "networks": null,
               "networkObjects": [
-                {
-                  "id": "ff80808146056aa2014605840b3303e0",
-                  "name": "PXE 2",
-                  "description": "",
-                  "type": "PXE",
-                  "vlanId": 20,
-                  "static": false,
-                  "staticNetworkConfiguration": null
-                }
+
               ],
               "minimum": 0,
               "maximum": 100,
@@ -420,11 +576,9 @@
               "wwpn": null
             },
             {
-              "id": "a0479aaf-53f4-4226-86f2-c3fea4763b7b",
+              "id": "7ca8a4a8-7865-4713-8139-a47053b284b4",
               "name": "2",
-              "networks": [
-
-              ],
+              "networks": null,
               "networkObjects": [
 
               ],
@@ -437,11 +591,9 @@
               "wwpn": null
             },
             {
-              "id": "6a9504c5-4fab-4c4d-8573-b7797bb3fb44",
+              "id": "c4b91fce-8708-4d07-b073-db2cca2e5fa7",
               "name": "3",
-              "networks": [
-
-              ],
+              "networks": null,
               "networkObjects": [
 
               ],
@@ -454,11 +606,9 @@
               "wwpn": null
             },
             {
-              "id": "ec8dfb22-814d-4b07-bdc8-74e6b2cc0c11",
+              "id": "ff237bac-dd74-4cf1-9d22-e8db47adf536",
               "name": "4",
-              "networks": [
-
-              ],
+              "networks": null,
               "networkObjects": [
 
               ],
@@ -470,15 +620,20 @@
               "wwnn": null,
               "wwpn": null
             }
-          ]
+          ],
+          "interfaces": null,
+          "enabled": false,
+          "redundancy": false,
+          "usedforfc": false,
+          "nictype": null
         },
         {
-          "id": "0bbb713a-6f82-435d-ab29-4a7f9bdeff2f",
+          "id": "3d904bc9-b6d2-4173-b6d1-d154a88b8012",
           "name": "Port 3",
           "partitioned": true,
           "partitions": [
             {
-              "id": "22ca92c8-95b5-49d4-8861-d0ca88647454",
+              "id": "32421640-8e30-4150-8caa-28db1ad22634",
               "name": "1",
               "networks": null,
               "networkObjects": [
@@ -493,7 +648,7 @@
               "wwpn": null
             },
             {
-              "id": "77beff64-c4a2-41e5-b406-e2776fe64a71",
+              "id": "0faa94b5-7b38-4304-88a8-047bb2a86039",
               "name": "2",
               "networks": null,
               "networkObjects": [
@@ -508,7 +663,7 @@
               "wwpn": null
             },
             {
-              "id": "c1a9a126-a23a-46e3-9989-c0b841a5c0e1",
+              "id": "bf808933-b964-4d79-a44d-f6dd50630803",
               "name": "3",
               "networks": null,
               "networkObjects": [
@@ -523,7 +678,7 @@
               "wwpn": null
             },
             {
-              "id": "d112829d-efae-467f-b519-bc4d9a423347",
+              "id": "982078ec-61a1-4dcc-9c4a-2d21e6ed0531",
               "name": "4",
               "networks": null,
               "networkObjects": [
@@ -537,15 +692,20 @@
               "wwnn": null,
               "wwpn": null
             }
-          ]
+          ],
+          "interfaces": null,
+          "enabled": false,
+          "redundancy": false,
+          "usedforfc": false,
+          "nictype": null
         },
         {
-          "id": "6904cf5a-1b97-4ae6-b712-b2123e729330",
+          "id": "a995dd3b-f7b4-448c-b4b7-0e5e487b1c17",
           "name": "Port 4",
           "partitioned": true,
           "partitions": [
             {
-              "id": "33357f8f-0bdd-435a-93e5-5353c03c67be",
+              "id": "655e4c47-7173-44fa-8271-364b15192b63",
               "name": "1",
               "networks": null,
               "networkObjects": [
@@ -560,7 +720,7 @@
               "wwpn": null
             },
             {
-              "id": "f2e26375-dff2-416b-b86a-c293c6ab3ec5",
+              "id": "0ea5bd29-01cd-4dff-b7ff-2a065bb00dbd",
               "name": "2",
               "networks": null,
               "networkObjects": [
@@ -575,7 +735,7 @@
               "wwpn": null
             },
             {
-              "id": "33df30cc-f2cb-4bb7-8a2b-0b2d5095fb79",
+              "id": "584cef73-ca53-4a3a-ba3b-fc12c0d61583",
               "name": "3",
               "networks": null,
               "networkObjects": [
@@ -590,7 +750,7 @@
               "wwpn": null
             },
             {
-              "id": "9bb76907-81eb-4cda-91a8-128a1213813e",
+              "id": "883051dd-9d9f-4bf9-9d7b-63be642b6c9e",
               "name": "4",
               "networks": null,
               "networkObjects": [
@@ -604,38 +764,33 @@
               "wwnn": null,
               "wwpn": null
             }
-          ]
+          ],
+          "interfaces": null,
+          "enabled": false,
+          "redundancy": false,
+          "usedforfc": false,
+          "nictype": null
         }
       ]
     },
     {
-      "id": "f09cadc0-7f44-4c74-93b9-ac6a6a372490",
+      "id": "3525f1b0-b2ba-4786-b736-4da0378c4d83",
       "name": "Fabric C",
       "redundancy": false,
-      "enabled": true,
+      "enabled": false,
       "nictype": "2",
       "interfaces": [
         {
-          "id": "374d1241-3332-49dc-8330-2376dfc077a6",
+          "id": "45289b62-6c3c-464a-98b5-264ac00afa2d",
           "name": "Port 1",
-          "partitioned": false,
+          "partitioned": true,
           "partitions": [
             {
-              "id": "4ad629cb-4402-41eb-ba47-37dbc8ffadf8",
+              "id": "61a4fa7d-ba2f-4ee0-919d-b65c578bf5a8",
               "name": "1",
-              "networks": [
-                "ff80808146056aa2014605840b3303e0"
-              ],
+              "networks": null,
               "networkObjects": [
-                {
-                  "id": "ff80808146056aa2014605840b3303e0",
-                  "name": "PXE 2",
-                  "description": "",
-                  "type": "PXE",
-                  "vlanId": 20,
-                  "static": false,
-                  "staticNetworkConfiguration": null
-                }
+
               ],
               "minimum": 0,
               "maximum": 100,
@@ -646,7 +801,7 @@
               "wwpn": null
             },
             {
-              "id": "8eea6a99-e483-4bfd-b936-0f0684eba7f8",
+              "id": "a9a77032-9873-4984-9c02-268cd4aafdf6",
               "name": "2",
               "networks": null,
               "networkObjects": [
@@ -661,7 +816,7 @@
               "wwpn": null
             },
             {
-              "id": "90e6e324-b78a-4332-b548-231fcb3b6f46",
+              "id": "7a1857a9-a720-47ab-a56c-da072ccaa9a7",
               "name": "3",
               "networks": null,
               "networkObjects": [
@@ -676,7 +831,7 @@
               "wwpn": null
             },
             {
-              "id": "4b875c11-0fc2-45ab-8112-5995e2d41587",
+              "id": "7af3a95c-161d-4190-8dc3-e29013b00801",
               "name": "4",
               "networks": null,
               "networkObjects": [
@@ -690,29 +845,24 @@
               "wwnn": null,
               "wwpn": null
             }
-          ]
+          ],
+          "interfaces": null,
+          "enabled": false,
+          "redundancy": false,
+          "usedforfc": false,
+          "nictype": null
         },
         {
-          "id": "153cee07-9abd-4ebd-bae9-c9b08fc722bf",
+          "id": "ad048a47-4f84-42be-b6cb-0cb3dcfce2e5",
           "name": "Port 2",
-          "partitioned": false,
+          "partitioned": true,
           "partitions": [
             {
-              "id": "490a3f1d-1971-426d-af3f-7f16e4910bdf",
+              "id": "0be97e3d-7a0b-45ad-a63a-680834eaa061",
               "name": "1",
-              "networks": [
-                "ff80808146056aa2014605840b3303e0"
-              ],
+              "networks": null,
               "networkObjects": [
-                {
-                  "id": "ff80808146056aa2014605840b3303e0",
-                  "name": "PXE 2",
-                  "description": "",
-                  "type": "PXE",
-                  "vlanId": 20,
-                  "static": false,
-                  "staticNetworkConfiguration": null
-                }
+
               ],
               "minimum": 0,
               "maximum": 100,
@@ -723,7 +873,7 @@
               "wwpn": null
             },
             {
-              "id": "c48b2277-64cb-4cd0-aa4e-6b5f77125781",
+              "id": "41d1f50c-c0dc-4b4d-95b1-e103e164ec07",
               "name": "2",
               "networks": null,
               "networkObjects": [
@@ -738,7 +888,7 @@
               "wwpn": null
             },
             {
-              "id": "5a90e04d-f5b9-4c7a-9ef8-ddf119356e6e",
+              "id": "58ac3079-0ffb-4153-9569-899ef0b668b4",
               "name": "3",
               "networks": null,
               "networkObjects": [
@@ -753,7 +903,7 @@
               "wwpn": null
             },
             {
-              "id": "f8abed95-0350-4736-8982-44504316c67c",
+              "id": "32af8c54-657b-49f8-9790-3d3b31bc2d75",
               "name": "4",
               "networks": null,
               "networkObjects": [
@@ -767,15 +917,20 @@
               "wwnn": null,
               "wwpn": null
             }
-          ]
+          ],
+          "interfaces": null,
+          "enabled": false,
+          "redundancy": false,
+          "usedforfc": false,
+          "nictype": null
         },
         {
-          "id": "241e044c-000f-4978-8961-31c3eb0036c0",
+          "id": "a36b6b38-18a2-4350-bbd0-a6c6650dadb4",
           "name": "Port 3",
           "partitioned": true,
           "partitions": [
             {
-              "id": "560334c0-c4b8-4c45-a802-c33763b25b46",
+              "id": "b2d416e9-d9c1-47e9-a450-b2cd33998666",
               "name": "1",
               "networks": null,
               "networkObjects": [
@@ -790,7 +945,7 @@
               "wwpn": null
             },
             {
-              "id": "044dc331-3200-4dbe-8061-6fce6a5ccb11",
+              "id": "a6c609cf-c4b6-4bc5-b45f-6eef1cd93936",
               "name": "2",
               "networks": null,
               "networkObjects": [
@@ -805,7 +960,7 @@
               "wwpn": null
             },
             {
-              "id": "70a294c2-bc7d-46e5-8ac3-59444bf3b074",
+              "id": "c2d5718d-d8e7-4aa8-9338-40d486e930c4",
               "name": "3",
               "networks": null,
               "networkObjects": [
@@ -820,7 +975,7 @@
               "wwpn": null
             },
             {
-              "id": "224ac359-42db-4252-adef-fdb257e941a0",
+              "id": "0986b839-4be1-4919-b413-c417d00d648e",
               "name": "4",
               "networks": null,
               "networkObjects": [
@@ -834,15 +989,20 @@
               "wwnn": null,
               "wwpn": null
             }
-          ]
+          ],
+          "interfaces": null,
+          "enabled": false,
+          "redundancy": false,
+          "usedforfc": false,
+          "nictype": null
         },
         {
-          "id": "55dfb864-3679-4aa5-ad91-9a36b73115e4",
+          "id": "c116fc70-209b-4b3d-98a7-c209ca8a1fc9",
           "name": "Port 4",
           "partitioned": true,
           "partitions": [
             {
-              "id": "493ce522-3a52-4d53-b632-58d8f6af064d",
+              "id": "9576c21a-4c42-4bdd-b764-7543fec3bf6a",
               "name": "1",
               "networks": null,
               "networkObjects": [
@@ -857,7 +1017,7 @@
               "wwpn": null
             },
             {
-              "id": "c08793bd-e415-410a-8ee3-ef38aa15d6e3",
+              "id": "73c8edaa-3e9a-4cfe-a081-6d9fd9173017",
               "name": "2",
               "networks": null,
               "networkObjects": [
@@ -872,7 +1032,7 @@
               "wwpn": null
             },
             {
-              "id": "81bb7586-7677-44b4-b092-54068f56a660",
+              "id": "0893ccdd-de93-449b-b708-181e8a629264",
               "name": "3",
               "networks": null,
               "networkObjects": [
@@ -887,7 +1047,7 @@
               "wwpn": null
             },
             {
-              "id": "f74a6fdd-9e7f-4c69-a340-a14abb22811b",
+              "id": "86f788de-1c4a-4fca-b26a-79850cf2430d",
               "name": "4",
               "networks": null,
               "networkObjects": [
@@ -901,9 +1061,15 @@
               "wwnn": null,
               "wwpn": null
             }
-          ]
+          ],
+          "interfaces": null,
+          "enabled": false,
+          "redundancy": false,
+          "usedforfc": false,
+          "nictype": null
         }
       ]
     }
-  ]
+  ],
+  "interfaces": null
 }
