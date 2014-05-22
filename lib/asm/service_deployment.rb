@@ -136,10 +136,9 @@ class ASM::ServiceDeployment
       server_cert_name =  server_component['puppetCertName']
       logger.debug "Server cert name: #{server_cert_name}"
 
-      if service_tag = cert_name_to_service_tag(server_cert_name)
+      if ASM::Util.dell_cert?(server_cert_name)
         # If we got service tag, it is a dell server and we get inventory
         logger.debug("Server CERT NAME IS: #{server_cert_name}")
-        logger.debug("Service Tag: #{service_tag}")
         inventory = ASM::Util.fetch_server_inventory(server_cert_name)
       else
         inventory = nil
@@ -212,10 +211,9 @@ class ASM::ServiceDeployment
       server_cert_name =  server_component['puppetCertName']
       logger.debug "Server cert name: #{server_cert_name}"
 
-      if service_tag = cert_name_to_service_tag(server_cert_name)
+      if ASM::Util.dell_cert?(server_cert_name)
         # If we got service tag, it is a dell server and we get inventory
         logger.debug("Server CERT NAME IS: #{server_cert_name}")
-        logger.debug("Service Tag: #{service_tag}")
         inventory = ASM::Util.fetch_server_inventory(server_cert_name)
 
         # Get Server WWPN Number
@@ -456,10 +454,8 @@ class ASM::ServiceDeployment
     log("Processing server component for compellent")
     if components = @components_by_type['SERVER']
       components.collect do |comp|
-        cert_name   = comp['puppetCertName']
-        dell_service_tag = cert_name_to_service_tag(cert_name)
-        # service_tag is only set for Dell servers
-        if dell_service_tag
+        cert_name = comp['puppetCertName']
+        if ASM::Util.dell_cert?(cert_name)
           deviceconf = ASM::Util.parse_device_config(cert_name)
           ASM::WsMan.get_wwpns(deviceconf,logger)
         end
@@ -473,25 +469,22 @@ class ASM::ServiceDeployment
     iscsi_ip_addresses = []
     if components = @components_by_type['SERVER']
       components.collect do |comp|
-        cert_name   = comp['puppetCertName']
-        dell_service_tag = cert_name_to_service_tag(cert_name)
-        logger.debug "Getting iSCSI IP Address for server #{dell_service_tag}"
+        cert_name = comp['puppetCertName']
         # service_tag is only set for Dell servers
-        if dell_service_tag
-          server_conf = ASM::Util.build_component_configuration(comp, :decrypt => decrypt?)
-          (server_conf['asm::server'] || []).each do |server_cert, server_params|
-            net_params = (server_conf['asm::esxiscsiconfig'] || {})[server_cert]
-            (net_params || {}).each do |name, net_array|
-              if name == 'storage_network'
-                unless net_array.size == 2
-                  raise("Expected 2 iscsi interfaces for hyperv, only found #{net_array.size}")
-                end
-                first_net = net_array.first
-                iscsi_ip_addresses.push(first_net['staticNetworkConfiguration']['ipAddress'])
-                iscsi_ip_addresses.push(net_array.last['staticNetworkConfiguration']['ipAddress'])
+        next unless ASM::Util.dell_cert?(cert_name)
+        logger.debug "Getting iSCSI IP Address for #{cert_name}"
+        server_conf = ASM::Util.build_component_configuration(comp, :decrypt => decrypt?)
+        (server_conf['asm::server'] || []).each do |server_cert, server_params|
+          net_params = (server_conf['asm::esxiscsiconfig'] || {})[server_cert]
+          (net_params || {}).each do |name, net_array|
+            if name == 'storage_network'
+              unless net_array.size == 2
+                raise("Expected 2 iscsi interfaces for hyperv, only found #{net_array.size}")
               end
+              first_net = net_array.first
+              iscsi_ip_addresses.push(first_net['staticNetworkConfiguration']['ipAddress'])
+              iscsi_ip_addresses.push(net_array.last['staticNetworkConfiguration']['ipAddress'])
             end
-
           end
         end
       end
@@ -499,26 +492,22 @@ class ASM::ServiceDeployment
     iscsi_ip_addresses.compact.flatten.uniq
   end
 
-  
   def get_dell_server_nfs_ipaddresses()
     nfs_ip_addresses = []
     if components = @components_by_type['SERVER']
       components.collect do |comp|
         cert_name   = comp['puppetCertName']
-        dell_service_tag = cert_name_to_service_tag(cert_name)
-        logger.debug "Getting Management and Storage IP Address for server #{dell_service_tag}"
-        # service_tag is only set for Dell servers
-        if dell_service_tag
-          server_conf = ASM::Util.build_component_configuration(comp, :decrypt => decrypt?)
-          (server_conf['asm::server'] || []).each do |server_cert, server_params|
-            net_params = (server_conf['asm::esxiscsiconfig'] || {})[server_cert]
-            (net_params || {}).each do |name, net_array|
-              logger.debug "Network name: #{name}"
-              logger.debug "Network array : #{net_array.inspect}"
-              if name == 'hypervisor_network' or name == 'converged_network' or name == 'nfs_network'
-                first_net = net_array.first
-                nfs_ip_addresses.push(first_net['staticNetworkConfiguration']['ipAddress'])
-              end
+        next unless ASM::Util.dell_cert?(cert_name)
+        logger.debug "Getting Management and Storage IP Address for server #{cert_name}"
+        server_conf = ASM::Util.build_component_configuration(comp, :decrypt => decrypt?)
+        (server_conf['asm::server'] || []).each do |server_cert, server_params|
+          net_params = (server_conf['asm::esxiscsiconfig'] || {})[server_cert]
+          (net_params || {}).each do |name, net_array|
+            logger.debug "Network name: #{name}"
+            logger.debug "Network array : #{net_array.inspect}"
+            if name == 'hypervisor_network' or name == 'converged_network' or name == 'nfs_network'
+              first_net = net_array.first
+              nfs_ip_addresses.push(first_net['staticNetworkConfiguration']['ipAddress'])
             end
           end
         end
@@ -535,12 +524,9 @@ class ASM::ServiceDeployment
   def get_specific_dell_server_wwpns(comp)
     wwpninfo=nil
     cert_name   = comp['puppetCertName']
-    dell_service_tag = cert_name_to_service_tag(cert_name)
-    # service_tag is only set for Dell servers
-    if dell_service_tag
-      deviceconf = ASM::Util.parse_device_config(cert_name)
-      ASM::WsMan.get_wwpns(deviceconf,logger)
-    end
+    return unless ASM::Util.dell_cert?(cert_name)
+    deviceconf = ASM::Util.parse_device_config(cert_name)
+    ASM::WsMan.get_wwpns(deviceconf,logger)
   end
 
   def process_test(component)
@@ -673,7 +659,7 @@ class ASM::ServiceDeployment
     switchinfoobj = Get_switch_information.new()
     switchportdetail = switchinfoobj.get_info(serverhash,@rack_server_switchhash,logger,server_nic_type,server_vlan_info)
     logger.debug "******** In process_tor switchportdetail :: #{switchportdetail} *********\n"
-    sinfo = serverhash[cert_name_to_service_tag(server_cert_name)]
+    sinfo = serverhash[ASM::Util.cert2serial(server_cert_name)]
     macArray = sinfo['mac_addresses']
     fabric_interfaces = switchinfoobj.get_fabic_configured_interfaces(server_nic_type,server_vlan_info,macArray,logger)
     logger.debug("Fabric Interface: #{fabric_interfaces}")
@@ -920,7 +906,7 @@ class ASM::ServiceDeployment
       logger.debug"switch_active_zoneset: #{switch_active_zoneset}"
       logger.debug"switch_storage_alias:#{switch_storage_alias}"
 
-      service_tag=self.cert_name_to_service_tag(server_cert_name)
+      service_tag=ASM::Util.cert2serial(server_cert_name)
       zone_name="ASM_#{service_tag}"
 
       resource_hash = Hash.new
@@ -962,21 +948,6 @@ class ASM::ServiceDeployment
       end
     end
     return portchannellist
-  end
-
-  #
-  # Dell specific servers have the service tag in
-  # the certificate name. This method returns a service
-  # tag for certificate names of Dell servers and
-  # returns nil for non-dell servers
-  #
-  def cert_name_to_service_tag(title)
-    match = /^(bladeserver|rackserver)-(.*)$/.match(title)
-    if match
-      match[2].upcase
-    else
-      nil
-    end
   end
 
   def get_server_inventory(certname)
@@ -1102,15 +1073,9 @@ class ASM::ServiceDeployment
 
     # In the case of Dell servers the cert_name should contain
     # the service tag and we retrieve it here
-    serial_number = nil
-    service_tag = cert_name_to_service_tag(cert_name)
-    if service_tag
-      is_dell_server = true
-      serial_number = service_tag
-    else
-      is_dell_server = false
-      serial_number = cert_name
-    end
+    serial_number = ASM::Util.cert2serial(cert_name)
+    is_dell_server = ASM::Util.dell_cert?(cert_name)
+    logger.debug "#{cert_name} -> #{serial_number}"
     logger.debug "Is #{cert_name} a dell server? #{is_dell_server}"
     resource_hash = {}
     server_vlan_info = {}
@@ -1134,7 +1099,7 @@ class ASM::ServiceDeployment
       server = ASM::Resource::Server.create(resource_hash).first
      
       title = server.title
-      os_image_type = server.os_image_type 
+      os_image_type = server.os_image_type
       os_host_name = server.os_host_name
       os_image_version = server.os_image_version
 
@@ -1528,10 +1493,7 @@ class ASM::ServiceDeployment
         (server_conf['asm::server'] || []).each do |server_cert, server_params|
           if server_params['os_image_type'] == 'vmware_esxi'
             install_mem = ASM::Util.to_boolean(server_params['esx_mem'])
-            serial_number = cert_name_to_service_tag(server_cert)
-            unless serial_number
-              serial_number = server_cert
-            end
+            serial_number = ASM::Util.cert2serial(server_cert)
 
             # Determine host IP
             log("Finding host ip for serial number #{serial_number}")
@@ -1842,14 +1804,8 @@ class ASM::ServiceDeployment
   #
   # { vswitch_type => { :vmnics => [vmnicn, ...], :networks => [net1, ...]}}
   def get_vmnics_and_networks(esx_endpoint, server_device_conf, network_config, network_params)
-    service_tag = cert_name_to_service_tag(server_device_conf[:cert_name])
-    if service_tag
-      is_dell_server = true
-      serial_number = service_tag
-    else
-      is_dell_server = false
-      serial_number = server_device_conf[:cert_name]
-    end
+    service_tag = ASM::Util.cert2serial(server_device_conf[:cert_name])
+    is_dell_server = ASM::Util.dell_cert?(server_device_conf[:cert_name])
 
     if is_dell_server
       network_config.add_nics!(server_device_conf)

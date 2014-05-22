@@ -42,19 +42,19 @@ describe ASM::ServiceDeployment do
 
     before do
       FileUtils.mkdir_p("#{@tmp_dir}/8000/resources")
-      @r_file = "#{@tmp_dir}/8000/resources/cert.yaml"
-      @o_file = "#{@tmp_dir}/8000/cert.out"
+      @r_file = "#{@tmp_dir}/8000/resources/server-cert.yaml"
+      @o_file = "#{@tmp_dir}/8000/server-cert.out"
       @data = {'serviceTemplate' => {'components' => [
-        {'id' => 'id', 'puppetCertName' => 'cert', 'resources' => []}
+        {'id' => 'id', 'puppetCertName' => 'server-cert', 'resources' => []}
       ]}}
     end
 
     it 'should be able to process data for a single resource' do
-      File.open( "#{@tmp_dir}/8000/cert.out", 'w') do |fh|
+      File.open( "#{@tmp_dir}/8000/server-cert.out", 'w') do |fh|
         fh.write('Results: For 0 resources. 0 from our run failed. 0 not from our run failed. 0 updated successfully.')
       end
       ASM::Util.expects(:run_command_streaming).with(
-        "sudo puppet asm process_node --debug --trace --filename #{@r_file} --run_type apply --statedir #{@tmp_dir}/8000/resources  --always-override cert", "#{@o_file}")
+        "sudo puppet asm process_node --debug --trace --filename #{@r_file} --run_type apply --statedir #{@tmp_dir}/8000/resources  --always-override server-cert", "#{@o_file}")
       @data['serviceTemplate']['components'][0]['type'] = 'TEST'
       @data['serviceTemplate']['components'][0]['resources'].push(
         {'id' => 'user', 'parameters' => [
@@ -81,7 +81,7 @@ describe ASM::ServiceDeployment do
       end
       it 'should configure a server' do
         ASM::Util.expects(:run_command_streaming).with(
-          "sudo -i puppet asm process_node --filename #{@r_file} --run_type apply --always-override cert", "#{@o_file}") do |cmd|
+          "sudo -i puppet asm process_node --filename #{@r_file} --run_type apply --always-override server-cert", "#{@o_file}") do |cmd|
           File.open(@o_file, 'w') do |fh|
             fh.write('Results: For 0 resources. 0 from our run failed. 0 not from our run failed. 0 updated successfully.')
           end
@@ -130,10 +130,10 @@ describe ASM::ServiceDeployment do
         }
         razor.stubs(:get).returns(policy)
         @sd.stubs(:razor).returns(razor)
-        @data['serviceTemplate']['components'][0]['id'] = 'bladeserver_serialno'
-        @data['serviceTemplate']['components'][0]['puppetCertName'] = 'bladeserver_serialno'
+        @data['serviceTemplate']['components'][0]['id'] = 'bladeserve-_serialno'
+        @data['serviceTemplate']['components'][0]['puppetCertName'] = 'bladeserver-serialno'
         @data['serviceTemplate']['components'][0]['type'] = 'SERVER'
-        parameters = [ {'id' => 'title', 'value' => 'bladeserver_serialno'},
+        parameters = [ {'id' => 'title', 'value' => 'bladeserver-serialno'},
                        {'id' => 'razor_image', 'value' => 'esxi-5.1'},
                        {'id' => 'os_image_type', 'value' => 'vmware_esxi'}, 
                        {'id' => 'os_host_name', 'value' => 'foo'}]
@@ -236,7 +236,7 @@ describe ASM::ServiceDeployment do
     it 'should fail when resources do not have types' do
       expect do
         @sd.process({'serviceTemplate' => {'components' => [
-          {'id' => 'id', 'puppetCertName' => 'cert', 'type' => 'TEST', 'resources' => [
+          {'id' => 'id', 'puppetCertName' => 'server-cert', 'type' => 'TEST', 'resources' => [
             {}
           ]}
         ]}})
