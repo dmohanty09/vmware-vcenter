@@ -1229,6 +1229,7 @@ class ASM::ServiceDeployment
                         resource_hash,
                         target_ip,
                         vol_names,
+                        logger,
                         get_disk_part_flag(component),
                         storage_type,
                         iscsi_fabric
@@ -2460,14 +2461,9 @@ class ASM::ServiceDeployment
     cert_name = component['puppetCertName']
     server_conf = ASM::Util.build_component_configuration(component, :decrypt => decrypt?)
     network_params = (server_conf['asm::esxiscsiconfig'] || {})[cert_name]
-    if network_params
-      [ 'converged_network'].each do |net|
-        logger.debug "Network GUID : #{network_params.inspect}"
-        if  network_params[net]
-          cluster_ip = ASM::Util.reserve_network_ips(network_params[net][0]['id'], 1, @id)
-        end
-      end
-    end
+    network_config = ASM::NetworkConfiguration.new(network_params['network_configuration'], logger)
+    management_network = network_config.get_network('HYPERVISOR_MANAGEMENT')
+    cluster_ip = ASM::Util.reserve_network_ips(management_network['id'], 1, @id)
     cluster_ip[0]
   end
   

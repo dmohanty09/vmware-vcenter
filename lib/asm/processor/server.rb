@@ -1,4 +1,6 @@
 require 'asm/util'
+require 'asm/network_configuration'
+
 module ASM
   module Processor
     module Server
@@ -8,7 +10,7 @@ module ASM
       # and converts them into the expected asm::server
       # resource hash
       #
-      def self.munge_hyperv_server(title, old_resources, target_ip, vol_names, disk_part_flag, storage_type = 'iscsi', iscsi_fabric = "Fabric A")
+      def self.munge_hyperv_server(title, old_resources, target_ip, vol_names, logger, disk_part_flag, storage_type = 'iscsi', iscsi_fabric = "Fabric A")
 
         resources = old_resources.dup 
 
@@ -65,6 +67,11 @@ module ASM
 
         # now merge in network parameters
         net_params   = (resources['asm::esxiscsiconfig'] || {})[title]
+          
+        network_config = ASM::NetworkConfiguration.new(net_params['network_configuration'], logger)
+        management_network = network_config.get_network('HYPERVISOR_MANAGEMENT')
+        migration_network = network_config.get_network('HYPERVISOR_MIGRATION')
+        private_network = network_config.get_network('HYPERVISOR_CLUSTER_PRIVATE')
 
         net_mapper = {
           'ipAddress' => 'ip_address',
@@ -72,46 +79,45 @@ module ASM
           'gateway'    => 'gateway'
         }
 
-        (net_params || {}).each do |name, net_array|
-
-          if ['private_cluster_network', 'live_migration_network', 'converged_network'].include?(name)
-
-            first_net = net_array.first
+        [management_network, migration_network, private_network].each do |network|
 
             param_prefix = name.sub(/_network$/, '')
 
-            param_prefix = "#{param_prefix}_net" if name == 'converged_network'
+            param_prefix = "converged_net" if network['type'] == 'HYPERVISOR_MANAGEMENT'
+            param_prefix = "live_migration" if network['type'] == 'HYPERVISOR_MIGRATION'
+            param_prefix = "cluster_private" if network['type'] == 'HYPERVISOR_CLUSTER_PRIVATE'
 
-            puppet_classification_data['hyperv::config'][ "#{param_prefix}_vlan_id"] = first_net['vlanId']
+            puppet_classification_data['hyperv::config'][ "#{param_prefix}_vlan_id"] = network['vlanId']
 
             net_mapper.each do |attr, puppet_param|
               param = "#{param_prefix}_#{puppet_param}"
-              puppet_classification_data['hyperv::config'][param] = first_net['staticNetworkConfiguration'][attr]
+              puppet_classification_data['hyperv::config'][param] = network['staticNetworkConfiguration'][attr]
             end
 
-            if name == 'converged_network'
-              puppet_classification_data['hyperv::config']['converged_net_dns_server'] = first_net['staticNetworkConfiguration']['primaryDns']
+            if network['type'] == 'HYPERVISOR_MANAGEMENT'
+              puppet_classification_data['hyperv::config']['converged_net_dns_server'] = network['staticNetworkConfiguration']['primaryDns']
             end
 
+        end
+        
+        storage_networks = network_config.get_networks('STORAGE_ISCSI_SAN')
+        if storage_type == 'iscsi'
+          unless storage_networks.size == 2
+            raise("Expected 2 iscsi interfaces for hyperv, only found #{storage_networks.size}")
           end
+          first_net = storage_networks[0]
+          second_net = storage_networks[1]
+          puppet_classification_data['hyperv::config']['iscsi_netmask']     =  first_net['staticNetworkConfiguration']['subnet']
+          puppet_classification_data['hyperv::config']['iscsi_vlan_id']           =  first_net['vlanId']
+          puppet_classification_data['hyperv::config']['iscsi_ip_addresses'] = []
+          puppet_classification_data['hyperv::config']['iscsi_ip_addresses'].push(first_net['staticNetworkConfiguration']['ipAddress'])
+          puppet_classification_data['hyperv::config']['iscsi_ip_addresses'].push(second_net['staticNetworkConfiguration']['ipAddress'])
+          puppet_classification_data['hyperv::config']['iscsi_fabric'] = iscsi_fabric
+        end
 
-          if name == 'storage_network' and storage_type == 'iscsi'
-            unless net_array.size == 2
-              raise("Expected 2 iscsi interfaces for hyperv, only found #{net_array.size}")
-            end
-            first_net = net_array.first
-            puppet_classification_data['hyperv::config']['iscsi_netmask']     =  first_net['staticNetworkConfiguration']['subnet']
-            puppet_classification_data['hyperv::config']['iscsi_vlan_id']           =  first_net['vlanId']
-            puppet_classification_data['hyperv::config']['iscsi_ip_addresses'] = []
-            puppet_classification_data['hyperv::config']['iscsi_ip_addresses'].push(first_net['staticNetworkConfiguration']['ipAddress'])
-            puppet_classification_data['hyperv::config']['iscsi_ip_addresses'].push(net_array.last['staticNetworkConfiguration']['ipAddress'])
-            puppet_classification_data['hyperv::config']['iscsi_fabric'] = iscsi_fabric
-          end
-
-          puppet_classification_data['hyperv::config']['hyperv_diskpart'] = disk_part_flag
-          if storage_type == 'fc'
-            puppet_classification_data['hyperv::config']['pod_type'] = 'AS1000'
-          end
+        puppet_classification_data['hyperv::config']['hyperv_diskpart'] = disk_part_flag
+        if storage_type == 'fc'
+          puppet_classification_data['hyperv::config']['pod_type'] = 'AS1000'
         end
 
         server_params['puppet_classification_data'] = puppet_classification_data
@@ -127,4 +133,5 @@ module ASM
 
     end
   end
+
 end

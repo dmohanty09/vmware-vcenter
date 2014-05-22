@@ -194,6 +194,7 @@ describe ASM::ServiceDeployment do
              {'asm::server' => {'bladeserver-serialno' => {'os_image_type' => 'hyperv', 'os_image_version' => 'hyperv', 'os_host_name' => 'foo', 'rule_number' => 1, 'broker_type' => 'puppet', 'serial_number' => 'SERIALNO', 'policy_name' => 'policy-foo-8000', 'cert_name' => 'agent-foo'}}},
             '127.0.1.1',
             ['vol1', 'vol2'],
+            @sd.logger,
             false,
             'iscsi',
             'Fabric A'
