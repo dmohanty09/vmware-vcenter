@@ -1092,13 +1092,25 @@ class ASM::ServiceDeployment
         raise(Exception, msg)
       end
 
-      title = resource_hash['asm::server'].keys[0]
+      server = ASM::Resource::Server.create(resource_hash).first
+     
+      title = server.title
+      os_image_type = server.os_image_type 
+      os_host_name = server.os_host_name
+      os_image_version = server.os_image_version
+
       params = resource_hash['asm::server'][title]
-      os_image_type = params['os_image_type']
-      os_host_name  = params['os_host_name']
       classes_config = get_classification_data(component, os_host_name)
-      massage_asm_server_params(serial_number, params, classes_config)
-      os_image_version = params['os_image_version']
+      server.process!(serial_number, rule_number, @id, classes_config)
+
+      if kickstart_script = server.delete('custom_script')
+        custom_script_path = create_custom_script(serial_number, kickstart_script.strip)
+        server.custom_script = custom_script_path
+      end
+
+      #massage_asm_server_params(serial_number, params, classes_config)
+
+      resource_hash['asm::server'] = server.to_puppet
     end
 
     # Create a vmware ks.cfg include file containing esxcli command line

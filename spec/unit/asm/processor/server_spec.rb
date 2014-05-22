@@ -28,7 +28,7 @@ describe ASM::Processor::Server do
   describe 'when munging resource data for hyperV' do
 
     it 'should do some stuff' do
-      data = subject.munge_hyperv_server('title', @data, '127.0.0.1', [], false)
+      data = subject.munge_hyperv_server('title', @data, '127.0.0.1', [], nil, false)
       server_data = data['asm::server']['title']
       idrac_data  = data['asm::idrac']['title']
       # make sure that all old values were munged out of server params

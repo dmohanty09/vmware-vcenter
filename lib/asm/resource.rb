@@ -1,6 +1,7 @@
 require 'hashie'
 require 'yaml'
 require 'json'
+require 'asm/util'
 
 module ASM
   module Resource
@@ -100,7 +101,7 @@ module ASM
         end
 
         def vm
-          @vm ||= findvm(datacenter.vmFolder, self.hostname) 
+          @vm ||= findvm(dc.vmFolder, self.hostname) 
         end
 
         def findvm(folder, name)
@@ -197,18 +198,73 @@ module ASM
 
     end
 
+    class Server_Mash < Hashie::Mash
+      def initialize(server, default=nil, &blk)
+        if server.include? 'os_type'
+          server['os_image_type'] = server.delete('os_type')
+        end
+        super(server, default, &blk)
+      end
+
+      def process!(serial_number, rule_number, id, classes={})
+        if self.include? 'rule_number'
+          raise(Exception, "Did not expect rule_number in asm::server")
+        else
+          self.rule_number = rule_number
+        end
+
+        if self.os_image_type == 'vmware_esxi'
+          self.broker_type = 'noop'
+        else
+          self.broker_type = 'puppet'
+        end
+
+        hostname = self.os_host_name
+
+        # For OS without os_image_version such as Linux, ESX
+        self.os_image_version ||= self.os_image_type
+
+        self.serial_number = serial_number
+        self.policy_name = "policy-#{hostname}-#{id}"
+
+        self.cert_name = ASM::Util.hostname_to_certname(hostname)
+        self.puppet_classification_data = classes unless classes.empty?
+      end
+
+      def to_puppet
+        title = self.delete 'title'
+        case self.os_image_type
+        when 'windows'
+          installer_options = {}
+	  [
+	    'language',
+	    'keyboard',
+	    'product_key',
+	    'timezone',
+	  ].each do |param|
+            installer_options[param] = self.delete(param) if self.include?(param)
+          end
+          self.installer_options = installer_options
+        end
+
+        { title => self.to_hash }
+      end
+    end
+
     class Server
       def self.create(value)
         if value.include? 'asm::server'
-          value['asm::server'].collect do |uuid, data| 
-            ASM::Resource::Mash.new(cleanup(data))
+          value['asm::server'].collect do |title, server| 
+            server['title'] = title
+            ASM::Resource::Server_Mash.new(server)
           end
         else
           []
         end
       end
 
-      def self.cleanup(server)
+      def self.cleanup(server, title)
+        server['title'] = title 
         if server.include? 'os_type'
           server['os_image_type'] = server.delete('os_type')
           # TODO: migrate logger
@@ -216,6 +272,7 @@ module ASM
         end
         server
       end
+
     end
 
     module Cluster
