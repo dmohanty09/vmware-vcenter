@@ -1072,12 +1072,18 @@ class ASM::ServiceDeployment
       is_dell_server = false
       serial_number = cert_name
     end
+    logger.debug "Is #{cert_name} a dell server? #{is_dell_server}"
     resource_hash = {}
     server_vlan_info = {}
     deviceconf = nil
     inventory = nil
     os_host_name = nil
     resource_hash = ASM::Util.build_component_configuration(component, :decrypt => decrypt?)
+    if !is_dell_server && resource_hash['asm::idrac']
+      logger.debug "ASM-1588: Non-Dell server has an asm::idrac resource"
+      logger.debug "ASM-1588: Stripping it out."
+      resource_hash.delete('asm::idrac')
+    end
 
     if resource_hash['asm::server']
       if resource_hash['asm::server'].size != 1
