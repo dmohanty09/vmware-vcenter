@@ -1392,31 +1392,31 @@ class ASM::ServiceDeployment
     next_require = "Esx_vswitch[#{hostip}:#{vswitch_name}]"
 
     portgrouptype = type == :workload ? 'VirtualMachine' : 'VMkernel'
-    portgroup_names = case type
-      when :storage
-        # iSCSI network
-        # NOTE: We have to make sure the ISCSI1 requires ISCSI0 so that
-        # they are created in the "right" order -- the order that will
-        # give ISCSI0 vmk2 and ISCSI1 vmk3 vmknics. The datastore
-        # configuration relies on that.
-        raise(Exception, "Exactly two networks expected for storage network") unless networks.size == 2
-        ['ISCSI0', 'ISCSI1']
-      when :management
-        # Hypervisor network. Currently the static management ip is
-        # set in the esxi kickstart and has a name of "Management
-        # Network". We have to match that name in order to be able to
-        # change the settings for that portgroup since they are
-        # configured by name.
-        raise(Exception, "Exactly one networks expected for management network") unless networks.size == 1
-        ['Management Network']
-      else
-        networks.map { |network| network['name'] }
+    is_iscsi = type == :storage && networks.first.type == 'STORAGE_ISCSI_SAN'
+    portgroup_names = if type == :storage && is_iscsi
+      # iSCSI network
+      # NOTE: We have to make sure the ISCSI1 requires ISCSI0 so that
+      # they are created in the "right" order -- the order that will
+      # give ISCSI0 vmk2 and ISCSI1 vmk3 vmknics. The datastore
+      # configuration relies on that.
+      raise(Exception, 'Exactly two networks expected for storage network') unless networks.size == 2
+      ['ISCSI0', 'ISCSI1']
+    elsif type == :management
+      # Hypervisor network. Currently the static management ip is
+      # set in the esxi kickstart and has a name of "Management
+      # Network". We have to match that name in order to be able to
+      # change the settings for that portgroup since they are
+      # configured by name.
+      raise(Exception, 'Exactly one networks expected for management network') unless networks.size == 1
+      ['Management Network']
+    else
+      networks.map { |network| network['name'] }
     end
 
     portgroup_names.each_with_index do |portgroup_name, index|
       network = networks[index]
       portgroup_title = "#{hostip}:#{portgroup_name}"
-      active_nics = type == :storage ? [vmnics[index]] : vmnics
+      active_nics = is_iscsi ? [vmnics[index]] : vmnics
       portgroup = build_portgroup(vswitch_name, path, hostip, portgroup_name,
                                   network, portgrouptype, active_nics, type)
 
