@@ -1027,7 +1027,7 @@ class ASM::ServiceDeployment
   end
 
   def populate_rack_switch_hash
-    process_switch('rack_switches') do |certname, conf|
+    process_switch('rack') do |certname, conf|
       if certname =~ /dell_ftos/
         conf['device_type'] = "dell_ftos"
       else
@@ -1048,7 +1048,7 @@ class ASM::ServiceDeployment
   end
 
   def populate_blade_switch_hash
-    process_switch('blade_switch') do |certname, conf|
+    process_switch('blade') do |certname, conf|
       if certname =~ /dell_ftos/
         conf['device_type'] = "dell_ftos"
       else
