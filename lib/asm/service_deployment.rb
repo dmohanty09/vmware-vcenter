@@ -1946,7 +1946,7 @@ class ASM::ServiceDeployment
 
     servers = ASM::Resource::Server.create(resource_hash)
     raise(Exception, "Expect zero or one set of Server configuration: #{servers.size} were passed") if servers.size > 1
-    server = servers.first || Hashie::Mash.new
+    server = servers.first
 
     clusters = (find_related_components('CLUSTER', component) || [])
     cluster = clusters.first || {}
@@ -1968,7 +1968,8 @@ class ASM::ServiceDeployment
     resource_hash = vm.to_puppet
 
     log("Creating VM #{hostname}")
-    process_generic(vm.certname, resource_hash, 'apply')
+    certname = "vm-#{hostname}"
+    process_generic(certname, resource_hash, 'apply')
 
     if server
       uuid = nil
@@ -1992,7 +1993,7 @@ class ASM::ServiceDeployment
       classes_config = get_classification_data(component, hostname)
       massage_asm_server_params(serial_number, server, classes_config)
       resource_hash['asm::server'] = { hostname => server.to_hash }
-      process_generic(vm.certname, resource_hash, 'apply')
+      process_generic(certname, resource_hash, 'apply')
 
       unless @debug
         # Unlike in bare-metal installs we only wait for the :boot_install
