@@ -1130,48 +1130,41 @@ class ASM::ServiceDeployment
 
       title = resource_hash['asm::esxiscsiconfig'].keys[0]
       network_params = resource_hash['asm::esxiscsiconfig'][title]
-      mgmt_networks = network_params['hypervisor_network']
-      if mgmt_networks
-        if mgmt_networks.size != 1
-          msg = "Only one hypervisor network allowed, found #{mgmt_networks.size}"
-          logger.error(msg)
-          raise(Exception, msg)
-        end
-        mgmt_network = mgmt_networks[0]
-        static = mgmt_network['staticNetworkConfiguration']
-        unless static
-          # This should have already been checked previously
-          msg = "Static network is required for hypervisor network"
-          logger.error(msg)
-          raise(Exception, msg)
-        end
+      network_config = ASM::NetworkConfiguration.new(network_params['network_configuration'], logger)
+      mgmt_network = network_config.get_network('HYPERVISOR_MANAGEMENT')
+      static = mgmt_network['staticNetworkConfiguration']
+      unless static
+        # This should have already been checked previously
+        msg = "Static network is required for hypervisor network"
+        logger.error(msg)
+        raise(Exception, msg)
+      end
 
-        static_ip = static['ipAddress']
-        content = "network --bootproto=static --device=vmnic0 --ip=#{static_ip}  --netmask=#{static['subnet']} --gateway=#{static['gateway']}"
-        # NOTE: vlanId is a FixNum
-        if mgmt_network['vlanId']
-          content += " --vlanid=#{mgmt_network['vlanId']}"
-        end
-        nameservers = [ static['dns1'], static['dns2'] ].select { |x| !x.nil? && !x.empty? }
-        if nameservers.size > 0
-          content += " --nameserver=#{nameservers.join(',')}"
-        else
-          content += ' --nodns'
-        end
-        if os_host_name
-          content += " --hostname='#{os_host_name}'"
-        end
-        content += "\n"
+      static_ip = static['ipAddress']
+      content = "network --bootproto=static --device=vmnic0 --ip=#{static_ip}  --netmask=#{static['subnet']} --gateway=#{static['gateway']}"
+      # NOTE: vlanId is a FixNum
+      if mgmt_network['vlanId']
+        content += " --vlanid=#{mgmt_network['vlanId']}"
+      end
+      nameservers = [static['dns1'], static['dns2']].select { |x| !x.nil? && !x.empty? }
+      if nameservers.size > 0
+        content += " --nameserver=#{nameservers.join(',')}"
+      else
+        content += ' --nodns'
+      end
+      if os_host_name
+        content += " --hostname='#{os_host_name}'"
+      end
+      content += "\n"
 
-        resource_hash['file'] = {}
-        resource_hash['file'][cert_name] = {
+      resource_hash['file'] = {}
+      resource_hash['file'][cert_name] = {
           'path' => "/opt/razor-server/tasks/vmware_esxi/bootproto_#{serial_number}.inc.erb",
           'content' => content,
           'owner' => 'razor',
           'group' => 'razor',
           'mode' => '0644',
-        }
-      end
+      }
     end
 
     if is_dell_server && resource_hash['asm::idrac']
@@ -1497,28 +1490,18 @@ class ASM::ServiceDeployment
 
             # Determine host IP
             log("Finding host ip for serial number #{serial_number}")
-            hostip = razor.find_host_ip(serial_number)
-            if @debug && !hostip
-              hostip = "DEBUG-IP-ADDRESS"
-            end
             network_params = (server_conf['asm::esxiscsiconfig'] || {})[server_cert]
-            mgmt_networks = network_params['hypervisor_network']
-            if mgmt_networks
-              if mgmt_networks.size != 1
-                msg = "Only one hypervisor network allowed, found #{mgmt_networks.size}"
-                logger.error(msg)
-                raise(Exception, msg)
-              end
-              mgmt_network = mgmt_networks[0]
-              static = mgmt_network['staticNetworkConfiguration']
-              unless static
-                # This should have already been checked previously
-                msg = "Static network is required for hypervisor network"
-                logger.error(msg)
-                raise(Exception, msg)
-              end
-              hostip = static['ipAddress']
+            network_config = ASM::NetworkConfiguration.new(network_params['network_configuration'], logger)
+            mgmt_network = network_config.get_network('HYPERVISOR_MANAGEMENT')
+            static = mgmt_network['staticNetworkConfiguration']
+            static = mgmt_network['staticNetworkConfiguration']
+            unless static
+              # This should have already been checked previously
+              msg = "Static network is required for hypervisor network"
+              logger.error(msg)
+              raise(Exception, msg)
             end
+            hostip = static['ipAddress']
 
             raise(Exception, "Could not find host ip for #{server_cert}") unless hostip
             serverdeviceconf = ASM::Util.parse_device_config(server_cert)
@@ -1651,7 +1634,7 @@ class ASM::ServiceDeployment
                       chap = {
                         'chapname' => storage_params['chap_user_name'],
                         'chapsecret' => storage_params['passwd']}
-                      asm_datastore.merge! chap 
+                      asm_datastore.merge! chap
                     end
                     resource_hash['asm::datastore'] ||= {}
                     resource_hash['asm::datastore']["#{hostip}:#{storage_title}:datastore"] = asm_datastore
@@ -1693,7 +1676,7 @@ class ASM::ServiceDeployment
                         'transport'              => "Transport[vcenter]",
                         'storage_groupip'        => ASM::Util.find_equallogic_iscsi_ip(storage_cert),
                         'iscsi_netmask'          => ASM::Util.find_equallogic_iscsi_netmask(storage_cert),
-                        'iscsi_vswitch'          => storage_network_vswitch,  
+                        'iscsi_vswitch'          => storage_network_vswitch,
                         'vnics'                  => vnics,
                         'vnics_ipaddress'        => vnics_ipaddress
                       }
@@ -1701,7 +1684,7 @@ class ASM::ServiceDeployment
                         chap = {
                           'iscsi_chapuser'         => storage_params['chap_user_name'],
                           'iscsi_chapsecret'       => storage_params['passwd'] }
-                        esx_mem.merge! chap 
+                        esx_mem.merge! chap
                       end
                       resource_hash['esx_mem'] ||= {}
                       resource_hash['esx_mem'][hostip] = esx_mem
@@ -1753,7 +1736,7 @@ class ASM::ServiceDeployment
                     }
                   end
                 end
-                
+
                 # Configure NFS Datastore
                 if storage_hash['netapp::create_nfs_export']
                   storage_hash['netapp::create_nfs_export'].each do |volume, storage_params|
@@ -1775,7 +1758,7 @@ class ASM::ServiceDeployment
                     }
                   end
                 end
-                
+
               end
               logger.debug('Configuring persistent storage for logs')
               if not storage_titles.empty?
