@@ -20,12 +20,28 @@ module ASM
     DEVICE_CONF_DIR="#{PUPPET_CONF_DIR}/devices"
     DEVICE_SSL_DIR="/var/opt/lib/pe-puppet/devices"
     DATABASE_CONF="#{PUPPET_CONF_DIR}/database.yaml"
+
+    # Extract a server serial number from the certname.
+    # For Dell servers, the serial number will be the service tag
+    # For others, this is hopefully correct but probably not in the long run.
+    def self.cert2serial(cert_name)
+      /^[^-]+-(.*)$/.match(cert_name)[1].upcase
+    end
+
+    # Check to see if this cert is talking about a Dell server.
+    # This is arguably laughably wrong, but cannot be fixed here for now for
+    # hysterical reasons.  As an additional guard, the serial number portion
+    # of the cert name must be exactly 7 chars in length for it to be
+    # considered a Dell service tag.
+    def self.dell_cert?(cert_name)
+      /^(blade|rack)server-.{7}$/ === cert_name
+    end
+
     # See spec/fixtures/asm_server_m620.json for sample response
     #
     # cert_name is in format devicetype-servicetag
     def self.fetch_server_inventory(cert_name)
-      service_tag_lower = /^[^-]+-(.*)$/.match(cert_name)[1]
-      service_tag = service_tag_lower.upcase
+      service_tag = cert2serial(cert_name)
       url = "#{SERVER_RA_URL}/?filter=eq,serviceTag,#{service_tag}"
       data = RestClient.get(url, {:accept => :json})
       ret = JSON.parse(data)
