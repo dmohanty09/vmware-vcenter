@@ -1905,6 +1905,8 @@ class ASM::ServiceDeployment
     end
 
     resource_hash = vm.to_puppet
+    vm_resource = resource_hash[resource_hash.keys[0]]
+    vm_title = vm_resource[vm_resource.keys[0]]
 
     log("Creating VM #{hostname}")
     certname = "vm-#{hostname}"
@@ -1931,7 +1933,8 @@ class ASM::ServiceDeployment
       # TODO: move the massage_asm_server_params stuff into ASM::Resource::Server
       classes_config = get_classification_data(component, hostname)
       massage_asm_server_params(serial_number, server, classes_config)
-      resource_hash['asm::server'] = { hostname => server.to_hash }
+      server.title = vm_title # TODO: clean this up
+      resource_hash['asm::server'] = server.to_puppet
       process_generic(certname, resource_hash, 'apply')
 
       unless @debug
