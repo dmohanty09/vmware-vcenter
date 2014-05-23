@@ -33,8 +33,8 @@ module ASM
         end
 
         # This is purely for testing:
-        def conf(certname)
-          @conf ||= ASM::Util.parse_device_config(certname)
+        def conf(cert)
+          @conf ||= ASM::Util.parse_device_config(cert)
         end
 
         def to_puppet
@@ -43,7 +43,7 @@ module ASM
       end
 
       class VMware < VM_Mash
-        def process!(certname, server, cluster)
+        def process!(cert, server, cluster)
           self.hostname = self.hostname || server.hostname || server.os_host_name
           raise(ArgumentError, 'VM hostname not specified and missing server hostname value') unless self.hostname
 
@@ -61,7 +61,7 @@ module ASM
           conf(cluster['puppetCertName'])
           self.cluster = cluster.cluster
           self.datacenter = cluster.datacenter
-          self.vcenter_id = certname
+          self.vcenter_id = cert
           self.vcenter_options = { 'insecure' => true }
           self.ensure = 'present'
 
@@ -82,6 +82,7 @@ module ASM
         end
 
         def to_puppet
+          @hostname = self.hostname
           hostname = self.delete 'hostname'
           { 'asm::vm::vcenter' => { hostname => self.to_hash }}
         end
@@ -101,7 +102,7 @@ module ASM
         end
 
         def vm
-          @vm ||= findvm(dc.vmFolder, self.hostname) 
+          @vm ||= findvm(dc.vmFolder, (self.hostname||@hostname)) 
         end
 
         def findvm(folder, name)
@@ -142,13 +143,12 @@ module ASM
       end
 
       class Scvmm < VM_Mash
-        def process!(certname, server, cluster)
-          hostname = self.delete('name')
-          raise(ArgumentError, 'VM hostname not specified, missing server os_host_name value') unless hostname
-          self.hostname = hostname
+        def process!(cert, server, cluster)
+          self.hostname ||= self.delete('name')
+          raise(ArgumentError, 'VM hostname not specified, missing server os_host_name value') unless self.hostname
 
-          conf(cluster['puppetCertName'])
-          self.scvmm_server = certname
+          conf(cert)
+          self.scvmm_server = cert
           self.vm_cluster = cluster.name
           self.ensure = 'present'
 
@@ -161,7 +161,8 @@ module ASM
           }
 
           networks = {}
-          self.network_interfaces.each_with_index do |i, net|
+
+          self.network_interfaces.each_with_index do |net, i|
             network = network_default.clone
             vlan_id = net['vlanId']
             raise(ArgumentError, "Missing VLAN id #{vlan}") unless vlan_id
@@ -172,7 +173,12 @@ module ASM
         end
 
         def to_puppet
+          @hostname = self.hostname
           hostname = self.delete 'hostname'
+
+          self.each do |key, val|
+            self.delete key if val.nil? or val == ''
+          end
           { 'asm::vm::scvmm' => { hostname => self.to_hash }}
         end
 
@@ -188,7 +194,8 @@ module ASM
 
         def macaddress
           raise(Exception, "Resource has not been processed.") unless @conf
-          result = ASM::Util.run_command_success("./scvmm_macaddress.rb -u '#{@conf.user}' -p '#{@conf.password}' -s '#{@conf.host}' -v '#{self.hostname}'")
+          cmd = File.join(File.dirname(__FILE__),'scvmm_macaddress.rb')
+          result = ASM::Util.run_command_success("#{cmd} -u '#{@conf.user}' -p '#{@conf.password}' -s '#{@conf.host}' -v '#{self.hostname||@hostname}'")
           result = result.stdout.each_line.collect{|line| line.chomp.rstrip.gsub(':', '')}
           macaddress = result.find{|x| x =~ /^[0-9a-fA-F]{12}$/}
           raise(Exception, 'Virtual machine needs to power on first.') if macaddress == '00000000000000'
