@@ -1124,14 +1124,6 @@ class ASM::ServiceDeployment
       resource_hash.delete('asm::idrac')
     end
     
-    title = resource_hash['asm::idrac'].keys[0]
-    params = resource_hash['asm::idrac'][title]
-    target_boot_device = params['target_boot_device']
-    if (target_boot_device.downcase == "fc" ) or (target_boot_device.downcase == "iscsi")
-      logger.debug("Boot from SAN Server Processing is not supported")
-      return true
-    end
-    
     if resource_hash['asm::server']
       if resource_hash['asm::server'].size != 1
         msg = "Only one O/S configuration allowed per server; found #{resource_hash['asm::server'].size} for #{serial_number}"
