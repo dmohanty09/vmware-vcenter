@@ -1559,9 +1559,9 @@ class ASM::ServiceDeployment
 
               # TODO: append_resources! should do this automatically
               network_config = ASM::NetworkConfiguration.new(network_params['network_configuration'], logger)
-              network_config.fabrics.each do |fabric|
-                logger.debug("Found fabric: #{fabric.name}")
-                fabric.interfaces.each do |port|
+              network_config.cards.each do |card|
+                logger.debug("Found card: #{card.name}")
+                card.interfaces.each do |port|
                   logger.debug("Found interface: #{port.name}")
                   port.partitions.each do |partition|
                     logger.debug("Found partition: #{partition.name} #{partition.fqdd} #{partition.mac_address} #{partition.networkObjects}")
