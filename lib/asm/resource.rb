@@ -47,6 +47,7 @@ module ASM
           self.hostname = self.hostname || server.hostname || server.os_host_name
           raise(ArgumentError, 'VM hostname not specified and missing server hostname value') unless self.hostname
 
+          server ||= {}
           case server['os_image_type']
           when 'windows'
             self.os_type = 'windows'
