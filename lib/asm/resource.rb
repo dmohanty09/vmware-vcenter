@@ -194,7 +194,8 @@ module ASM
 
         def macaddress
           raise(Exception, "Resource has not been processed.") unless @conf
-          result = ASM::Util.run_command_success("/opt/asm-deployer/lib/asm/scvmm_macaddress.rb -u '#{@conf.user}' -p '#{@conf.password}' -s '#{@conf.host}' -v '#{self.hostname||@hostname}'")
+          cmd = File.join(File.dirname(__FILE__),'scvmm_macaddress.rb')
+          result = ASM::Util.run_command_success("#{cmd} -u '#{@conf.user}' -p '#{@conf.password}' -s '#{@conf.host}' -v '#{self.hostname||@hostname}'")
           result = result.stdout.each_line.collect{|line| line.chomp.rstrip.gsub(':', '')}
           macaddress = result.find{|x| x =~ /^[0-9a-fA-F]{12}$/}
           raise(Exception, 'Virtual machine needs to power on first.') if macaddress == '00000000000000'
