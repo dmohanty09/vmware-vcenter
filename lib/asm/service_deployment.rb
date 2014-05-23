@@ -553,19 +553,56 @@ class ASM::ServiceDeployment
 
     resource_hash = ASM::Util.build_component_configuration(component, :decrypt => decrypt?)
 
+    process_storage = false
     wwpns = nil
     (resource_hash['compellent::createvol'] || {}).each do |title, params|
 
-      # TODO this can't be right, it should not be all servers, but
-      # just those that are related components
-      wwpns ||= (get_dell_server_wwpns || [])
+      server_comps = ASM::Util.asm_json_array(
+      find_related_components('SERVER', component)
+      )
+      # Check if the volume has boot volume set to true
+      boot_flag = resource_hash['compellent::createvol'][title]['boot']
+      if boot_flag
+        # There has to be only one related server, else raise error
+        unless server_comps.size == 1
+          raise(Exception, "Expected to find only one related server, found #{server_comps.size}")
+        end
 
+        # Get the wwpn of the related server
+        wwpns ||= (get_specific_dell_server_wwpns(server_comps[0]) || [])
+        server_servicetag = cert_name_to_service_tag(server_comps[0]['puppetCertName'])
+      else
+        # TODO this can't be right, it should not be all servers, but
+        # just those that are related components
+        wwpns ||= (get_dell_server_wwpns || [])
+      end
+      
       new_wwns = params['wwn'].split(',') + wwpns
       # Replace all the ":" from the WWPN
       # Compellent command-set do not like ":" in the value
       new_wwns = new_wwns.compact.map {|s| s.gsub(/:/, '')}
       resource_hash['compellent::createvol'][title]['wwn'] = new_wwns
+      configure_san = resource_hash['compellent::createvol'][title]['configuresan']
       resource_hash['compellent::createvol'][title].delete('configuresan')
+      resource_hash['compellent::createvol'][title]['force'] = 'true'
+        
+      server_comps.each do |server_comp|
+        if configure_san
+          resource_hash['compellent::createvol'][title]['servername'] = "ASM_#{server_servicetag}"
+        else
+          resource_hash['compellent::createvol'][title]['servername'] = ""
+        end
+        
+        process_generic(
+        component['puppetCertName'],
+        resource_hash,
+        'device',
+        true,
+        nil,
+        component['asmGUID']
+        )
+      end
+      process_storage = true
     end
 
     # Process EqualLogic manifest file in case auth_type is 'iqnip'
@@ -612,14 +649,16 @@ class ASM::ServiceDeployment
       resource_hash['netapp::create_nfs_export'][title].delete('nfs_network')
     end
 
-    process_generic(
+    if !process_storage
+      process_generic(
       component['puppetCertName'],
       resource_hash,
       'device',
       true,
       nil,
       component['asmGUID']
-    )
+      )
+    end
   end
 
   def process_tor(component)
@@ -1084,7 +1123,15 @@ class ASM::ServiceDeployment
       logger.debug "ASM-1588: Stripping it out."
       resource_hash.delete('asm::idrac')
     end
-
+    
+    title = resource_hash['asm::idrac'].keys[0]
+    params = resource_hash['asm::idrac'][title]
+    target_boot_device = params['target_boot_device']
+    if (target_boot_device.downcase == "fc" ) or (target_boot_device.downcase == "iscsi")
+      logger.debug("Boot from SAN Server Processing is not supported")
+      return true
+    end
+    
     if resource_hash['asm::server']
       if resource_hash['asm::server'].size != 1
         msg = "Only one O/S configuration allowed per server; found #{resource_hash['asm::server'].size} for #{serial_number}"
