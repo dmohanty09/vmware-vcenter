@@ -1090,6 +1090,7 @@ class ASM::ServiceDeployment
     # calls to create a static management network that will be executed
     # from the vmware ks.cfg
     static_ip = nil
+    network_config = nil
     if resource_hash['asm::esxiscsiconfig']
       if resource_hash['asm::esxiscsiconfig'].size != 1
         msg = "Only one ESXi networking configuration allowed per server; found #{resource_hash['asm::esxiscsiconfig'].size} for #{serial_number}"
@@ -1151,6 +1152,9 @@ class ASM::ServiceDeployment
       params['nfssharepath'] = '/var/nfs/idrac_config_xml'
       params['servicetag'] = inventory['serviceTag']
       params['model'] = inventory['model'].split(' ').last.downcase
+      if network_config
+        params['network_configuration'] = network_config.to_hash
+      end
       params['before'] = []
       if resource_hash['asm::server']
         params['before'].push("Asm::Server[#{cert_name}]")
