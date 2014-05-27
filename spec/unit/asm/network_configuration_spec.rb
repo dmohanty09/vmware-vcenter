@@ -260,6 +260,27 @@ describe ASM::NetworkConfiguration do
       partitions[1].mac_address.should == '00:0E:1E:0D:8C:37'
     end
 
+    it 'should find single network ip addresses' do
+      ips = ASM::NetworkConfiguration.new(@data).get_static_ips('HYPERVISOR_MANAGEMENT')
+      ips.should == ['172.28.12.118']
+    end
+
+    it 'should find multiple static ips of same type' do
+      ips = ASM::NetworkConfiguration.new(@data).get_static_ips('STORAGE_ISCSI_SAN')
+      ips.sort.should == ['172.16.12.120', '172.16.12.121']
+    end
+
+    it 'should find multiple static ips with different types' do
+      config = ASM::NetworkConfiguration.new(@data)
+      ips = config.get_static_ips('HYPERVISOR_MANAGEMENT', 'STORAGE_ISCSI_SAN')
+      ips.sort.should == ['172.16.12.120', '172.16.12.121', '172.28.12.118']
+    end
+
+    it 'should ignore dhcp when finding static ips' do
+      ips = ASM::NetworkConfiguration.new(@data).get_static_ips('PXE')
+      ips.empty?.should == true
+    end
+
   end
 
   describe 'when parsing an un-partitioned network config' do

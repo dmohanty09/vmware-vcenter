@@ -463,64 +463,6 @@ class ASM::ServiceDeployment
     end
   end
 
-  # Get the iSCSI IP Address reserved for each of the server
-  # and return the list of IP Addresses
-  def get_dell_server_iscsi_ipaddresses()
-    iscsi_ip_addresses = []
-    if components = @components_by_type['SERVER']
-      components.collect do |comp|
-        cert_name = comp['puppetCertName']
-        # service_tag is only set for Dell servers
-        next unless ASM::Util.dell_cert?(cert_name)
-        logger.debug "Getting iSCSI IP Address for #{cert_name}"
-        server_conf = ASM::Util.build_component_configuration(comp, :decrypt => decrypt?)
-        (server_conf['asm::server'] || []).each do |server_cert, server_params|
-          net_params = (server_conf['asm::esxiscsiconfig'] || {})[server_cert]
-          (net_params || {}).each do |name, net_array|
-            if name == 'storage_network'
-              unless net_array.size == 2
-                raise("Expected 2 iscsi interfaces for hyperv, only found #{net_array.size}")
-              end
-              first_net = net_array.first
-              iscsi_ip_addresses.push(first_net['staticNetworkConfiguration']['ipAddress'])
-              iscsi_ip_addresses.push(net_array.last['staticNetworkConfiguration']['ipAddress'])
-            end
-          end
-        end
-      end
-    end
-    iscsi_ip_addresses.compact.flatten.uniq
-  end
-
-  def get_dell_server_nfs_ipaddresses()
-    nfs_ip_addresses = []
-    if components = @components_by_type['SERVER']
-      components.collect do |comp|
-        cert_name   = comp['puppetCertName']
-        next unless ASM::Util.dell_cert?(cert_name)
-        logger.debug "Getting Management and Storage IP Address for server #{cert_name}"
-        server_conf = ASM::Util.build_component_configuration(comp, :decrypt => decrypt?)
-        (server_conf['asm::server'] || []).each do |server_cert, server_params|
-          net_params = (server_conf['asm::esxiscsiconfig'] || {})[server_cert]
-          (net_params || {}).each do |name, net_array|
-            logger.debug "Network name: #{name}"
-            logger.debug "Network array : #{net_array.inspect}"
-            if name == 'hypervisor_network' or name == 'converged_network' or name == 'nfs_network'
-              first_net = net_array.first
-              nfs_ip_addresses.push(first_net['staticNetworkConfiguration']['ipAddress'])
-            end
-          end
-        end
-      end
-    end
-    logger.debug "NFS IP Address in host processing: #{nfs_ip_addresses}"
-    if nfs_ip_addresses.empty?
-      nfs_ip_addresses = ['all_hosts']
-      logger.debug "NFS IP Address list is empty: #{nfs_ip_addresses}"
-    end
-    nfs_ip_addresses.compact.flatten.uniq
-  end
-  
   def get_specific_dell_server_wwpns(comp)
     wwpninfo=nil
     cert_name   = comp['puppetCertName']
@@ -534,35 +476,48 @@ class ASM::ServiceDeployment
     process_generic(component['puppetCertName'], config, 'apply', true)
   end
 
+  def build_network_config(server_comp)
+    server = ASM::Util.build_component_configuration(server_comp, :decrypt => decrypt?)
+    network_params = server['asm::esxiscsiconfig']
+    if network_params && !network_params.empty?
+      params = network_params[network_params.keys[0]]
+      ASM::NetworkConfiguration.new(params['network_configuration'])
+    end
+  end
+
+  def build_related_network_configs(comp)
+    related_servers = find_related_components('SERVER', comp)
+    related_servers.map do |server_comp|
+      build_network_config(server_comp)
+    end.compact
+  end
+
   def process_storage(component)
     log("Processing storage component: #{component['id']}")
 
     resource_hash = ASM::Util.build_component_configuration(component, :decrypt => decrypt?)
 
     process_storage = false
-    wwpns = nil
     (resource_hash['compellent::createvol'] || {}).each do |title, params|
-
-      server_comps = ASM::Util.asm_json_array(
-      find_related_components('SERVER', component)
-      )
+      wwpns = nil
       # Check if the volume has boot volume set to true
+      related_servers = find_related_components('SERVER', component)
       boot_flag = resource_hash['compellent::createvol'][title]['boot']
       if boot_flag
         # There has to be only one related server, else raise error
-        unless server_comps.size == 1
-          raise(Exception, "Expected to find only one related server, found #{server_comps.size}")
+        unless related_servers.size == 1
+          raise(Exception, "Expected to find only one related server, found #{related_servers.size}")
         end
 
         # Get the wwpn of the related server
-        wwpns ||= (get_specific_dell_server_wwpns(server_comps[0]) || [])
-        server_servicetag = cert_name_to_service_tag(server_comps[0]['puppetCertName'])
+        wwpns ||= (get_specific_dell_server_wwpns(related_servers[0]) || [])
+        server_servicetag = cert_name_to_service_tag(related_servers[0]['puppetCertName'])
       else
         # TODO this can't be right, it should not be all servers, but
         # just those that are related components
         wwpns ||= (get_dell_server_wwpns || [])
       end
-      
+
       new_wwns = params['wwn'].split(',') + wwpns
       # Replace all the ":" from the WWPN
       # Compellent command-set do not like ":" in the value
@@ -571,14 +526,14 @@ class ASM::ServiceDeployment
       configure_san = resource_hash['compellent::createvol'][title]['configuresan']
       resource_hash['compellent::createvol'][title].delete('configuresan')
       resource_hash['compellent::createvol'][title]['force'] = 'true'
-        
-      server_comps.each do |server_comp|
+
+      related_servers.each do |server_comp|
         if configure_san
           resource_hash['compellent::createvol'][title]['servername'] = "ASM_#{server_servicetag}"
         else
           resource_hash['compellent::createvol'][title]['servername'] = ""
         end
-        
+
         process_generic(
         component['puppetCertName'],
         resource_hash,
@@ -592,9 +547,14 @@ class ASM::ServiceDeployment
     end
 
     # Process EqualLogic manifest file in case auth_type is 'iqnip'
+    network_configs = build_related_network_configs(component)
     (resource_hash['equallogic::create_vol_chap_user_access'] || {}).each do |title, params|
-      if ( resource_hash['equallogic::create_vol_chap_user_access'][title]['auth_type'] == "iqnip")
-        iscsi_ipaddresses ||= (get_dell_server_iscsi_ipaddresses() || [])
+      if resource_hash['equallogic::create_vol_chap_user_access'][title]['auth_type'] == "iqnip"
+        iscsi_ipaddresses = network_configs.map do |network_config|
+          ips = network_config.get_static_ips('STORAGE_ISCSI_SAN')
+          raise("Expected 2 iscsi interfaces for hyperv, only found #{ips.size}") unless ips.size == 2
+          ips
+        end.flatten.uniq
         logger.debug "iSCSI IP Address reserved for the deployment: #{iscsi_ipaddresses}"
         server_template_iqnorip = resource_hash['equallogic::create_vol_chap_user_access'][title]['iqnorip']
         logger.debug "server_template_iqnorip : #{server_template_iqnorip}"
@@ -611,10 +571,20 @@ class ASM::ServiceDeployment
     end
 
     (resource_hash['netapp::create_nfs_export'] || {}).each do |title, params|
-      management_ipaddress ||= ( get_dell_server_nfs_ipaddresses() || [] )  
+      # TODO: Why is the variable called management_ipaddress if it is a list including nfs ips?
+      management_ipaddress = network_configs.map do |network_config|
+        # WAS: if name == 'hypervisor_network' or name == 'converged_network' or name == 'nfs_network'
+        # TODO: what network type is converged_network?
+          network_config.get_static_ips('HYPERVISOR_MANAGEMENT', 'FILESHARE')
+      end.flatten.uniq
+      logger.debug "NFS IP Address in host processing: #{management_ipaddress}"
+      if management_ipaddress.empty?
+        management_ipaddress = ['all_hosts'] # TODO: is this a magic value?
+        logger.debug "NFS IP Address list is empty: #{management_ipaddress}"
+      end
       resource_hash['netapp::create_nfs_export'][title]['readwrite'] = management_ipaddress
       resource_hash['netapp::create_nfs_export'][title]['readonly'] = ''
-      
+
       size_param = resource_hash['netapp::create_nfs_export'][title]['size']
       if size_param.include?('GB')
         resource_hash['netapp::create_nfs_export'][title]['size'] = size_param.gsub(/GB/,'g')
@@ -625,14 +595,13 @@ class ASM::ServiceDeployment
       if size_param.include?('TB')
         resource_hash['netapp::create_nfs_export'][title]['size'] = size_param.gsub(/TB/,'t')
       end
-   
+
       resource_hash['netapp::create_nfs_export'][title].delete('path')
       snapresv = resource_hash['netapp::create_nfs_export'][title]['snapresv']
       resource_hash['netapp::create_nfs_export'][title]['snapresv'] = snapresv.to_s
-      
+
       # handling anon
       resource_hash['netapp::create_nfs_export'][title].delete('anon')
-      resource_hash['netapp::create_nfs_export'][title].delete('nfs_network')
     end
 
     if !process_storage
@@ -762,7 +731,7 @@ class ASM::ServiceDeployment
     ["Fabric A", "Fabric B", "Fabric C"].each do |fabric|
       logger.debug "Configuring IOM for fabric : #{fabric}"
       tagged_vlans = []
-      untagged_vlans = []  
+      untagged_vlans = []
       tagged_vlans = server_vlan_info["#{fabric}"]['tagged_vlan'] if !server_vlan_info["#{fabric}"].empty?
       untagged_vlans = server_vlan_info["#{fabric}"]['untagged_vlan'] if !server_vlan_info["#{fabric}"].empty?
       logger.debug "In configure_tor tagged vlan list found #{tagged_vlans}"
@@ -2148,73 +2117,26 @@ class ASM::ServiceDeployment
       if fabrics
         fabrics.each do |fabric|
           fabric_networks = []
-          fabic_interfaces = fabric['interfaces']
-          if fabic_interfaces
-            networks = []
-            fabic_interfaces.each do |fabic_interface|
-              partitions = fabic_interface['partitions']
+          fabric_interfaces = fabric['interfaces']
+          if fabric_interfaces
+            fabric_interfaces.each do |fabric_interface|
+              partitions = fabric_interface['partitions']
               networks = partitions.collect { |partition| partition['networkObjects'] }.flatten
               fabric_networks.concat(networks)
             end
           end
-          network_fabric_info["#{fabric['name']}"] = fabric_networks
+          network_fabric_info[fabric['name']] = fabric_networks
         end
       end
       logger.debug"network_info: #{network_fabric_info}"
     end
-   
-    fabric_vlan_info = {} 
+
+    fabric_vlan_info = {}
     if network_fabric_info
       fabric_vlan_info = get_fabric_vlan_info(network_fabric_info)
       logger.debug("Fabric VLAN INFO: #{fabric_vlan_info}")
     end
-    return fabric_vlan_info
-
-    if network_params
-      [ 'hypervisor_network', 'converged_network', 'vmotion_network',
-        'private_cluster_network', 'live_migration_network'
-      ].each do |net|
-        if  network_params[net]
-          networks = network_params[net]
-          raise(Exception, "Exactly one #{net} expected") unless networks.size == 1
-          vlan = networks[0]['vlanId'].to_s
-          logger.debug "#{net} :: #{vlan}"
-          tagged_vlaninfo.push(vlan)
-        end
-      end
-
-      if network_params['storage_network']
-        networks = network_params['storage_network']
-        raise(Exception, 'Exactly two storage networks expected') unless networks.size == 2
-        iscsivlanid = networks[0]['vlanId']
-        raise(Exception, 'iSCSI vlan ids must be the same') unless iscsivlanid == networks[1]['vlanId']
-        tagged_vlaninfo.push(iscsivlanid.to_s)
-      end
-
-      if network_params['workload_network']
-        networks = network_params['workload_network']
-        networks.each do |network|
-          tagged_workloadvlaninfo.push(network['vlanId'])
-        end
-      end
-
-      if network_params['pxe_network']
-        networks = network_params['pxe_network']
-        raise(Exception, "Exactly one pxe network expected, found #{network_params['pxe_network'].inspect}") unless networks.size == 1
-        pxevlanid = networks[0]['vlanId']
-        untagged_vlaninfo.push(pxevlanid.to_s)
-      end
-
-      logger.debug "Tagged vlan info #{tagged_vlaninfo}"
-      logger.debug "Untagged vlan info #{untagged_vlaninfo}"
-      server_vlan_info["#{server_cert}_taggedvlanlist"] = tagged_vlaninfo
-      server_vlan_info["#{server_cert}_taggedworkloadvlanlist"] = tagged_workloadvlaninfo
-      server_vlan_info["#{server_cert}_untaggedvlanlist"] = untagged_vlaninfo
-      logger.debug "Server vlan hash is #{server_vlan_info}"
-    else
-      log("Did not find expected class asm::iscsiconfig")
-    end
-    return server_vlan_info
+    fabric_vlan_info
   end
 
   def initiate_discovery(device_hash)
@@ -2389,8 +2311,15 @@ class ASM::ServiceDeployment
     domain_username = "#{run_as_account_credentials['domain_name']}\\#{run_as_account_credentials['username']}"
     resource_hash = Hash.new
 
+    # TODO: why do we only look at the first host? why only workload and pxe networks?
+    # why the empty 'subnet' => '' part of the hash?
+    network_config = build_network_config(hyperv_hosts[0])
+    raise(Exception, "Could not find network config for #{hyperv_hosts[0]}") unless network_config
+    subnet_vlans = network_config.get_networks('PUBLIC_LAN', 'PRIVATE_LAN', 'PXE').collect do |network|
+      {'vlan' => network['vlanId'], 'subnet' => ''}
+    end
+
     host_group_array = Array.new
-    deviceconf = ASM::Util.parse_device_config(cert_name)
     resource_hash['asm::cluster::scvmm'] = {
       "#{cluster_name}" => {
       'ensure'      => 'present',
@@ -2401,7 +2330,7 @@ class ASM::ServiceDeployment
       'password' => run_as_account_credentials['password'],
       'run_as_account_name' => run_as_account_credentials['username'],
       'logical_network_hostgroups' => host_group_array.push(host_group),
-      'logical_network_subnet_vlans' => get_logical_network_subnet_vlans(hyperv_hosts[0]),
+      'logical_network_subnet_vlans' => subnet_vlans,
       'fqdn' => run_as_account_credentials['fqdn'],
       'scvmm_server' => cert_name,
       }
@@ -2460,78 +2389,6 @@ class ASM::ServiceDeployment
     cluster_ip = ASM::Util.reserve_network_ips(management_network['id'], 1, @id)
     cluster_ip[0]
   end
-  
-
-  def get_logical_network_name(component)
-    logical_network_name = ''
-    cert_name = component['puppetCertName']
-    server_conf = ASM::Util.build_component_configuration(component, :decrypt => decrypt?)
-    network_params = (server_conf['asm::esxiscsiconfig'] || {})[cert_name]
-    if network_params
-      [ 'converged_network'].each do |net|
-        logger.debug "Network GUID : #{network_params.inspect}"
-        if  network_params[net]
-          logical_network_name = network_params[net][0]['name']
-        end
-      end
-    end
-    logical_network_name
-  end
-  
-def get_logical_network_subnet_vlans(server_component)
-  server_cert=server_component['puppetCertName']
-  server_vlan_info        = {}
-  logical_network_vlaninfo = []
-  server_conf = ASM::Util.build_component_configuration(server_component, :decrypt => decrypt?)
-  network_params = (server_conf['asm::esxiscsiconfig'] || {})[server_cert]
-  if network_params
-    [ 'hypervisor_network', 'converged_network', 'vmotion_network',
-      'private_cluster_network', 'live_migration_network'
-    ].each do |net|
-      if  network_params[net]
-        networks = network_params[net]
-        raise(Exception, "Exactly one #{net} expected") unless networks.size == 1
-        vlan = networks[0]['vlanId'].to_s
-        logger.debug "#{net} :: #{vlan}"
-        #logical_network_vlaninfo.push(vlan)
-      end
-    end
-
-    if network_params['workload_network']
-      networks = network_params['workload_network']
-      networks.each do |network|
-        logical_network_vlan = {}
-        #logical_network_vlaninfo.push(network['vlanId'])
-        logical_network_vlan = { 'vlan' => network['vlanId'],
-                                 'subnet' => ''
-                               }
-        #logical_network_vlaninfo.push(vlan)
-        logical_network_vlaninfo.push(logical_network_vlan)
-
-      end
-    end
-
-    if network_params['pxe_network']
-      networks = network_params['pxe_network']
-      raise(Exception, "Exactly one pxe network expected, found #{network_params['pxe_network'].inspect}") unless networks.size == 1
-      pxevlanid = networks[0]['vlanId']
-      logical_network_vlan = {}
-      logical_network_vlan = { 'vlan' => pxevlanid,
-                                 'subnet' => ''
-                               }
-        #logical_network_vlaninfo.push(vlan)
-        logical_network_vlaninfo.push(logical_network_vlan)
-
-      #logical_network_vlaninfo.push(pxevlanid.to_s)
-    end
-
-    logger.debug "Logical Network vlan info #{logical_network_vlaninfo}"
-  else
-    log("Did not find expected class asm::iscsiconfig")
-  end
-  logical_network_vlaninfo
-end
-
 
   #This function gets the related services to a component, and creates the classification data that will be passed to puppet module
   def get_classification_data(component, hostname)
