@@ -127,6 +127,14 @@ module ASM
       end
     end
 
+    def get_static_ips(*network_types)
+      get_networks(*network_types).collect do |network|
+        if ASM::Util.to_boolean(network.static)
+          network.staticNetworkConfiguration.ipAddress
+        end
+      end.compact
+    end
+
     def is_blade?
       @mash.servertype == 'blade'
     end
