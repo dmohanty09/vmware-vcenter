@@ -206,7 +206,9 @@ class ASM::ServiceDeployment
     # Get the compellent controller id's, required for mapping of information
     compellent_contollers=compellent_controller_ids()
 
+    san_hash = {}
     # Perform the SAN configuration for each server
+    servers = []
     (@components_by_type['SERVER'] || []).each do |server_component|
       server_cert_name =  server_component['puppetCertName']
       logger.debug "Server cert name: #{server_cert_name}"
@@ -240,9 +242,30 @@ class ASM::ServiceDeployment
         blade_type = inventory['serverType'].downcase
         logger.debug("Server Blade type: #{blade_type}")
         logger.debug "Configuring SAN Switch"
-        configure_san_switch(server_cert_name, wwpns, compellent_contollers)
+        servers.push(server_cert_name) if !servers.include?(server_cert_name)
+        san_hash["#{server_cert_name}"] = configure_san_switch(server_cert_name, wwpns, compellent_contollers)
+        logger.debug("SAN HASH after merge : #{san_hash}")
       else
         logger.debug "Not able to identify server inventory or wwpn information for server #{server_cert_name}"
+      end
+    end
+    logger.debug("SAN HASH end of loop : #{san_hash}")
+    san_info = {}
+    if servers.size > 0
+      servers.each do |server|
+        san_switch_info = san_hash["#{server}"]
+        logger.debug "san_switch_info : #{san_switch_info}"
+        san_switch_info.each do |switch_cert,swinfo|
+          logger.debug "Switch : #{switch_cert} resource_hash: #{swinfo}"
+          san_info["#{switch_cert}"] ||= {}
+          san_info["#{switch_cert}"] = san_info["#{switch_cert}"].keep_merge(swinfo)
+        end
+      end
+      logger.debug "san_info after translation: #{san_info}"
+      san_info.each do |san_switch,resource_hash|
+        logger.debug("Process san switch: #{san_switch}")
+        logger.debug("SAN Resource hash: #{resource_hash}")
+        process_generic(san_switch,resource_hash , 'device', true, san_switch) 
       end
     end
   end
@@ -597,6 +620,7 @@ class ASM::ServiceDeployment
       end
 
       resource_hash['netapp::create_nfs_export'][title].delete('path')
+      resource_hash['netapp::create_nfs_export'][title].delete('nfs_network')
       snapresv = resource_hash['netapp::create_nfs_export'][title]['snapresv']
       resource_hash['netapp::create_nfs_export'][title]['snapresv'] = snapresv.to_s
 
@@ -851,6 +875,8 @@ class ASM::ServiceDeployment
       return false
     end
 
+    san_switches = []
+    san_switch_resource = {}
     switchportdetail[0].each do |server_wwpn,sw_info|
       if sw_info.empty?
         logger.debug "There is no switch information for WWPN #{server_wwpn}"
@@ -878,20 +904,40 @@ class ASM::ServiceDeployment
       service_tag=ASM::Util.cert2serial(server_cert_name)
       zone_name="ASM_#{service_tag}"
 
-      resource_hash = Hash.new
-      resource_hash["brocade::createzone"] = {
-        "#{zone_name}" => {
+      certname_to_var = certname_to_var(switchcertname)
+      if !san_switches.include?(switchcertname)
+        san_switches.push(switchcertname) 
+        self.instance_variable_set("@resource_hash_#{certname_to_var}",Hash.new)
+      end
+      
+      #resource_hash = Hash.new
+      #switch_hash["brocade::createzone"] ||= {}
+      self.instance_variable_get("@resource_hash_#{certname_to_var}")["brocade::createzone"] ||= {}
+      self.instance_variable_get("@resource_hash_#{certname_to_var}")["brocade::createzone"]["#{zone_name}"] = {
         'storage_alias' => switch_storage_alias,
         'server_wwn' => server_wwpn,
         'zoneset' => switch_active_zoneset
-        }
       }
       logger.debug("*** resource_hash is #{resource_hash} ******")
-      process_generic(switchcertname, resource_hash, 'device', true, server_cert_name)
-
+      #process_generic(switchcertname, resource_hash, 'device', true, server_cert_name)
     end
+    
+    logger.debug("SAN Switch name : #{san_switches}" )
+    san_switches.each do |san_switch|
+      #switch_var = "resource_hash_#{san_switch}"
+      certname_to_var = certname_to_var(san_switch)
+      resource_hash = self.instance_variable_get("@resource_hash_#{certname_to_var}")
+      logger.debug "Resource hash for switch #{san_switch}: #{resource_hash}"
+      #process_generic(san_switch, resource_hash, 'device', true, server_cert_name)
+      san_switch_resource["#{san_switch}"] = resource_hash 
+    end 
+    san_switch_resource
   end
-
+  
+  def certname_to_var(certname)
+    certname.gsub(/\./,'').gsub(/-/,'')
+  end
+  
   def get_interfaces(interfaceList)
     logger.debug "Entering get_interfaces #{interfaceList}"
     interfacelist = ""
@@ -1101,40 +1147,42 @@ class ASM::ServiceDeployment
       title = resource_hash['asm::esxiscsiconfig'].keys[0]
       network_params = resource_hash['asm::esxiscsiconfig'][title]
       network_config = ASM::NetworkConfiguration.new(network_params['network_configuration'], logger)
-      mgmt_network = network_config.get_network('HYPERVISOR_MANAGEMENT')
-      static = mgmt_network['staticNetworkConfiguration']
-      unless static
-        # This should have already been checked previously
-        msg = "Static network is required for hypervisor network"
-        logger.error(msg)
-        raise(Exception, msg)
-      end
+      if os_image_type.downcase == "esxi"
+        mgmt_network = network_config.get_network('HYPERVISOR_MANAGEMENT')
+        static = mgmt_network['staticNetworkConfiguration']
+        unless static
+          # This should have already been checked previously
+          msg = "Static network is required for hypervisor network"
+          logger.error(msg)
+          raise(Exception, msg)
+        end
 
-      static_ip = static['ipAddress']
-      content = "network --bootproto=static --device=vmnic0 --ip=#{static_ip}  --netmask=#{static['subnet']} --gateway=#{static['gateway']}"
-      # NOTE: vlanId is a FixNum
-      if mgmt_network['vlanId']
-        content += " --vlanid=#{mgmt_network['vlanId']}"
-      end
-      nameservers = [static['dns1'], static['dns2']].select { |x| !x.nil? && !x.empty? }
-      if nameservers.size > 0
-        content += " --nameserver=#{nameservers.join(',')}"
-      else
-        content += ' --nodns'
-      end
-      if os_host_name
-        content += " --hostname='#{os_host_name}'"
-      end
-      content += "\n"
+        static_ip = static['ipAddress']
+        content = "network --bootproto=static --device=vmnic0 --ip=#{static_ip}  --netmask=#{static['subnet']} --gateway=#{static['gateway']}"
+        # NOTE: vlanId is a FixNum
+        if mgmt_network['vlanId']
+          content += " --vlanid=#{mgmt_network['vlanId']}"
+        end
+        nameservers = [static['dns1'], static['dns2']].select { |x| !x.nil? && !x.empty? }
+        if nameservers.size > 0
+          content += " --nameserver=#{nameservers.join(',')}"
+        else
+          content += ' --nodns'
+        end
+        if os_host_name
+          content += " --hostname='#{os_host_name}'"
+        end
+        content += "\n"
 
-      resource_hash['file'] = {}
-      resource_hash['file'][cert_name] = {
+        resource_hash['file'] = {}
+        resource_hash['file'][cert_name] = {
           'path' => "/opt/razor-server/tasks/vmware_esxi/bootproto_#{serial_number}.inc.erb",
           'content' => content,
           'owner' => 'razor',
           'group' => 'razor',
           'mode' => '0644',
-      }
+        }
+      end
     end
 
     if is_dell_server && resource_hash['asm::idrac']
@@ -2557,3 +2605,17 @@ class ASM::ServiceDeployment
 
 end
 
+class Hash
+   def keep_merge(hash)
+      target = dup
+      hash.keys.each do |key|
+         if hash[key].is_a? Hash and self[key].is_a? Hash
+            target[key] = target[key].keep_merge(hash[key])
+            next
+         end
+         #target[key] = hash[key]
+         target.update(hash) { |key, *values| values.flatten.uniq }
+      end
+      target
+   end
+end
