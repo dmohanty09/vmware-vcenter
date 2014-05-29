@@ -508,7 +508,7 @@ module ASM
 
     def self.run_command_success(cmd, *args)
       result = self.run_command(cmd, *args)
-      raise(RuntimeError, "Command failed: #{cmd}\n#{result.stdout}\n#{result.stderrr}") unless result.exit_status == 0
+      raise(RuntimeError, "Command failed: #{cmd}\n#{result.stdout}\n#{result.stderr}") unless result.exit_status == 0
       result
     end
 
