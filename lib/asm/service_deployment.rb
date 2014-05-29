@@ -1137,7 +1137,7 @@ class ASM::ServiceDeployment
       title = resource_hash['asm::esxiscsiconfig'].keys[0]
       network_params = resource_hash['asm::esxiscsiconfig'][title]
       network_config = ASM::NetworkConfiguration.new(network_params['network_configuration'], logger)
-      if os_image_type.downcase == "esxi"
+      if os_image_type.downcase == "vmware_esxi"
         mgmt_network = network_config.get_network('HYPERVISOR_MANAGEMENT')
         static = mgmt_network['staticNetworkConfiguration']
         unless static
