@@ -522,7 +522,6 @@ class ASM::ServiceDeployment
 
     process_storage = false
     (resource_hash['compellent::createvol'] || {}).each do |title, params|
-      wwpns = nil
       # Check if the volume has boot volume set to true
       related_servers = find_related_components('SERVER', component)
       boot_flag = resource_hash['compellent::createvol'][title]['boot']
@@ -531,26 +530,17 @@ class ASM::ServiceDeployment
         unless related_servers.size == 1
           raise(Exception, "Expected to find only one related server, found #{related_servers.size}")
         end
-
-        # Get the wwpn of the related server
-        wwpns ||= (get_specific_dell_server_wwpns(related_servers[0]) || [])
-        server_servicetag = cert_name_to_service_tag(related_servers[0]['puppetCertName'])
-      else
-        # TODO this can't be right, it should not be all servers, but
-        # just those that are related components
-        wwpns ||= (get_dell_server_wwpns || [])
       end
-
-      new_wwns = params['wwn'].split(',') + wwpns
-      # Replace all the ":" from the WWPN
-      # Compellent command-set do not like ":" in the value
-      new_wwns = new_wwns.compact.map {|s| s.gsub(/:/, '')}
-      resource_hash['compellent::createvol'][title]['wwn'] = new_wwns
       configure_san = resource_hash['compellent::createvol'][title]['configuresan']
       resource_hash['compellent::createvol'][title].delete('configuresan')
       resource_hash['compellent::createvol'][title]['force'] = 'true'
 
       related_servers.each do |server_comp|
+        wwpns = nil
+        wwpns ||= (get_specific_dell_server_wwpns(server_comp || []))
+        new_wwns = wwpns.compact.map {|s| s.gsub(/:/, '')}
+        resource_hash['compellent::createvol'][title]['wwn'] = new_wwns
+        server_servicetag = ASM::Util.cert2serial(server_comp['puppetCertName'])
         if configure_san
           resource_hash['compellent::createvol'][title]['servername'] = "ASM_#{server_servicetag}"
         else
