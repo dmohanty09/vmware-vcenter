@@ -485,7 +485,7 @@ class ASM::ServiceDeployment
       end.compact.flatten.uniq
     end
   end
-
+  
   def get_specific_dell_server_wwpns(comp)
     wwpninfo=nil
     cert_name   = comp['puppetCertName']
@@ -581,6 +581,19 @@ class ASM::ServiceDeployment
         new_iscsi_iporiqn = new_iscsi_iporiqn.compact.map {|s| s.gsub(/ /, '')}
         resource_hash['equallogic::create_vol_chap_user_access'][title]['iqnorip'] = new_iscsi_iporiqn
       end
+      ####################################################################################### BFS
+      logger.debug "finding related servers configured with iSCSI networking"
+      iscsi_ips = []
+      network_configs.each do |nc|
+        iscsi_boot_ips = nc.get_static_ips('STORAGE_ISCSI_SAN')
+        iscsi_boot_ips.each{|ip| iscsi_ips.push(ip)}
+      end
+      if !iscsi_ips.empty?
+        resource_hash['equallogic_volume_access_iqn'] = { 
+          title => {'iqnorip'=>iscsi_ips.join(','), 'ensure' => 'present', 'require' => "Equallogic_volume[#{title}]" }
+        }
+      end
+      ######################################################################################
     end
 
     (resource_hash['netapp::create_nfs_export'] || {}).each do |title, params|
@@ -1093,8 +1106,15 @@ class ASM::ServiceDeployment
       logger.debug "ASM-1588: Stripping it out."
       resource_hash.delete('asm::idrac')
     end
-    
-    if resource_hash['asm::server']
+
+    #Flag an iSCSI boot from san deployment
+    if is_dell_server and resource_hash['asm::idrac'][resource_hash['asm::idrac'].keys[0]]['target_boot_device'] == 'iSCSI'
+      @bfs = true
+    else
+      @bfs = false
+    end
+
+    if resource_hash['asm::server'] and !@bfs 
       if resource_hash['asm::server'].size != 1
         msg = "Only one O/S configuration allowed per server; found #{resource_hash['asm::server'].size} for #{serial_number}"
         logger.error(msg)
@@ -1127,7 +1147,7 @@ class ASM::ServiceDeployment
     # from the vmware ks.cfg
     static_ip = nil
     network_config = nil
-    if resource_hash['asm::esxiscsiconfig']
+    if resource_hash['asm::esxiscsiconfig'] and !@bfs
       if resource_hash['asm::esxiscsiconfig'].size != 1
         msg = "Only one ESXi networking configuration allowed per server; found #{resource_hash['asm::esxiscsiconfig'].size} for #{serial_number}"
         logger.error(msg)
@@ -1194,6 +1214,25 @@ class ASM::ServiceDeployment
         params['network_configuration'] = network_config.to_hash
       end
       params['before'] = []
+
+      #Process a BFS Server Component
+      if params['target_boot_device'] == 'iSCSI'
+        logger.debug "Processing iSCSI Boot From San configuration"
+        #Flag Server Component as BFS
+        @bfs = true          	                              				
+        #Get Network Configuration
+        params['network_configuration'] = build_network_config(component).to_hash
+        #Find first related storage component
+        storage_component = find_related_components('STORAGE',component)[0]
+        #Identify Boot Volume
+        boot_volume = storage_component['resources'].detect{|r|r['id']=='equallogic::create_vol_chap_user_access'}['parameters'].detect{|p|p['id']=='title'}['value']
+        #Get Storage Facts
+        ASM::Util.run_puppet_device!(storage_component['puppetCertName'])
+        params['target_iscsi'] = ASM::Util.find_equallogic_iscsi_volume(storage_component['asmGUID'],boot_volume)['TargetIscsiName']
+        params['target_ip'] = ASM::Util.find_equallogic_iscsi_ip(storage_component['puppetCertName'])
+        resource_hash.delete("asm::server")
+      end
+
       if resource_hash['asm::server']
         params['before'].push("Asm::Server[#{cert_name}]")
       end
@@ -1265,7 +1304,7 @@ class ASM::ServiceDeployment
     # O/S. Don't bother doing this if we are @debug since we do not
     # actually execute any puppet commands in that case any way.
     skip_deployment = nil
-    unless @debug
+    unless @debug || @bfs
       begin
         node = (razor.find_node(serial_number) || {})
         if node['policy'] && node['policy']['name']
@@ -1290,7 +1329,7 @@ class ASM::ServiceDeployment
       log("Skipping deployment of #{cert_name}; already complete.")
     else
       process_generic(component['puppetCertName'], resource_hash, 'apply', 'true')
-      unless @debug
+      unless @debug || @bfs
         (resource_hash['asm::server'] || []).each do |title, params|
           type = params['os_image_type']
           version = params['os_image_version'] || params['os_image_type']
