@@ -913,16 +913,12 @@ class ASM::ServiceDeployment
         self.instance_variable_set("@resource_hash_#{certname_to_var}",Hash.new)
       end
       
-      #resource_hash = Hash.new
-      #switch_hash["brocade::createzone"] ||= {}
       self.instance_variable_get("@resource_hash_#{certname_to_var}")["brocade::createzone"] ||= {}
       self.instance_variable_get("@resource_hash_#{certname_to_var}")["brocade::createzone"]["#{zone_name}"] = {
         'storage_alias' => switch_storage_alias,
         'server_wwn' => server_wwpn,
         'zoneset' => switch_active_zoneset
       }
-      logger.debug("*** resource_hash is #{resource_hash} ******")
-      #process_generic(switchcertname, resource_hash, 'device', true, server_cert_name)
     end
     
     logger.debug("SAN Switch name : #{san_switches}" )
