@@ -85,7 +85,7 @@ module ASM
 
             param_prefix = "converged_net" if network['type'] == 'HYPERVISOR_MANAGEMENT'
             param_prefix = "live_migration" if network['type'] == 'HYPERVISOR_MIGRATION'
-            param_prefix = "cluster_private" if network['type'] == 'HYPERVISOR_CLUSTER_PRIVATE'
+            param_prefix = "private_cluster" if network['type'] == 'HYPERVISOR_CLUSTER_PRIVATE'
 
             puppet_classification_data['hyperv::config'][ "#{param_prefix}_vlan_id"] = network['vlanId']
 
