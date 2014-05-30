@@ -1952,7 +1952,7 @@ class ASM::ServiceDeployment
 
     resource_hash = vm.to_puppet
     vm_resource = resource_hash[resource_hash.keys[0]]
-    vm_title = vm_resource[vm_resource.keys[0]]
+    vm_title = vm_resource.keys[0]
 
     log("Creating VM #{hostname}")
     certname = "vm-#{hostname}"
@@ -1982,7 +1982,6 @@ class ASM::ServiceDeployment
       server.title = vm_title # TODO: clean this up
       resource_hash['asm::server'] = server.to_puppet
       process_generic(certname, resource_hash, 'apply')
-
       unless @debug
         # Unlike in bare-metal installs we only wait for the :boot_install
         # log event in razor. At that point the O/S installer has just been
