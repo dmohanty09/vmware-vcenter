@@ -182,6 +182,32 @@ describe ASM::NetworkConfiguration do
       end.to raise_error(Exception)
     end
 
+    it 'should be able to generate missing partitions' do
+      fqdd_to_mac = {'NIC.Integrated.1-1-1' => '00:0E:1E:0D:8C:30',
+                     'NIC.Integrated.1-2-1' => '00:0E:1E:0D:8C:31',
+      }
+      ASM::WsMan.stubs(:get_mac_addresses).returns(fqdd_to_mac)
+      net_config = ASM::NetworkConfiguration.new(@data)
+      net_config.add_nics!(Hashie::Mash.new(:host => '127.0.0.1'), :add_partitions => true)
+      fabric = net_config.cards.find { |fabric| fabric.name == 'Fabric A' }
+
+      # Verify all Fabric A partitions set correctly
+      (1..2).each do |port_no|
+        port = fabric.interfaces.find { |p| p.name == "Port #{port_no}" }
+        (1..4).each do |partition_no|
+          fqdd = "NIC.Integrated.1-#{port_no}-#{partition_no}"
+          puts "====> Checking #{fqdd}"
+          partition = port.partitions.find { |p| p.name == partition_no.to_s }
+          partition.fqdd.should == fqdd
+          if partition_no == 1
+            partition.mac_address.should == fqdd_to_mac[fqdd]
+          else
+            partition.mac_address.should be_nil
+          end
+        end
+      end
+    end
+
     it 'should find PXE networks' do
       partitions = ASM::NetworkConfiguration.new(@data).get_partitions('PXE')
       partitions.size.should == 2
