@@ -90,8 +90,8 @@ module ASM
         def certname
           if self.source
             "vm#{macaddress.downcase}"
-          elsif self.hostname
-            ASM::Util.hostname_to_certname(self.hostname)
+          elsif @hostname
+            ASM::Util.hostname_to_certname(@hostname)
           else
             raise Exception, "Unable to determine certname without source or hostname"
           end
