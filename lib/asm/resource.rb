@@ -58,8 +58,7 @@ module ASM
             self.os_guest_id = 'rhel6_64Guest'
             self.scsi_controller_type = 'VMware Paravirtual'
           end
-
-          conf(cluster['puppetCertName'])
+          conf(cluster.title)
           self.cluster = cluster.cluster
           self.datacenter = cluster.datacenter
           self.vcenter_id = cert
@@ -99,7 +98,8 @@ module ASM
         end
 
         def macaddress
-          vm.guest.net.first.macAddress
+          value = vm.guest.net.first.macAddress
+          value.gsub(':', '')
         end
 
         def vm
@@ -148,14 +148,15 @@ module ASM
           self.hostname ||= self.delete('name')
           raise(ArgumentError, 'VM hostname not specified, missing server os_host_name value') unless self.hostname
 
-          conf(cert)
+          conf(cluster.title)
           self.scvmm_server = cert
           self.vm_cluster = cluster.name
           self.ensure = 'present'
 
           network_default = {
             :ensure => 'present',
-            :mac_address_type => 'dynamic',
+            :mac_address_type => 'static',
+            :mac_address => '00:00:00:00:00:00', 
             :ipv4_address_type => 'dynamic',
             :vlan_enabled => 'true',
             :transport => 'Transport[winrm]',
@@ -196,14 +197,20 @@ module ASM
         def macaddress
           raise(Exception, "Resource has not been processed.") unless @conf
           cmd = File.join(File.dirname(__FILE__),'scvmm_macaddress.rb')
-          result = ASM::Util.run_command_success("#{cmd} -u '#{@conf.user}' -p '#{@conf.password}' -s '#{@conf.host}' -v '#{self.hostname||@hostname}'")
+          domain, user = @conf.user.split('\\')
+
+          # Workaround bundler JRuby gems intefering:
+          # https://groups.google.com/forum/#!topic/ruby-bundler/UufhzrliWfo
+          result = ''
+          Bundler.with_clean_env do
+            result = ASM::Util.run_command_success("#{cmd} -u '#{user}' -d '#{domain}' -p '#{@conf.password}' -s #{@conf.host} -v #{self.hostname||@hostname}")
+          end
           result = result.stdout.each_line.collect{|line| line.chomp.rstrip.gsub(':', '')}
           macaddress = result.find{|x| x =~ /^[0-9a-fA-F]{12}$/}
           raise(Exception, 'Virtual machine needs to power on first.') if macaddress == '00000000000000'
           macaddress
         end
       end
-
     end
 
     class Server_Mash < Hashie::Mash
@@ -286,6 +293,7 @@ module ASM
     module Cluster
       def self.create(value)
         result = []
+
         value.each do |cluster_type, cluster_config|
           case cluster_type
           when 'asm::cluster', 'asm::cluster::vmware'
