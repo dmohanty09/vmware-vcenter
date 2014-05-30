@@ -110,17 +110,20 @@ class Get_switch_information
     # Using server vlan info, get fabrics where vlans needs to be configured
     fabrics = []
     configured_interfaces = []
-    ('A'..'Z').each do |fabric_prefix|
-      fabric = "Fabric #{fabric_prefix}"
-      if server_vlan_info[fabric]
-        tagged_vlan = server_vlan_info["#{fabric}"]['tagged_vlan']
-        untagged_vlan = server_vlan_info["#{fabric}"]['untagged_vlan']
-          
+    fabric_enum = []
+    ("A".."Z").each_with_index do |char,index|
+      fabric_enum[index] = "Fabric #{char}"
+    end
+    
+    server_vlan_info.each do |card,card_info|
+      card_info.each do |interface,interface_info|
+        tagged_vlan = interface_info['tagged_vlans']
+        untagged_vlan = interface_info['untagged_vlans']
         if (tagged_vlan.nil? or tagged_vlan.length == 0) and ( untagged_vlan.nil? or untagged_vlan.length == 0)
-          logger.debug "Fabric #{fabric} do not have vlans"
+          logger.debug "Card #{card}, port #{interface} do not have vlans"
         else
-          logger.debug "Fabric #{fabric} needs to be configured"
-          fabrics.push(fabric)
+          logger.debug "Card #{card}, port #{interface} needs to be configured"
+          fabrics.push(fabric_enum[card.to_i]) if !fabrics.include?(fabric_enum[card.to_i])
         end
       end
     end
@@ -140,8 +143,6 @@ class Get_switch_information
       integrated_slot.push("#{interface_info[2]}") if interface_info[1] == "Integrated"
       additional_slot.push("#{interface_info[2]}") if interface_info[1] == "Slot"
       
-      #slots.push(interface_info[2])
-      #slot_interface["#{interface_info[2]}"] = interface_info[1]
       integrated_slot_interface["#{interface_info[2]}"] = interface_info[1] if interface_info[1] == "Integrated"
       additional_slot_interface["#{interface_info[2]}"] = interface_info[1] if interface_info[1] == "Slot"
     end
@@ -176,17 +177,22 @@ class Get_switch_information
     # Using server vlan info, get fabrics where vlans needs to be configured
     fabrics = []
     configured_interfaces = []
-    ('A'..'Z').each do |fabric_sufix|
-      fabric = "Fabric #{fabric_sufix}"
-      if server_vlan_info[fabric]
-        tagged_vlan = server_vlan_info["#{fabric}"]['tagged_vlan']
-        untagged_vlan = server_vlan_info["#{fabric}"]['untagged_vlan']
+    
+    fabric_enum = []
+    ("A".."Z").each_with_index do |char,index|
+      fabric_enum[index] = "Fabric #{char}"
+    end
 
+    server_vlan_info.each do |card,card_info|
+      logger.debug("Card: #{card}")
+      card_info.each do |interface,interface_info|
+        tagged_vlan = interface_info['tagged_vlans']
+        untagged_vlan = interface_info['untagged_vlans']
         if (tagged_vlan.nil? or tagged_vlan.length == 0) and ( untagged_vlan.nil? or untagged_vlan.length == 0)
-          logger.debug "Fabric #{fabric} do not have vlans"
+          logger.debug "Card #{card}, port #{interface} do not have vlans"
         else
-          logger.debug "Fabric #{fabric} needs to be configured"
-          fabrics.push(fabric)
+          logger.debug "Card #{card}, port #{interface} needs to be configured"
+          fabrics.push(fabric_enum[card.to_i]) if !fabrics.include?(fabric_enum[card.to_i])
         end
       end
     end
@@ -222,11 +228,12 @@ class Get_switch_information
 
     logger.debug("Integrated slot interfaces :#{integrated_slot_interfaces}")
     logger.debug("Additional slot interfaces :#{additional_slot_interfaces}")
+    logger.debug("Slots: #{slots}")
 
     interface_info = {}
     fabrics.each_with_index do |fabric,index|
       slot_name = slots[index]
-      if integrated_slot_interfaces[slot_name]
+      if integrated_slot_interfaces[slot_name] and integrated_slot_interfaces[slot_name].size > 0
         interface_info[fabric] = integrated_slot_interfaces[slot_name]
         integrated_slot_interfaces.delete(slot_name)
       else
@@ -239,3 +246,4 @@ class Get_switch_information
   
 
 end
+
