@@ -1599,8 +1599,7 @@ class ASM::ServiceDeployment
                 end
               end
 
-              vswitches = get_vmnics_and_networks(esx_endpoint, serverdeviceconf,
-                                                  network_config, network_params)
+              vswitches = get_vmnics_and_networks(esx_endpoint, serverdeviceconf, network_config, network_params)
               vswitches.keys.each do |vswitch_type|
                 vswitch = vswitches[vswitch_type]
                 vswitch_resources = build_vswitch(vswitch_type, vswitch[:vmnics], vswitch[:networks], hostip, params)
@@ -1697,7 +1696,7 @@ class ASM::ServiceDeployment
 
                     # Esx_mem configuration is below
                     if install_mem
-                      vnics = resource_hash['esx_vswitch']["#{hostip}:#{storage_network_vswitch}"]['nics'].map do|n|
+                      vnics = resource_hash['esx_vswitch']["#{storage_network_vswitch}"]['nics'].map do|n|
                         n.strip
                       end
 
