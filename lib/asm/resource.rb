@@ -49,7 +49,7 @@ module ASM
 
           server ||= {}
           case server['os_image_type']
-          when 'windows'
+          when /windows/
             self.os_type = 'windows'
             self.os_guest_id = 'windows8Server64Guest'
             self.scsi_controller_type = 'LSI Logic SAS'
@@ -249,14 +249,14 @@ module ASM
       def to_puppet
         title = self.delete 'title'
         case self.os_image_type
-        when 'windows'
+        when /windows/
           installer_options = {}
-	  [
-	    'language',
-	    'keyboard',
-	    'product_key',
-	    'timezone',
-	  ].each do |param|
+          [
+            'language',
+            'keyboard',
+            'product_key',
+            'timezone',
+          ].each do |param|
             installer_options[param] = self.delete(param) if self.include?(param)
           end
           self.installer_options = installer_options
