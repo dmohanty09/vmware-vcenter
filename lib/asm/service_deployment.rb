@@ -1942,7 +1942,8 @@ class ASM::ServiceDeployment
     cluster_resource = ASM::Util.build_component_configuration(cluster, :decrypt => decrypt?)
     clusters = ASM::Resource::Cluster.create(cluster_resource)
     raise(Exception, "Expected one asm::cluster resource: #{clusters.size} was provided") unless clusters.size == 1
-    cluster_name, cluster_params = clusters.first.shift
+    title, cluster_params = clusters.first.shift
+    cluster_params.title = title
 
     vm.process!(certname, server, cluster_params)
     hostname = vm.hostname || server.os_host_name
@@ -1999,6 +2000,19 @@ class ASM::ServiceDeployment
         await_agent_run_completion(vm.certname)
       end
     end
+
+    puppet_classes = get_classification_data(component, hostname)
+    if puppet_classes
+      certname = vm.certname
+      config = {certname => {'classes' => puppet_classes}}
+      puppet_node_yaml(certname, config)
+      await_agent_run_completion(certname)
+    end
+  end
+
+  def puppet_node_yaml(certname, config)
+    filename = File.join('/etc/puppetlabs/puppet/node_data', "#{certname}.yaml")
+    File.write(filename, config.to_yaml)
   end
 
   def await_agent_run_completion(certname, timeout = 3600)
