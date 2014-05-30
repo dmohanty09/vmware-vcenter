@@ -171,7 +171,7 @@ describe ASM::ServiceDeployment do
              'puppetCertName' => 'k1',
              'componentID'=>'s1',
              'resources' => [{
-               'id' => 'equallogic::create_vol_chap_user_access',
+               'id' => 'asm::volume::equallogic',
                'parameters' => [
                  {'id' => 'title', 'value' => 'vol1'}
                ]
@@ -181,7 +181,7 @@ describe ASM::ServiceDeployment do
              'puppetCertName' => 'k1',
              'componentID'=>'s1',
              'resources' => [{
-               'id' => 'equallogic::create_vol_chap_user_access',
+               'id' => 'asm::volume::equallogic',
                'parameters' => [
                  {'id' => 'title', 'value' => 'vol2'}
                ]

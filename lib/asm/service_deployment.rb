@@ -561,15 +561,15 @@ class ASM::ServiceDeployment
 
     # Process EqualLogic manifest file in case auth_type is 'iqnip'
     network_configs = build_related_network_configs(component)
-    (resource_hash['equallogic::create_vol_chap_user_access'] || {}).each do |title, params|
-      if resource_hash['equallogic::create_vol_chap_user_access'][title]['auth_type'] == "iqnip"
+    (resource_hash['asm::volume::equallogic'] || {}).each do |title, params|
+      if resource_hash['asm::volume::equallogic'][title]['auth_type'] == "iqnip"
         iscsi_ipaddresses = network_configs.map do |network_config|
           ips = network_config.get_static_ips('STORAGE_ISCSI_SAN')
           raise("Expected 2 iscsi interfaces for hyperv, only found #{ips.size}") unless ips.size == 2
           ips
         end.flatten.uniq
         logger.debug "iSCSI IP Address reserved for the deployment: #{iscsi_ipaddresses}"
-        server_template_iqnorip = resource_hash['equallogic::create_vol_chap_user_access'][title]['iqnorip']
+        server_template_iqnorip = resource_hash['asm::volume::equallogic'][title]['iqnorip']
         logger.debug "server_template_iqnorip : #{server_template_iqnorip}"
         if !server_template_iqnorip.nil?
           logger.debug "Value of IP or IQN provided"
@@ -579,21 +579,8 @@ class ASM::ServiceDeployment
           new_iscsi_iporiqn = iscsi_ipaddresses
         end
         new_iscsi_iporiqn = new_iscsi_iporiqn.compact.map {|s| s.gsub(/ /, '')}
-        resource_hash['equallogic::create_vol_chap_user_access'][title]['iqnorip'] = new_iscsi_iporiqn
+        resource_hash['asm::volume::equallogic'][title]['iqnorip'] = new_iscsi_iporiqn
       end
-      ####################################################################################### BFS
-      logger.debug "finding related servers configured with iSCSI networking"
-      iscsi_ips = []
-      network_configs.each do |nc|
-        iscsi_boot_ips = nc.get_static_ips('STORAGE_ISCSI_SAN')
-        iscsi_boot_ips.each{|ip| iscsi_ips.push(ip)}
-      end
-      if !iscsi_ips.empty?
-        resource_hash['equallogic_volume_access_iqn'] = { 
-          title => {'iqnorip'=>iscsi_ips.join(','), 'ensure' => 'present', 'require' => "Equallogic_volume[#{title}]" }
-        }
-      end
-      ######################################################################################
     end
 
     (resource_hash['netapp::create_nfs_export'] || {}).each do |title, params|
@@ -1221,7 +1208,7 @@ class ASM::ServiceDeployment
         #Find first related storage component
         storage_component = find_related_components('STORAGE',component)[0]
         #Identify Boot Volume
-        boot_volume = storage_component['resources'].detect{|r|r['id']=='equallogic::create_vol_chap_user_access'}['parameters'].detect{|p|p['id']=='title'}['value']
+        boot_volume = storage_component['resources'].detect{|r|r['id']=='asm::volume::equallogic'}['parameters'].detect{|p|p['id']=='title'}['value']
         #Get Storage Facts
         ASM::Util.run_puppet_device!(storage_component['puppetCertName'])
         params['target_iscsi'] = ASM::Util.find_equallogic_iscsi_volume(storage_component['asmGUID'],boot_volume)['TargetIscsiName']
@@ -1252,7 +1239,7 @@ class ASM::ServiceDeployment
       storage.each do |c|
         target_devices.push(c['puppetCertName'])
         ASM::Util.asm_json_array(c['resources']).each do |r|
-          if r['id'] == 'equallogic::create_vol_chap_user_access'
+          if r['id'] == 'asm::volume::equallogic'
             r['parameters'].each do |param|
               if param['id'] == 'title'
                 vol_names.push(param['value'])
@@ -1647,7 +1634,7 @@ class ASM::ServiceDeployment
                 storage_creds = ASM::Util.parse_device_config(storage_cert)
                 storage_hash = ASM::Util.build_component_configuration(storage_component, :decrypt => decrypt?)
 
-                if storage_hash['equallogic::create_vol_chap_user_access']
+                if storage_hash['asm::volume::equallogic']
                   # Configure iscsi datastore
                   if @debug
                     hba_list = [ 'vmhba33', 'vmhba34' ]
@@ -1656,7 +1643,7 @@ class ASM::ServiceDeployment
                   end
                   raise(Exception, "Network not setup for #{server_cert}") unless storage_network_vmk_index
 
-                  storage_hash['equallogic::create_vol_chap_user_access'].each do |storage_title, storage_params|
+                  storage_hash['asm::volume::equallogic'].each do |storage_title, storage_params|
 
                     storage_titles.push storage_title
                     asm_datastore = {
