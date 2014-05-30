@@ -142,6 +142,16 @@ module ASM
       end.flatten
     end
 
+    def get_all_partitions
+      @mash.cards.collect do |fabric|
+        fabric.interfaces.collect do |port|
+          port.partitions.find_all do |partition|
+            partition.networkObjects && !partition.networkObjects.empty?
+          end
+        end
+      end.flatten
+    end
+
     # Finds all networks of one of the specified network types
     def get_networks(*network_types)
       @mash.cards.collect do |fabric|
