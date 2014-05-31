@@ -18,7 +18,7 @@
           "asmGUID": "equallogic-172.17.15.10",
           "relatedComponents": {},
           "resources": {
-            "id": "equallogic::create_vol_chap_user_access",
+            "id": "asm::volume::equallogic",
             "displayName": "Storage Settings",
             "parameters": [
               {

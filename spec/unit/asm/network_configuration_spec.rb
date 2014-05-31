@@ -196,7 +196,6 @@ describe ASM::NetworkConfiguration do
         port = fabric.interfaces.find { |p| p.name == "Port #{port_no}" }
         (1..4).each do |partition_no|
           fqdd = "NIC.Integrated.1-#{port_no}-#{partition_no}"
-          puts "====> Checking #{fqdd}"
           partition = port.partitions.find { |p| p.name == partition_no.to_s }
           partition.fqdd.should == fqdd
           if partition_no == 1
