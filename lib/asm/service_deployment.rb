@@ -147,12 +147,12 @@ class ASM::ServiceDeployment
       if inventory
         # Putting the re-direction as per the blade type
         # Blade and RACK server
-        server_vlan_info = get_server_networks(server_component,server_cert_name)
-        server_nic_type = get_server_nic_type(server_component,server_cert_name)
         blade_type = inventory['serverType'].downcase
         logger.debug("Server Blade type: #{blade_type}")
         if blade_type == "rack"
           logger.debug "Configuring rack server"
+          server_vlan_info = get_server_networks_rackserver(server_component,server_cert_name)
+          server_nic_type  = get_server_nic_type(server_component,server_cert_name)
           if @configured_rack_switches.length() > 0
             logger.debug "Configuring ToR configuration for server #{server_cert_name}"
             configure_tor(server_cert_name, server_vlan_info,server_nic_type)
@@ -162,6 +162,8 @@ class ASM::ServiceDeployment
         else
           if @configured_blade_switches.length() > 0
             logger.debug "Configuring blade server"
+            server_vlan_info = get_server_networks(server_component,server_cert_name)
+            server_nic_type = get_server_nic_type(server_component,server_cert_name)
             configure_tor_blade(server_cert_name, server_vlan_info,server_nic_type)
           else
             logger.debug "INFO: There are no IOM Switches in the ASM Inventory"
@@ -660,83 +662,87 @@ class ASM::ServiceDeployment
     fabric_interfaces = switchinfoobj.get_fabic_configured_interfaces(server_nic_type,server_vlan_info,macArray,logger)
     logger.debug("Fabric Interface: #{fabric_interfaces}")
 
-    # Need to process for the ToR Switches for each Fabric
-    ["Fabric A", "Fabric B", "Fabric C"].each do |fabric|
-      logger.debug "Configuring IOM for fabric : #{fabric}"
-      tagged_vlans = server_vlan_info["#{fabric}"]['tagged_vlan']
-      untagged_vlans = server_vlan_info["#{fabric}"]['untagged_vlan']
-      logger.debug "In configure_tor tagged vlan list found #{tagged_vlans}"
-      logger.debug "In configure_tor untagged vlan list found #{untagged_vlans}"
-      if ((tagged_vlans.nil? or tagged_vlans.length == 0) and ( untagged_vlans.nil? or untagged_vlans.length == 0))
-        logger.debug("No tagged / untagged VLANS for fabric #{fabric}")
-        next
-      end
+    fabric_enum = []
+    ("A".."Z").each_with_index do |char,index|
+      fabric_enum[index] = "Fabric #{char}"
+    end
 
-      resource_hash = Hash.new
-      switchportdetail.each do |switchportdetailhash|
-        switchportdetailhash.each do |macaddress,intfhash|
-          logger.debug "macaddress :: #{macaddress}    intfhash :: #{intfhash}"
-          switchcertname = intfhash[0][0]
-          interface = intfhash[0][1][0]
-          # Check if interface needs to be configured for this fabric
-          if !fabric_interfaces[fabric].include?(macaddress)
-            logger.debug "Interface #{interface} not required to be configured for fabric #{fabric}"
-            next
-          end
-          interfaces = get_interfaces(interface)
-          portchannels = get_portchannel(interface)
-          logger.debug "switchcertname :: #{switchcertname} interface :: #{interface}"
-          tagged_vlans.each do |vlanid|
-            logger.debug "vlanid :: #{vlanid}"
-            if switchcertname =~ /dell_ftos/
-              switch_resource_type = "asm::force10"
-              resource_hash[switch_resource_type] ||= {}
-              resource_hash[switch_resource_type]["#{vlanid}"] = {
-                'vlan_name' => '',
-                'desc' => '',
-                'tagged_tengigabitethernet' => interfaces.strip,
-                'tagged_portchannel' => portchannels.strip
-              }
-              logger.debug("*** resource_hash is #{resource_hash} ******")
-            elsif switchcertname =~ /dell_powerconnect/
-              switch_resource_type = "asm::powerconnect"
-              resource_hash[switch_resource_type] ||= {}
-              resource_hash[switch_resource_type]["#{vlanid}"] = {
-                'vlan_name' => '',
-                'portchannel' => portchannels.strip,
-                'interface' => interfaces.strip,
-                'mode' => 'general'
-              }
-            elsif switchcertname =~ /dell_iom/
-              switch_resource_type = "asm::iom"
+    # Need to configure the VLANs Per Card/Per Port instead of per fabric
+    server_vlan_info.each do |card,card_info|
+      card_info.each do |interface,interface_info|
+        tagged_vlans = interface_info['tagged_vlans']
+        untagged_vlans = interface_info['untagged_vlans']
+        if ((tagged_vlans.nil? or tagged_vlans.length == 0) and ( untagged_vlans.nil? or untagged_vlans.length == 0))
+          logger.debug("No tagged / untagged VLANS for card #{card}, port #{interface}")
+          next
+        end
+        resource_hash = Hash.new
+        switchportdetail.each do |switchportdetailhash|
+          switchportdetailhash.each do |macaddress,intfhash|
+            logger.debug "macaddress :: #{macaddress}    intfhash :: #{intfhash}"
+            switchcertname = intfhash[0][0]
+            interface = intfhash[0][1][0]
+            # Check if interface needs to be configured for this fabric
+            if macaddress != interface_info['mac_address']
+              logger.debug "Interface #{interface} not required to be configured for card #{card}, interface: #{interface}"
+              next
+            end
+            
+            interfaces = get_interfaces(interface)
+            portchannels = get_portchannel(interface)
+            logger.debug "switchcertname :: #{switchcertname} interface :: #{interface}"
+            tagged_vlans.each do |vlanid|
+              logger.debug "vlanid :: #{vlanid}"
+              if switchcertname =~ /dell_ftos/
+                switch_resource_type = "asm::force10"
+                resource_hash[switch_resource_type] ||= {}
+                resource_hash[switch_resource_type]["#{vlanid}"] = {
+                  'vlan_name' => '',
+                  'desc' => '',
+                  'tagged_tengigabitethernet' => interfaces.strip,
+                  'tagged_portchannel' => portchannels.strip
+                }
+                logger.debug("*** resource_hash is #{resource_hash} ******")
+              elsif switchcertname =~ /dell_powerconnect/
+                switch_resource_type = "asm::powerconnect"
+                resource_hash[switch_resource_type] ||= {}
+                resource_hash[switch_resource_type]["#{vlanid}"] = {
+                  'vlan_name' => '',
+                  'portchannel' => portchannels.strip,
+                  'interface' => interfaces.strip,
+                  'mode' => 'general'
+                }
+              elsif switchcertname =~ /dell_iom/
+                switch_resource_type = "asm::iom"
 
-            else
-              logger.debug "Non-supported switch type"
-              return
+              else
+                logger.debug "Non-supported switch type"
+                return
+              end
+              #process_generic(switchcertname, resource_hash, 'device', true, server_cert_name)
             end
-            #process_generic(switchcertname, resource_hash, 'device', true, server_cert_name)
-          end
-          untagged_vlans.each do |vlanid|
-            logger.debug "vlanid :: #{vlanid}"
-            if switchcertname =~ /dell_ftos/
-              switch_resource_type = "asm::force10"
-              resource_hash[switch_resource_type] ||= {}
-              resource_hash[switch_resource_type]["#{vlanid}"] = {
-                'vlan_name' => '',
-                'desc' => '',
-                'untagged_tengigabitethernet' => interfaces.strip,
-              }
-              logger.debug("*** resource_hash is #{resource_hash} ******")
-            elsif switchcertname =~ /dell_iom/
-              switch_resource_type = "asm::iom"
-            else
-              logger.debug "Non-supported switch type"
-              return
+            untagged_vlans.each do |vlanid|
+              logger.debug "vlanid :: #{vlanid}"
+              if switchcertname =~ /dell_ftos/
+                switch_resource_type = "asm::force10"
+                resource_hash[switch_resource_type] ||= {}
+                resource_hash[switch_resource_type]["#{vlanid}"] = {
+                  'vlan_name' => '',
+                  'desc' => '',
+                  'untagged_tengigabitethernet' => interfaces.strip,
+                }
+                logger.debug("*** resource_hash is #{resource_hash} ******")
+              elsif switchcertname =~ /dell_iom/
+                switch_resource_type = "asm::iom"
+              else
+                logger.debug "Non-supported switch type"
+                return
+              end
+              #process_generic(switchcertname, resource_hash, 'device', true, server_cert_name)
             end
-            #process_generic(switchcertname, resource_hash, 'device', true, server_cert_name)
+            logger.debug("Switch #{switchcertname}, Resource hash: #{resource_hash}")
+            process_generic(switchcertname, resource_hash, 'device', true, server_cert_name)
           end
-          logger.debug("Switch #{switchcertname}, Resource hash: #{resource_hash}")
-          process_generic(switchcertname, resource_hash, 'device', true, server_cert_name)
         end
       end
     end
@@ -2226,6 +2232,57 @@ class ASM::ServiceDeployment
       logger.debug("Fabric VLAN INFO: #{fabric_vlan_info}")
     end
     fabric_vlan_info
+  end
+
+  def get_server_networks_rackserver(server_component,server_cert)
+    server_vlan_info        = {}
+    tagged_vlaninfo         = []
+    tagged_workloadvlaninfo = []
+    untagged_vlaninfo       = []
+    server_conf = ASM::Util.build_component_configuration(server_component, :decrypt => decrypt?)
+
+    network_params = (server_conf['asm::esxiscsiconfig'] || {})[server_cert]
+
+    # get fabric information
+    network_fabric_info = {}
+    nc = ASM::NetworkConfiguration.new(network_params['network_configuration'])
+    device_conf = ASM::Util.parse_device_config(server_cert)
+    options = { :add_partitions => true }
+    nc.add_nics!(device_conf, options)
+    nc.cards.each do |card|
+      logger.debug("Card name: #{card}")
+      card.interfaces.each do |interface|
+        fabric_networks = []
+        tagged_vlans = []
+        untagged_vlans = []
+        interface_mac = ""
+        logger.debug("Interface name: #{interface['name']}")
+        interface.partitions.each do |partition|
+          if partition.partition_no == 1
+            interface_mac = partition.mac_address
+          end
+          logger.debug("Partition: #{partition}")
+          logger.debug("Network Object #{partition['networkObjects']}")
+          #networks = partitions.collect { |partition| partition['networkObjects'] }.flatten
+          networks = partition['networkObjects']
+          partition['networkObjects'].each do |networkObject|
+            if networkObject['type'] == "PXE"
+              untagged_vlans.push(networkObject['vlanId'])
+            else
+              tagged_vlans.push(networkObject['vlanId'])
+            end
+          end
+          #fabric_networks.concat(networks)
+        end
+        network_fabric_info[card['card_index']] ||= {}
+        network_fabric_info[card['card_index']][interface['name']] ||= {}
+        network_fabric_info[card['card_index']][interface['name']]['tagged_vlans'] = tagged_vlans
+        network_fabric_info[card['card_index']][interface['name']]['untagged_vlans'] = untagged_vlans
+        network_fabric_info[card['card_index']][interface['name']]['mac_address'] = interface_mac
+      end
+    end
+    logger.debug("network_fabric_info: #{network_fabric_info}")
+    network_fabric_info
   end
 
   def initiate_discovery(device_hash)
