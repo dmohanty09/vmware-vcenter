@@ -1,0 +1,5 @@
+---
+# For jruby / torquebox:
+database_url: 'jdbc:postgresql:asm_dev?user=orion&password=Password123$'
+# for MRI ruby:
+#database_url: 'postgres://orion:Password123$@localhost/asm_dev'

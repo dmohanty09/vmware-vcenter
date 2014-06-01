@@ -12,7 +12,6 @@ module ASM
   module Util
 
     SERVER_RA_URL='http://localhost:9080/ServerRA/Server'
-    NETWORKS_RA_URL='http://localhost:9080/VirtualServices/Network'
     CHASSIS_RA_URL='http://localhost:9080/ChassisRA/Chassis'
     MANAGED_DEVICE_URL='http://localhost:9080/AsmManager/ManagedDevice'
     # TODO: give razor user access to this directory

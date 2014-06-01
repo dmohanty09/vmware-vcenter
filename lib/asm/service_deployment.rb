@@ -33,8 +33,9 @@ class ASM::ServiceDeployment
   attr_reader :configured_rack_switches
   attr_reader :configured_blade_switches
   attr_reader :configured_brocade_san_switches
+  attr_reader :db
 
-  def initialize(id)
+  def initialize(id, db)
     unless id
       raise(Exception, "Service deployment must have an id")
     end
@@ -45,6 +46,7 @@ class ASM::ServiceDeployment
     @rack_server_switchhash = {}
     @blade_server_switchhash = {}
     @brocade_san_switchhash = {}
+    @db = db
   end
 
   def logger
@@ -84,7 +86,10 @@ class ASM::ServiceDeployment
       
       ASM.logger.info("Deploying #{service_deployment['deploymentName']} with id #{service_deployment['id']}")
       log("Status: Started")
-      log("Starting deployment #{service_deployment['deploymentName']}")
+      msg = "Starting deployment #{service_deployment['deploymentName']}"
+      log(msg)
+      db.create_execution(service_deployment)
+      db.log(:info, msg)
 
       # Write the deployment to filesystem for ease of debugging / reuse
       File.write(
@@ -97,6 +102,8 @@ class ASM::ServiceDeployment
       unless dup_servers.empty?
         msg = "Duplicate host names found in deployment #{dup_servers.inspect}"
         logger.error(msg)
+        db.log(:error, msg)
+        db.set_status(:error)
         raise(Exception, msg)
       end
       if is_retry?
@@ -106,6 +113,8 @@ class ASM::ServiceDeployment
       unless ds.empty?
         msg = "The listed hosts are already in use #{ds.inspect}"
         logger.error(msg)
+        db.log(:error, msg)
+        db.set_status(:error)
         raise(Exception, msg)
       end
 
@@ -132,6 +141,7 @@ class ASM::ServiceDeployment
     rescue Exception => e
       if e.class == ASM::UserException
         logger.error(e.to_s)
+        db.log(:error, e.to_s)
       end
       backtrace = (e.backtrace || []).join("\n")
       File.write(
@@ -139,10 +149,12 @@ class ASM::ServiceDeployment
           "#{e.inspect}\n\n#{backtrace}"
       )
       log("Status: Error")
+      db.set_status(:error)
       raise(e)
     ensure
       update_vcenters
     end
+    db.log(:info, "Deployment completed")
     log("Status: Completed")
   end
 
@@ -318,6 +330,7 @@ class ASM::ServiceDeployment
       if components = @components_by_type[type]
         log("Processing components of type #{type}")
         log("Status: Processing_#{type.downcase}")
+        db.log(:info, "Processing #{type.downcase} components")
         components.collect do |comp|
           #
           # TODO: this is some pretty primitive thread management, we need to use
@@ -325,19 +338,24 @@ class ASM::ServiceDeployment
           #
           Thread.new do
             raise(Exception, 'Component has no certname') unless comp['puppetCertName']
+            Thread.current[:component_id] = comp['id']
             Thread.current[:certname] = comp['puppetCertName']
+            db.set_component_status(comp['id'], :in_progress)
             send("process_#{type.downcase}", comp)
           end
         end.each do |thrd|
           begin
             thrd.join
             log("Status: Completed_component_#{type.downcase}/#{thrd[:certname]}")
+            db.set_component_status(thrd[:component_id], :complete)
           rescue Exception => e
             log("Status: Failed_component_#{type.downcase}/#{thrd[:certname]}")
+            db.set_component_status(thrd[:component_id], :error)
             raise(e)
           end
         end
-        log("Finsished components of type #{type}")
+        log("Finished components of type #{type}")
+        db.log(:info, "Finished processing #{type.downcase} components")
       end
     end
   end

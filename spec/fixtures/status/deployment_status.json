@@ -1,0 +1,40 @@
+{
+    "id": "ff8080814656ae6001465baffbcd066e",
+    "name": "Deployment Name",
+    "status": "in_progress",
+    "message": "Deployment in progress",
+    "start_time": "2014-06-02 04:42:21",
+    "end_time": null,
+    "components": [
+        {
+            "id": "0222a2a4-579f-41d0-8920-e1fa7911f644",
+            "asm_guid": "ff8080814656ae60014656d9a09d02a8",
+            "name": "Server 1",
+            "type": "SERVER",
+            "status": "in_progress",
+            "message": "Deploying server",
+            "start_time": "2014-06-02 04:45:35",
+            "end_time": null
+        },
+        {
+            "id": "0222a2a4-579f-41d0-8920-e1fa7911f645",
+            "asm_guid": "ff8080814656ae60014656d9a09d02b8",
+            "name": "Server 2",
+            "type": "SERVER",
+            "status": "completed",
+            "message": "Successfully deployed server",
+            "start_time": "2014-06-02 04:45:35",
+            "end_time": "2014-06-02 04:55:35"
+        },
+        {
+            "id": "0222a2a4-579f-41d0-8920-e1fa7911f646",
+            "asm_guid": "ff8080814656ae60014656d9a09d02a9",
+            "name": "Server 3",
+            "type": "SERVER",
+            "status": "error",
+            "message": "Server deployment failed",
+            "start_time": "2014-06-02 04:45:35",
+            "end_time": "2014-06-02 04:57:35"
+        }
+    ]
+}

@@ -43,7 +43,7 @@ module ASM
       backup_dir
     end
 
-    def self.retry_deployment(deployment_id, deployment, debug_deployment = false)
+    def self.backup_deployment_dirs(deployment_id, deployment, debug_deployment = false)
       dir = File.join(ASM::base_dir, deployment_id)
       raise 'Deployment directory not found for retry' unless File.directory?(dir)
 
@@ -56,9 +56,6 @@ module ASM
         deployment['debug'] = 'true'
       end
       deployment['retry'] = 'true'
-      
-      ASM.logger.info("Re-running deployment; this will take awhile ...")
-      ASM.process_deployment(deployment)
     end
   end
 end

@@ -9,9 +9,9 @@ describe ASM::UpdateDeployment do
   before do
     ASM.init
     @test_dir = Dir.mktmpdir('update_deployment_spec')
-    FileUtils.cp_r(File.expand_path("../../../fixtures/deployments", __FILE__), @test_dir)
+    FileUtils.cp_r(File.expand_path('../../../fixtures/deployments', __FILE__), @test_dir)
     ASM.stubs(:base_dir).returns("#{@test_dir}/deployments")
-    ASM::Util.stubs(:reserve_network_ips).returns(["172.23.119.2"])
+    ASM::Util.stubs(:reserve_network_ips).returns(['172.23.119.2'])
     ASM::Util.stubs(:fetch_managed_inventory).returns([])
     mock_command_result = Hashie::Mash.new({
       'stdout' => '', 'stderr' => '', 'exit_status' => 0, 'pid' => 0
@@ -33,10 +33,14 @@ describe ASM::UpdateDeployment do
     ASM::ServiceDeployment.any_instance.stubs(:process_tor_switches).returns(nil)
     ASM::ServiceDeployment.any_instance.stubs(:process_san_switches).returns(nil)
     ASM::ServiceDeployment.any_instance.stubs(:process_components).returns(nil)
+
+    mock = mock('deployment_data')
+    mock.stub_everything
+    ASM::Data::Deployment.stubs(:new).returns(mock)
   end
 
   after do
-    ASM.clear_mutex
+    ASM.reset
     FileUtils.rm_rf(@test_dir)
   end
 
