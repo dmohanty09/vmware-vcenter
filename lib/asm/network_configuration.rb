@@ -95,6 +95,10 @@ module ASM
         ret
       end
 
+      def card_prefix
+        "NIC.#{@mash.type}.#{@mash.card}"
+      end
+
     end
 
     def get_wsman_nic_info(endpoint)
@@ -260,20 +264,36 @@ module ASM
       end
     end
 
-    def build_index_to_slot_hash(nics)
-      slots = nics.collect { |nic| nic.card.to_i }.compact.sort.uniq
+    # Compare nics at the card level by type and card number. Type is compared
+    # lexicographically, but the real intent is that Integrated nics are ordered
+    # before Slot nics.
+    def compare_cards(nic1, nic2)
+      type_cmp = nic1.type <=> nic2.type
+      if type_cmp != 0
+        type_cmp
+      else
+        nic1.card.to_i <=> nic2.card.to_i
+      end
+    end
 
-      unless slots.size >= @mash.cards.size
+    # Returns an ordered list prefixes of the cards contained in the nics.
+    # Ordering is done by type and then card number.
+    #
+    # For rack servers this order is lined up with the order of cards passed
+    # in the network configuration data in order to match physical nics to
+    # that data.
+    def ordered_nic_prefixes(nics)
+      prefixes = nics.sort { |a, b| compare_cards(a, b) }.collect do |nic|
+        nic.card_prefix
+      end.uniq
+
+      if prefixes.size >= @mash.cards.size
+        prefixes.slice(0, @mash.cards.size + 1)
+      else
         fqdds = nics.collect { |nic| nic.fqdd }
         logger.debug("Found nic fqdd's: #{fqdds}") if logger
-        raise(ASM::UserException, "Network configuration requires #{@mash.cards.size} network cards but only #{slots.size} were found")
+        raise(ASM::UserException, "Network configuration requires #{@mash.cards.size} network cards but only #{prefixes.size} were found")
       end
-
-      ret = {}
-      @mash.cards.collect { |card| card.card_index }.each do |i|
-        ret[i] = slots[i]
-      end
-      ret
     end
 
     # Add nic, fqdd and mac_address fields to the partition data. This info
@@ -286,8 +306,9 @@ module ASM
     # directly for generating partitioned config.xml data even when the server
     # nics are not currently partitioned.
     def add_nics!(endpoint, options = {})
-      options = { :add_partitions => false }.merge(options)
+      options = {:add_partitions => false}.merge(options)
       nics = get_wsman_nic_info(endpoint)
+      nic_prefixes = nil
 
       @mash.cards.each do |card|
         card.interfaces.each do |interface|
@@ -299,9 +320,9 @@ module ASM
                     name_to_port(interface.name).to_s == n.port &&
                     partition_no.to_s == n.partition_no)
               else
-                slot_map ||= build_index_to_slot_hash(nics)
-                slot = slot_map[card.card_index] or raise(Exception, "No slot found for card_index #{card.card_index} in #{slot_map}")
-                (slot.to_s == n.card &&
+                nic_prefixes ||= ordered_nic_prefixes(nics)
+                prefix = nic_prefixes[card.card_index] or raise(Exception, "No slot found for card_index #{card.card_index} in #{nic_prefixes}")
+                (n.fqdd.start_with?(prefix) &&
                     name_to_port(interface.name).to_s == n.port &&
                     partition_no.to_s == n.partition_no)
               end

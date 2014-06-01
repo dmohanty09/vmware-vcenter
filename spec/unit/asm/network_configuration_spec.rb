@@ -459,6 +459,49 @@ describe ASM::NetworkConfiguration do
         end
       end
     end
+
+    it 'should prefer integrated to slot nics' do
+      fqdd_to_mac = {'NIC.Slot.5-1-1' => '00:0A:F7:06:88:50',
+                     'NIC.Slot.5-2-1' => '00:0A:F7:06:88:52',
+                     'NIC.Slot.3-1-1' => '01:0A:F7:06:88:50',
+                     'NIC.Slot.3-2-1' => '01:0A:F7:06:88:52',
+                     'NIC.Slot.1-1-1' => '02:0A:F7:06:88:50',
+                     'NIC.Slot.1-2-1' => '02:0A:F7:06:88:52',
+                     'NIC.Slot.7-1-1' => '03:0A:F7:06:88:50',
+                     'NIC.Slot.7-2-1' => '03:0A:F7:06:88:52',
+                     'NIC.Integrated.1-1-1' => '04:0A:F7:06:88:50',
+                     'NIC.Integrated.1-2-1' => '04:0A:F7:06:88:52',
+      }
+
+      ASM::WsMan.stubs(:get_mac_addresses).returns(fqdd_to_mac)
+      net_config = ASM::NetworkConfiguration.new(@data)
+      net_config.add_nics!(Hashie::Mash.new({:host => '127.0.0.1'}))
+
+      # Verify 3 cards, unpartitioned
+      to_fqdd = {0 => 'NIC.Integrated.1', 1 => 'NIC.Slot.1', 2 => 'NIC.Slot.3', }
+      found_macs = []
+      (0..2).each do |card_index|
+        card = net_config.cards.find { |c| c.card_index == card_index }
+        fqdd_prefix = to_fqdd[card_index]
+        (1..2).each do |port_no|
+          port = card.interfaces.find { |p| p.name == "Port #{port_no}" }
+          (1..4).each do |partition_no|
+            fqdd = "#{fqdd_prefix}-#{port_no}-#{partition_no}"
+            partition = port.partitions.find { |p| p.name == partition_no.to_s }
+            if partition_no > 1
+              partition.should be_nil
+            else
+              partition.fqdd.should == fqdd
+              mac = fqdd_to_mac[fqdd]
+              partition.mac_address.should == mac
+              found_macs.include?(mac).should be_false
+              found_macs.push(mac)
+            end
+          end
+        end
+      end
+    end
+
   end
 
 end
