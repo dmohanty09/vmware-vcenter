@@ -64,6 +64,9 @@ module ASM
       if (data['noop'] || '').downcase == 'true'
         service_deployment.noop = true
       end
+      if (!data['retry'].nil?)
+        service_deployment.is_retry = ASM::Util.to_boolean(data['retry'])
+      end
       service_deployment.process(data)
     ensure
       complete_deployment(id)

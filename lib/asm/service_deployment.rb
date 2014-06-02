@@ -71,6 +71,10 @@ class ASM::ServiceDeployment
     @razor ||= ASM::Razor.new(:logger => logger)
   end
 
+  def is_retry=(is_retry)
+    @is_retry = is_retry
+  end
+
   def process(service_deployment)
     begin
       ASM.logger.info("Deploying #{service_deployment['deploymentName']} with id #{service_deployment['id']}")
@@ -1199,6 +1203,9 @@ class ASM::ServiceDeployment
       params['nfssharepath'] = '/var/nfs/idrac_config_xml'
       params['servicetag'] = inventory['serviceTag']
       params['model'] = inventory['model'].split(' ').last.downcase
+      if(!@is_retry.nil?)
+        params['force_reboot'] = !@is_retry
+      end
       if network_config
         params['network_configuration'] = network_config.to_hash
       end
@@ -1287,56 +1294,25 @@ class ASM::ServiceDeployment
     # The rest of the asm::esxiscsiconfig is used to configure vswitches
     # and portgroups on the esxi host and is done in the cluster swimlane
     resource_hash.delete('asm::esxiscsiconfig')
-
-    # Check whether we should skip calling process_generic based on
-    # whether the server already seems to be installed with the correct
-    # O/S. Don't bother doing this if we are @debug since we do not
-    # actually execute any puppet commands in that case any way.
-    skip_deployment = nil
+    process_generic(component['puppetCertName'], resource_hash, 'apply', 'true')
     unless @debug || @bfs
-      begin
-        node = (razor.find_node(serial_number) || {})
-        if node['policy'] && node['policy']['name']
-          policy = razor.get('policies', node['policy']['name'])
-          razor_params = resource_hash['asm::server'][cert_name]
-          if policy &&
-              (policy['repo'] || {})['name'] == razor_params['razor_image'] &&
-              (policy['task'] || {})['name'] =~ /^(#{razor_params['os_image_version']}|#{razor_params['os_image_type']}){1}$/
-            skip_deployment = true
-          end
-        end
-      rescue Timeout::Error
-        skip_deployment = nil
-      end
-    end
-
-    if skip_deployment
-      # In theory the puppet razor and idrac modules should be idempotent
-      # and we could call process_generic without affecting them if they
-      # are already in the desired state. However, the idrec module
-      # currently always reboots the server
-      log("Skipping deployment of #{cert_name}; already complete.")
-    else
-      process_generic(component['puppetCertName'], resource_hash, 'apply', 'true')
-      unless @debug || @bfs
-        (resource_hash['asm::server'] || []).each do |title, params|
-          type = params['os_image_type']
-          version = params['os_image_version'] || params['os_image_type']
-          node = razor.block_until_task_complete(serial_number,
-                                                 params['policy_name'], version)
-          if type == 'vmware_esxi'
-            raise(Exception, "Static management IP address was not specified for #{serial_number}") unless static_ip
-            block_until_esxi_ready(title, params, static_ip, timeout = 900)
-          else
-            deployment_status = await_agent_run_completion(ASM::Util.hostname_to_certname(os_host_name), timeout = 3600)
-            if (deployment_status and os_image_type == 'hyperv')
-               hyperv_post_installation(ASM::Util.hostname_to_certname(os_host_name), cert_name, timeout=3600)
-            end
+      (resource_hash['asm::server'] || []).each do |title, params|
+        type = params['os_image_type']
+        version = params['os_image_version'] || params['os_image_type']
+        node = razor.block_until_task_complete(serial_number,
+                                               params['policy_name'], version)
+        if type == 'vmware_esxi'
+          raise(Exception, "Static management IP address was not specified for #{serial_number}") unless static_ip
+          block_until_esxi_ready(title, params, static_ip, timeout = 900)
+        else
+          deployment_status = await_agent_run_completion(ASM::Util.hostname_to_certname(os_host_name), timeout = 3600)
+          if (deployment_status and os_image_type == 'hyperv')
+             hyperv_post_installation(ASM::Util.hostname_to_certname(os_host_name), cert_name, timeout=3600)
           end
         end
       end
-      update_inventory_through_controller(component['asmGUID'])
     end
+    update_inventory_through_controller(component['asmGUID'])
   end
 
   #
