@@ -24,10 +24,8 @@ describe ASM::ServiceDeployment do
         'gateway' => '172.28.0.1', 'subnet' => '255.255.0.0'
       }
     }
-    ASM::Util.stubs(:fetch_network_settings).returns(network)
     ASM::Util.stubs(:fetch_managed_inventory).returns([])
-    ASM::Util.stubs(:reserve_network_ips).returns(['172.28.118.1'])
-    mock_command_result = Hashie::Mash.new({ 
+    mock_command_result = Hashie::Mash.new({
       'stdout' => '', 'stderr' => '', 'exit_status' => 0, 'pid' => 0
     })
     ASM::Util.stubs(:run_command_simple).returns(mock_command_result)

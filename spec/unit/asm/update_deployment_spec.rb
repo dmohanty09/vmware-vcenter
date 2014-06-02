@@ -13,35 +13,12 @@ describe ASM::UpdateDeployment do
     ASM.stubs(:base_dir).returns("#{@test_dir}/deployments")
     ASM::Util.stubs(:reserve_network_ips).returns(["172.23.119.2"])
     ASM::Util.stubs(:fetch_managed_inventory).returns([])
-    ASM::Util.stubs(:release_network_ips)
-    mock_command_result = Hashie::Mash.new({ 
+    mock_command_result = Hashie::Mash.new({
       'stdout' => '', 'stderr' => '', 'exit_status' => 0, 'pid' => 0
     })
     ASM::Util.stubs(:run_command_simple).returns(mock_command_result)
     ASM::Util.stubs(:run_command_success).returns(mock_command_result)
     ASM::Util.stubs(:run_command)
-    fetch_network_settings = {
-      "id"=>"ff808081452c813b01452cee4a3f0066",
-      "name"=>"vMotion",
-      "description"=>"",
-      "type"=>"HYPERVISOR_MANAGEMENT",
-      "vlanId"=>23,
-      "staticNetworkConfiguration"=>
-        {"gateway"=>"172.23.0.1",
-         "subnet"=>"255.255.0.0",
-         "ipRange"=>
-           [{"id"=>"ff808081452c813b01452cee4a460067",
-             "startingIp"=>"172.23.119.1",
-             "endingIp"=>"172.23.119.100"}]},
-      "createdDate"=>"2014-04-04T13:29:45.239+0000",
-      "createdBy"=>"admin",
-      "link"=>
-        {"title"=>"vMotion",
-         "href"=>
-         "http://localhost:9080/VirtualServices/Network/ff808081452c813b01452cee4a3f0066",
-         "rel"=>"self"},
-         "static"=>true
-    }
     populate_blade_switch_hash = {
       "dell_iom-172.17.15.234"=>
         {"connection_url"=>nil, 
@@ -52,7 +29,6 @@ describe ASM::UpdateDeployment do
          "device_type"=>"dell_powerconnect"}
     }
     ASM::ServiceDeployment.any_instance.stubs(:populate_blade_switch_hash).returns(populate_blade_switch_hash)
-    ASM::Util.stubs(:fetch_network_settings).returns(fetch_network_settings)
     ASM::Util.stubs(:fetch_server_inventory).returns({"serverType"=>"BLADE","serviceTag"=>"1FQSGT1","model"=>"PowerEdge M620"})
     ASM::ServiceDeployment.any_instance.stubs(:process_tor_switches).returns(nil)
     ASM::ServiceDeployment.any_instance.stubs(:process_san_switches).returns(nil)
