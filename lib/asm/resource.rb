@@ -98,7 +98,9 @@ module ASM
         end
 
         def macaddress
-          value = vm.guest.net.first.macAddress
+          value = ASM::Util.block_and_retry_until_ready(300, NoMethodError, 10) do
+            vm.guest.net.first.macAddress
+          end
           value.gsub(':', '')
         end
 
