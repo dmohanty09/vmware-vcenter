@@ -116,29 +116,6 @@ describe ASM::ServiceDeployment do
         @sd.process(@data)
         (YAML.load_file(@r_file)['asm::server']['foo']['rule_number'].to_s =~ /\d+/).should == 0
       end
-      
-      it 'should skip processing if server already deployed' do
-        @sd.expects(:process_generic).never
-        node = {'policy' => { 'name' => 'policy_test' } }
-        razor = mock('razor')
-        razor.stubs(:find_node).returns(node)
-        policy = {
-          'repo' => {'name' => 'esxi-5.1'},
-          'task' => {'name' => 'vmware_esxi'} 
-        }
-        razor.stubs(:get).returns(policy)
-        @sd.stubs(:razor).returns(razor)
-        @data['serviceTemplate']['components'][0]['id'] = 'bladeserve-_serialno'
-        @data['serviceTemplate']['components'][0]['puppetCertName'] = 'bladeserver-serialno'
-        @data['serviceTemplate']['components'][0]['type'] = 'SERVER'
-        parameters = [ {'id' => 'title', 'value' => 'bladeserver-serialno'},
-                       {'id' => 'razor_image', 'value' => 'esxi-5.1'},
-                       {'id' => 'os_image_type', 'value' => 'vmware_esxi'}, 
-                       {'id' => 'os_host_name', 'value' => 'foo'}]
-        resource = { 'id' => 'asm::server', 'parameters' => parameters }
-        @data['serviceTemplate']['components'][0]['resources'].push(resource)
-        @sd.process(@data)
-      end
 
       describe 'hyperV server' do
         it 'should process hyperv servers' do
