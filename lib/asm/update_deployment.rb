@@ -57,10 +57,6 @@ module ASM
       end
       deployment['retry'] = 'true'
       
-      # Release reserved network IPs; hopefully on retry we will get the same
-      ASM.logger.info("Releasing reserved network IPs from previous deployment ...")
-      ASM::Util.release_network_ips(deployment_id)
-
       ASM.logger.info("Re-running deployment; this will take awhile ...")
       ASM.process_deployment(deployment)
     end

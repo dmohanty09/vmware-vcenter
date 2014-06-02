@@ -52,17 +52,6 @@ module ASM
       ret[0]
     end
 
-    def self.fetch_network_settings(guid)
-      url = "#{NETWORKS_RA_URL}/#{guid}"
-      data = RestClient.get(url, {:accept => :json})
-      ret = JSON.parse(data)
-      if ret['id'] != guid
-        raise(Exception, "Failed to retrieve network settings for guid #{guid}: #{ret.to_yaml}")
-      else
-        ret
-      end
-    end
-
     def self.reserve_network_ips(guid, n_ips, usage_guid)
       url = "#{NETWORKS_RA_URL}/ipAddress/assign?networkId=#{URI.encode(guid)}&numberToReserve=#{n_ips}&usageGUID=#{URI.encode(usage_guid)}"
       data = RestClient.put(url, {:content_type => :json}, {:accept => :json})
@@ -73,7 +62,7 @@ module ASM
       end
       ret
     end
-    
+
     def self.fetch_managed_inventory()
       url = "#{MANAGED_DEVICE_URL}"
       data = RestClient.get(url, {:accept => :json})
@@ -82,12 +71,6 @@ module ASM
         raise(Exception, "Failed to get managed devices list")
       end
       ret
-    end
-
-    def self.release_network_ips(usage_guid)
-      url = "#{NETWORKS_RA_URL}/ipAddress/release?usageGUID=#{URI.encode(usage_guid)}"
-      data = RestClient.put(url, '')
-      true
     end
 
     def self.chassis_inventory(server_cert_name, logger)
