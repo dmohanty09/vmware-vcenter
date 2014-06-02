@@ -24,7 +24,7 @@ gem 'rbvmomi', '1.6.0'
 
 group :development, :test do
   gem 'rake'
-  gem 'rspec', :require => false
+  gem 'rspec', '~>2.14.0', :require => false
   gem 'mocha', :require => false
   gem 'puppet', :require => false
   gem 'puppetlabs_spec_helper', :require => false
