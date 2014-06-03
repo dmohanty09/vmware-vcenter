@@ -75,6 +75,10 @@ class ASM::ServiceDeployment
     @is_retry = is_retry
   end
 
+  def is_retry?
+    @is_retry
+  end
+
   def process(service_deployment)
     begin
       ASM.logger.info("Deploying #{service_deployment['deploymentName']} with id #{service_deployment['id']}")
@@ -94,7 +98,7 @@ class ASM::ServiceDeployment
         logger.error(msg)
         raise(Exception, msg)
       end
-      if service_deployment['retry'] == 'true'
+      if is_retry?
         hostlist = hostlist - ASM::DeploymentTeardown.get_previous_deployment_certs(service_deployment['id'])
       end
       ds = ASM::Util.check_host_list_against_previous_deployments(hostlist)
@@ -1203,9 +1207,7 @@ class ASM::ServiceDeployment
       params['nfssharepath'] = '/var/nfs/idrac_config_xml'
       params['servicetag'] = inventory['serviceTag']
       params['model'] = inventory['model'].split(' ').last.downcase
-      if(!@is_retry.nil?)
-        params['force_reboot'] = !@is_retry
-      end
+      params['force_reboot'] = !is_retry?
       if network_config
         params['network_configuration'] = network_config.to_hash
       end
