@@ -19,6 +19,11 @@ class ASM::App < Sinatra::Base
     ASM.process_deployment_request(request)
   end
 
+  # Initiate migration of server
+  post '/process_service_profile_migration' do
+    ASM.process_deployment_request_migration(request)
+  end
+
   # Retrieve logs for a deployment id
   get '/logs/:id' do | id |
     content_type :json

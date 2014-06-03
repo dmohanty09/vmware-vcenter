@@ -79,8 +79,56 @@ class ASM::ServiceDeployment
     @is_retry
   end
 
+  def process_migration(service_migration)
+    begin
+      ASM.logger.info("Initiating the service migration #{service_migration['deploymentName']} with id #{service_migration['id']}")
+      log("Status: Started")
+      log("Starting deployment migration #{service_migration['deploymentName']}")
+
+      # Write the deployment to filesystem for ease of debugging / reuse
+      File.write(
+      deployment_file('deployment.json'),
+      JSON.pretty_generate(service_migration)
+      )
+
+      # Will need to access other component types during deployment
+      # of a given component type in the future, e.g. VSwitch configuration
+      # information is contained in the server component type data
+      @component_for_migration = ASM::ServiceMigrationDeployment.components_for_miration(service_migration)
+      reset_servers(@component_for_migration)
+      
+      @components_by_type = components_by_type(service_migration)
+      get_all_switches()
+      
+      @rack_server_switchhash = self.populate_rack_switch_hash()
+      @blade_server_switchhash = self.populate_blade_switch_hash()
+      @brocade_san_switchhash = self.populate_brocade_san_switch_hash()
+      
+      process_tor_switches(@component_for_migration)
+      process_san_switches(@component_for_migration)
+      process_migration_components(@component_for_migration)
+    rescue Exception => e
+      if e.class == ASM::UserException
+        logger.error(e.to_s)
+      end
+      backtrace = (e.backtrace || []).join("\n")
+      File.write(
+      deployment_file('migration_exception.log'),
+      "#{e.inspect}\n\n#{backtrace}"
+      )
+      log("Status: Error")
+      raise(e)
+    end
+    log("Status: Migration Completed")
+  end
+
   def process(service_deployment)
     begin
+      
+      if service_deployment['migration'] and service_deployment['migration']
+        return process_migration(service_deployment)
+      end
+      
       ASM.logger.info("Deploying #{service_deployment['deploymentName']} with id #{service_deployment['id']}")
       log("Status: Started")
       log("Starting deployment #{service_deployment['deploymentName']}")
@@ -138,9 +186,11 @@ class ASM::ServiceDeployment
     log("Status: Completed")
   end
 
-  def process_tor_switches()
+  def process_tor_switches(components=nil)
     # Get all Servers
-    (@components_by_type['SERVER'] || []).each do |server_component|
+    components = @components_by_type if components.nil?
+    logger.debug("Component in the input list: #{components}")
+    (components['SERVER'] || []).each do |server_component|
       server_cert_name =  server_component['puppetCertName']
       logger.debug "Server cert name: #{server_cert_name}"
 
@@ -184,8 +234,9 @@ class ASM::ServiceDeployment
   # SAN Switch configuration needs to be performed
   # only if the SAN Switch configuration flag is set to true
   # And compellent is available in the service template
-  def process_san_switches()
+  def process_san_switches(components=nil)
 
+    components = @components_by_type if components.nil?
     # Check if Compellent is added to the service template
     if !compellent_in_service_template()
       logger.debug "Compellent is not in the service template, skippnig SAN configuration"
@@ -201,14 +252,14 @@ class ASM::ServiceDeployment
       return
     end
 
-    fcsupport=servers_has_fc_enabled()
+    fcsupport=servers_has_fc_enabled(components)
     if !fcsupport['returncode']
       logger.error(fcsupport['returnmessage'])
       raise(Exception,"#{fcsupport['returnmessage']}")
     end
 
     # Reboot all servers to ensure that the WWPN values are accessible on the Brocade switch
-    reboot_all_servers()
+    reboot_all_servers(components)
 
     # Initiating the discovery of the Brocade switches so that all the values are updated
     initiate_discovery(@brocade_san_switchhash)
@@ -219,7 +270,7 @@ class ASM::ServiceDeployment
     san_hash = {}
     # Perform the SAN configuration for each server
     servers = []
-    (@components_by_type['SERVER'] || []).each do |server_component|
+    (components['SERVER'] || []).each do |server_component|
       server_cert_name =  server_component['puppetCertName']
       logger.debug "Server cert name: #{server_cert_name}"
 
@@ -301,7 +352,8 @@ class ASM::ServiceDeployment
     components_by_type
   end
 
-  def process_components()
+  def process_components(components=nil)
+    components = @components_by_type if components.nil?
     ['STORAGE', 'TOR', 'SERVER', 'CLUSTER', 'VIRTUALMACHINE', 'TEST'].each do |type|
       if components = @components_by_type[type]
         log("Processing components of type #{type}")
@@ -1297,6 +1349,7 @@ class ASM::ServiceDeployment
     # The rest of the asm::esxiscsiconfig is used to configure vswitches
     # and portgroups on the esxi host and is done in the cluster swimlane
     resource_hash.delete('asm::esxiscsiconfig')
+    resource_hash.delete('asm::baseserver')
     process_generic(component['puppetCertName'], resource_hash, 'apply', 'true')
     unless @debug || @bfs
       (resource_hash['asm::server'] || []).each do |title, params|
@@ -2323,9 +2376,9 @@ class ASM::ServiceDeployment
     }
   end
 
-  def reboot_all_servers
+  def reboot_all_servers(components)
     reboot_count = 0
-    (@components_by_type['SERVER'] || []).each do |server_component|
+    (components['SERVER'] || []).each do |server_component|
       server_cert_name = server_component['puppetCertName']
       deviceconf ||= ASM::Util.parse_device_config(server_cert_name)
       # Get the powerstate, if the powerstate is 13, the reboot the server
@@ -2346,10 +2399,11 @@ class ASM::ServiceDeployment
     end
   end
 
-  def servers_has_fc_enabled()
+  def servers_has_fc_enabled(components=nil)
     returncode=true
     returnmessage=""
-    (@components_by_type['SERVER'] || []).each do |server_component|
+    components = @components_by_type if  components.nil?
+    (components['SERVER'] || []).each do |server_component|
       server_cert_name = server_component['puppetCertName']
       wwpns ||= (get_specific_dell_server_wwpns(server_component) || [])
       if wwpns.nil? or (wwpns.length == 0)
@@ -2679,6 +2733,100 @@ class ASM::ServiceDeployment
       end
     end
     iscsi_fabric.uniq.compact
+  end
+
+  def process_migration_components(migration_components)
+    # Get the related storage devices and process them
+    migration_components['SERVER'].each do |migration_component|
+      logger.info("Processing server component: #{migration_component['puppetCertName']}")
+      storage_components = find_related_components('STORAGE',migration_component)
+      
+      storage_components.each do |storage_component|
+        log("Processing storage component: #{storage_component['puppetCertName']}")
+        process_storage(storage_component)
+      end
+    end
+
+    ['SERVER', 'TEST'].each do |type|
+      if components = migration_components[type]
+        log("Processing components of type #{type}")
+        log("Status: Processing_#{type.downcase}")
+        components.collect do |comp|
+          Thread.new do
+            raise(Exception, 'Component has no certname') unless comp['puppetCertName']
+            Thread.current[:certname] = comp['puppetCertName']
+            send("process_#{type.downcase}", comp)
+          end
+        end.each do |thrd|
+          begin
+            thrd.join
+            log("Status: Completed_component_#{type.downcase}/#{thrd[:certname]}")
+          rescue Exception => e
+            log("Status: Failed_component_#{type.downcase}/#{thrd[:certname]}")
+            raise(e)
+          end
+        end
+        log("Finsished components of type #{type}")
+      end
+    end
+  end
+  
+  def reset_servers(migration_components)
+    migration_components['SERVER'].each do |migration_component|
+      server_cert = migration_component['puppetCertName']
+      logger.info("Processing server component: #{migration_component['puppetCertName']}")
+      server_conf = ASM::Util.build_component_configuration(migration_component, :decrypt => decrypt?)
+      oldserver_info = (server_conf['asm::baseserver'] || {})
+      if !oldserver_info
+        raise(Exception,"Old server information is not provided for migration")
+      end
+      old_server_cert = oldserver_info.keys[0]
+      logger.debug("Old server certificate name: #{old_server_cert}")
+      begin
+        cleanup_server(migration_component,old_server_cert)
+        endpoint = ASM::Util.parse_device_config(old_server_cert)
+        ASM::WsMan.poweroff(endpoint,logger)
+      rescue Exception => e
+        logger.debug("Exception occured during the server cleanup/poweroff. Message: #{e.message}")
+        logger.debug("Stack Trace: #{e.backtrace}")
+      end
+    end
+  end
+
+  #Resets VirtualMac Addresses to permanent mac addresses
+  def cleanup_server(server_component, old_server_cert)
+    server_conf = ASM::Util.build_component_configuration(server_component, :decrypt => decrypt?)
+    server_cert = server_component['puppetCertName']
+    network_params = (server_conf['asm::esxiscsiconfig'] || {})[server_cert]
+    net_config = nil
+    device_conf = {}
+    # get fabric information
+    if network_params
+      net_config = ASM::NetworkConfiguration.new(network_params['network_configuration'])
+      device_conf = ASM::Util.parse_device_config(old_server_cert)
+      options = { :add_partitions => true }
+      net_config.add_nics!(device_conf, options)
+      logger.debug("Resetting virtual mac addresses to permanent mac addresses for: #{old_server_cert}")
+      net_config.reset_virt_mac_addr(device_conf)
+
+      network_params['network_configuration'] = net_config.to_hash
+      server_conf.delete('asm::server')
+      server_conf.delete('asm::baseserver')
+      server_conf.delete('asm::esxiscsiconfig')
+      # Rename the cert name in the resource hash from new cert to old certname
+      new_conf = {}
+      new_conf['asm::idrac'] = Hash[server_conf['asm::idrac'].map {|k,v| [old_server_cert,v]}]
+      #new_conf['asm::esxiscsiconfig'] = Hash[server_conf['asm::esxiscsiconfig'].map {|k,v| [old_server_cert,v]}]
+
+      inventory = ASM::Util.fetch_server_inventory(old_server_cert)
+      new_conf['asm::idrac'][old_server_cert]['nfsipaddress'] = ASM::Util.get_preferred_ip(device_conf[:host])
+      new_conf['asm::idrac'][old_server_cert]['nfssharepath'] = '/var/nfs/idrac_config_xml'
+      new_conf['asm::idrac'][old_server_cert]['servicetag'] = inventory['serviceTag']
+      new_conf['asm::idrac'][old_server_cert]['model'] = inventory['model'].split(' ').last.downcase
+      new_conf['asm::idrac'][old_server_cert]['network_configuration'] =  net_config.to_hash
+
+      process_generic(old_server_cert, new_conf, 'apply', 'true')
+    end
   end
 
 end
