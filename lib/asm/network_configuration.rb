@@ -87,7 +87,7 @@ module ASM
           ret.fabric = $2
           expected_fabric = card_to_fabric(orig_card)
           if ret.fabric != expected_fabric
-            logger.warn("Mismatched fabric information for #{orig_card}: #{ret.fabric} versus #{expected_fabric}")
+            logger.warn("Mismatched fabric information for #{orig_card}: #{ret.fabric} versus #{expected_fabric}") if logger
           end
         else
           ret.fabric = card_to_fabric(ret.card)
