@@ -79,55 +79,8 @@ class ASM::ServiceDeployment
     @is_retry
   end
 
-  def process_migration(service_migration)
-    begin
-      ASM.logger.info("Initiating the service migration #{service_migration['deploymentName']} with id #{service_migration['id']}")
-      log("Status: Started")
-      log("Starting deployment migration #{service_migration['deploymentName']}")
-
-      # Write the deployment to filesystem for ease of debugging / reuse
-      File.write(
-      deployment_file('deployment.json'),
-      JSON.pretty_generate(service_migration)
-      )
-
-      # Will need to access other component types during deployment
-      # of a given component type in the future, e.g. VSwitch configuration
-      # information is contained in the server component type data
-      @component_for_migration = ASM::ServiceMigrationDeployment.components_for_migration(service_migration)
-      reset_servers(@component_for_migration)
-      
-      @components_by_type = components_by_type(service_migration)
-      get_all_switches()
-      
-      @rack_server_switchhash = self.populate_rack_switch_hash()
-      @blade_server_switchhash = self.populate_blade_switch_hash()
-      @brocade_san_switchhash = self.populate_brocade_san_switch_hash()
-      
-      process_tor_switches(@component_for_migration)
-      process_san_switches(@component_for_migration)
-      process_migration_components(@component_for_migration)
-    rescue Exception => e
-      if e.class == ASM::UserException
-        logger.error(e.to_s)
-      end
-      backtrace = (e.backtrace || []).join("\n")
-      File.write(
-      deployment_file('migration_exception.log'),
-      "#{e.inspect}\n\n#{backtrace}"
-      )
-      log("Status: Error")
-      raise(e)
-    end
-    log("Status: Migration Completed")
-  end
-
   def process(service_deployment)
     begin
-      
-      if service_deployment['migration'] and service_deployment['migration']
-        return process_migration(service_deployment)
-      end
       
       ASM.logger.info("Deploying #{service_deployment['deploymentName']} with id #{service_deployment['id']}")
       log("Status: Started")
@@ -159,11 +112,19 @@ class ASM::ServiceDeployment
       # Will need to access other component types during deployment
       # of a given component type in the future, e.g. VSwitch configuration
       # information is contained in the server component type data
+      if service_deployment['migration']
+        logger.debug("Processing the service deployment migration")
+        @components_for_migration = ASM::ServiceMigrationDeployment.components_for_migration(service_deployment)
+        reset_servers(@components_for_migration)
+      end
+      
       @components_by_type = components_by_type(service_deployment)
+      
       get_all_switches()
       @rack_server_switchhash = self.populate_rack_switch_hash()
       @blade_server_switchhash = self.populate_blade_switch_hash()
       @brocade_san_switchhash = self.populate_brocade_san_switch_hash()
+      
       # Changing the ordering of SAN and LAN configuration
       # To ensure that the server boots with razor image
       process_tor_switches()
@@ -1281,9 +1242,12 @@ class ASM::ServiceDeployment
         ASM::Util.run_puppet_device!(storage_component['puppetCertName'])
         params['target_iscsi'] = ASM::Util.find_equallogic_iscsi_volume(storage_component['asmGUID'],boot_volume)['TargetIscsiName']
         params['target_ip'] = ASM::Util.find_equallogic_iscsi_ip(storage_component['puppetCertName'])
-        resource_hash.delete("asm::server")
       end
-
+    end
+    
+    if @bfs
+      params['network_configuration'] = build_network_config(component).to_hash
+      resource_hash.delete("asm::server")
       if resource_hash['asm::server']
         params['before'].push("Asm::Server[#{cert_name}]")
       end
@@ -2735,42 +2699,6 @@ class ASM::ServiceDeployment
     iscsi_fabric.uniq.compact
   end
 
-  def process_migration_components(migration_components)
-    # Get the related storage devices and process them
-    migration_components['SERVER'].each do |migration_component|
-      logger.info("Processing server component: #{migration_component['puppetCertName']}")
-      storage_components = find_related_components('STORAGE',migration_component)
-      
-      storage_components.each do |storage_component|
-        log("Processing storage component: #{storage_component['puppetCertName']}")
-        process_storage(storage_component)
-      end
-    end
-
-    ['SERVER', 'TEST'].each do |type|
-      if components = migration_components[type]
-        log("Processing components of type #{type}")
-        log("Status: Processing_#{type.downcase}")
-        components.collect do |comp|
-          Thread.new do
-            raise(Exception, 'Component has no certname') unless comp['puppetCertName']
-            Thread.current[:certname] = comp['puppetCertName']
-            send("process_#{type.downcase}", comp)
-          end
-        end.each do |thrd|
-          begin
-            thrd.join
-            log("Status: Completed_component_#{type.downcase}/#{thrd[:certname]}")
-          rescue Exception => e
-            log("Status: Failed_component_#{type.downcase}/#{thrd[:certname]}")
-            raise(e)
-          end
-        end
-        log("Finsished components of type #{type}")
-      end
-    end
-  end
-  
   def reset_servers(migration_components)
     migration_components['SERVER'].each do |migration_component|
       server_cert = migration_component['puppetCertName']
@@ -2786,9 +2714,13 @@ class ASM::ServiceDeployment
         cleanup_server(migration_component,old_server_cert)
         endpoint = ASM::Util.parse_device_config(old_server_cert)
         ASM::WsMan.poweroff(endpoint,logger)
+        
+        # power on the new server to support the iDRAC module
+        endpoint = ASM::Util.parse_device_config(server_cert)
+        ASM::WsMan.poweroff(endpoint,logger)
       rescue Exception => e
         logger.debug("Exception occured during the server cleanup/poweroff. Message: #{e.message}")
-        logger.debug("Stack Trace: #{e.backtrace}")
+        logger.debug("Stack Trace: #{e.inspect}")
       end
     end
   end

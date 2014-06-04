@@ -45,6 +45,7 @@ module ASM
 
         deployment_file = File.join(backup, 'deployment.json')
         data['migration'] = 'true'
+        data['retry'] = 'true'
 
         ASM.logger.info("Initiating the server migration")
         ASM.process_deployment(data)
