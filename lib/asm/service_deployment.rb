@@ -88,7 +88,7 @@ class ASM::ServiceDeployment
       # Write the deployment to filesystem for ease of debugging / reuse
       File.write(
         deployment_file('deployment.json'),
-        JSON.pretty_generate(service_deployment)
+        JSON.pretty_generate(service_deployment, :max_nesting=>25)
       )
       
       hostlist = ASM::DeploymentTeardown.get_deployment_certs(service_deployment)
@@ -1302,6 +1302,13 @@ class ASM::ServiceDeployment
       (resource_hash['asm::server'] || []).each do |title, params|
         type = params['os_image_type']
         version = params['os_image_version'] || params['os_image_type']
+        begin
+          logger.info("Waiting for razor to get reboot event...")
+          razor.block_until_task_complete(serial_number, params['policy_name'], :reboot)
+        rescue
+          logger.info("Server never rebooted.  An old OS may be installed.  Manually rebooting to kick off razor install...")
+          ASM::WsMan.reboot({:host=>deviceconf['host'], :user=>deviceconf['user'], :password=>deviceconf['password']})
+        end
         node = razor.block_until_task_complete(serial_number,
                                                params['policy_name'], version)
         if type == 'vmware_esxi'
