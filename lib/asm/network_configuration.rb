@@ -345,5 +345,15 @@ module ASM
       end
     end
 
+    #resets virtual mac addresses of partitions to their permanent mac address
+    def reset_virt_mac_addr(endpoint)
+      permanent_macs = ASM::WsMan.get_permanent_mac_addresses(endpoint, logger)
+      get_all_partitions.each do |partition|
+        partition['lanMacAddress'] = permanent_macs[partition.fqdd]
+        partition['iscsiMacAddress'] = permanent_macs[partition.fqdd]
+        partition.delete('nic')
+      end
+    end
+
   end
 end

@@ -125,24 +125,35 @@ module ASM
     # Return all the server MAC Address along with the interface location
     # in a hash format
     def self.get_mac_addresses(endpoint, logger = nil)
+      get_nic_view(endpoint, 'CurrentMACAddress', logger)
+    end
+
+    def self.get_permanent_mac_addresses(endpoint, logger = nil)
+      get_nic_view(endpoint, 'PermanentMACAddress', logger)
+    end
+
+    #Gets Nic View data for a specified fqdd
+    def self.get_nic_view(endpoint, fqdd, logger = nil)
       mac_info = {}
-        resp = invoke(endpoint, 'enumerate',
-        'http://schemas.dmtf.org/wbem/wscim/1/cim-schema/2/root/dcim/DCIM_NICView',
-        :logger => logger)
-
-        mac_address = nil
-        resp.split("\n").each do |line|
-          # Expect to find alternating lines of CurrentMacAddress and FQDD
-          # where FQDD is the nic name. Only include macs from known nicNames.
-          if line =~ /<n1:CurrentMACAddress>(\S+)\<\/n1:CurrentMACAddress>/
-            mac_address = $1
-          elsif line =~ /<n1:FQDD>(\S+)<\/n1:FQDD>/ and !mac_address.nil?
+      resp = invoke(endpoint, 'enumerate',
+      'http://schemas.dmtf.org/wbem/wscim/1/cim-schema/2/root/dcim/DCIM_NICView',
+      :logger => logger)
+      nic_views = resp.split("<n1:DCIM_NICView>")
+      nic_views.shift
+      nic_views.each do |nic_view|
+        nic_name = nil
+        nic_view.split("\n").each do |line|
+          if line =~ /<n1:FQDD>(\S+)<\/n1:FQDD>/
             nic_name = $1
-            mac_info["#{nic_name}"] = mac_address
-            mac_address = nil
           end
+        end
+        nic_view.split("\n").each do |line|
+          if line =~ /<n1:#{fqdd}>(\S+)<\/n1:#{fqdd}>/
+            mac_address = $1
+            mac_info[nic_name] = mac_address
+          end
+        end
       end
-
       logger.debug("********* MAC Address List is #{mac_info.inspect} **************") if logger
       mac_info
     end

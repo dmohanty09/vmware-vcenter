@@ -387,6 +387,31 @@ describe ASM::NetworkConfiguration do
         end
       end
     end
+    
+    it 'should reset virtual mac addresses' do
+      fqdd_to_mac = {'NIC.Integrated.1-1-1' => '00:0A:F7:06:88:50',
+                     'NIC.Integrated.1-1-2' => '00:0A:F7:06:88:54',
+                     'NIC.Integrated.1-1-3' => '00:0A:F7:06:88:58',
+                     'NIC.Integrated.1-1-4' => '00:0A:F7:06:88:5C',
+                     'NIC.Integrated.1-2-1' => '00:0A:F7:06:88:52',
+                     'NIC.Integrated.1-2-2' => '00:0A:F7:06:88:56',
+                     'NIC.Integrated.1-2-3' => '00:0A:F7:06:88:5A',
+                     'NIC.Integrated.1-2-4' => '00:0A:F7:06:88:5E'}
+
+      ASM::WsMan.stubs(:get_mac_addresses).returns(fqdd_to_mac)
+      net_config = ASM::NetworkConfiguration.new(@data)
+      net_config.add_nics!(Hashie::Mash.new({:host => '127.0.0.1'}))
+      file_n = File.join(File.dirname(__FILE__), '..', '..',
+                            'fixtures', 'network_configuration', 'wsmanmacs.out')
+      ASM::WsMan.stubs(:invoke).returns(File.read(file_n))
+      net_config.reset_virt_mac_addr({:host=>'mock',:user=>'mocker',:password=>'mockest'})
+      partitions = net_config.get_all_partitions
+      partitions[0].lanMacAddress.should == '24:B6:FD:F4:4A:1E'
+      partitions[0].iscsiMacAddress.should == '24:B6:FD:F4:4A:1E'
+      partitions[4].lanMacAddress.should == '24:B6:FD:F4:4A:20'
+      partitions[4].iscsiMacAddress.should == '24:B6:FD:F4:4A:20'  
+    end
+
   end
 
   describe 'when parsing an un-partitioned rack network config' do
