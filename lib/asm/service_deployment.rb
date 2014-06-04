@@ -1105,7 +1105,7 @@ class ASM::ServiceDeployment
     end
 
     #Flag an iSCSI boot from san deployment
-    target_boot_device = resource_hash['asm::idrac'][resource_hash['asm::idrac'].keys[0]]['target_boot_device']
+    target_boot_device = resource_hash['asm::idrac'][resource_hash['asm::idrac'].keys[0]]['target_boot_device'] if is_dell_server
     if is_dell_server and  (target_boot_device == 'iSCSI' or target_boot_device == 'FC')
       @bfs = true
     else
