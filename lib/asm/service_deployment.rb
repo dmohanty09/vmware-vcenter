@@ -94,7 +94,7 @@ class ASM::ServiceDeployment
       # Will need to access other component types during deployment
       # of a given component type in the future, e.g. VSwitch configuration
       # information is contained in the server component type data
-      @component_for_migration = ASM::ServiceMigrationDeployment.components_for_miration(service_migration)
+      @component_for_migration = ASM::ServiceMigrationDeployment.components_for_migration(service_migration)
       reset_servers(@component_for_migration)
       
       @components_by_type = components_by_type(service_migration)
