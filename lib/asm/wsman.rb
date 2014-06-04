@@ -174,27 +174,5 @@ module ASM
       mac_info
     end
 
-    #Gets permanent mac address along with interface location
-    def self.get_permanent_mac_addresses(endpoint, logger = nil)
-      mac_info = {}
-      resp = invoke(endpoint, 'enumerate',
-      'http://schemas.dmtf.org/wbem/wscim/1/cim-schema/2/root/dcim/DCIM_NICView',
-      :logger => logger)
-
-      nic_name = nil
-      resp.split("\n").each do |line|
-        if line =~ /<n1:FQDD>(\S+)<\/n1:FQDD>/
-          nic_name = $1
-        elsif line =~ /<n1:PermanentMACAddress>(\S+)\<\/n1:PermanentMACAddress>/
-          mac_address = $1
-          mac_info["#{nic_name}"] = mac_address
-          mac_address = nil
-        end
-      end
-
-      logger.debug("********* Permanent MAC Address List is #{mac_info.inspect} **************") if logger
-      mac_info
-    end
-
   end
 end
