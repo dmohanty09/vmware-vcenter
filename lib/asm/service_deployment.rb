@@ -2169,6 +2169,8 @@ class ASM::ServiceDeployment
     tagged_workloadvlaninfo = []
     untagged_vlaninfo       = []
     server_conf = ASM::Util.build_component_configuration(server_component, :decrypt => decrypt?)
+    target_boot_device = ""
+    target_boot_device = server_conf['asm::idrac'][server_conf['asm::idrac'].keys[0]]['target_boot_device'] if ASM::Util.dell_cert?(server_cert)
     network_params = (server_conf['asm::esxiscsiconfig'] || {})[server_cert]
     # get fabric information
     network_fabric_info = {}
@@ -2194,7 +2196,7 @@ class ASM::ServiceDeployment
 
     fabric_vlan_info = {}
     if network_fabric_info
-      fabric_vlan_info = get_fabric_vlan_info(network_fabric_info)
+      fabric_vlan_info = get_fabric_vlan_info(network_fabric_info,target_boot_device)
       logger.debug("Fabric VLAN INFO: #{fabric_vlan_info}")
     end
     fabric_vlan_info
@@ -2206,7 +2208,8 @@ class ASM::ServiceDeployment
     tagged_workloadvlaninfo = []
     untagged_vlaninfo       = []
     server_conf = ASM::Util.build_component_configuration(server_component, :decrypt => decrypt?)
-
+    target_boot_device = ""
+    target_boot_device = server_conf['asm::idrac'][server_conf['asm::idrac'].keys[0]]['target_boot_device'] if ASM::Util.dell_cert?(server_cert)
     network_params = (server_conf['asm::esxiscsiconfig'] || {})[server_cert]
 
     # get fabric information
@@ -2229,16 +2232,22 @@ class ASM::ServiceDeployment
           end
           logger.debug("Partition: #{partition}")
           logger.debug("Network Object #{partition['networkObjects']}")
-          #networks = partitions.collect { |partition| partition['networkObjects'] }.flatten
           networks = partition['networkObjects']
           partition['networkObjects'].each do |networkObject|
-            if networkObject['type'] == "PXE"
-              untagged_vlans.push(networkObject['vlanId'])
+            if target_boot_device != "iSCSI"
+              if networkObject['type'] == "PXE"
+                untagged_vlans.push(networkObject['vlanId'])
+              else
+                tagged_vlans.push(networkObject['vlanId'])
+              end
             else
-              tagged_vlans.push(networkObject['vlanId'])
+              if networkObject['type'] == "STORAGE_ISCSI_SAN"
+                untagged_vlans.push(networkObject['vlanId'])
+              else
+                tagged_vlans.push(networkObject['vlanId'])
+              end
             end
           end
-          #fabric_networks.concat(networks)
         end
         network_fabric_info[card['card_index']] ||= {}
         network_fabric_info[card['card_index']][interface['name']] ||= {}
@@ -2557,7 +2566,7 @@ class ASM::ServiceDeployment
     netappip
   end
   
-  def get_fabric_vlan_info(network_fabric_info)
+  def get_fabric_vlan_info(network_fabric_info,target_boot_device)
     fabric_vlan_info = {}
     ["Fabric A", "Fabric B", "Fabric C"].each do |fabric|
       fabric_vlan_info["#{fabric}"] = {}
@@ -2566,11 +2575,20 @@ class ASM::ServiceDeployment
         vlan_untagged = []
         logger.debug("Processing fabric : #{fabric}")
         network_fabric_info["#{fabric}"].compact.each do |network_info|
-          if network_info['type'].to_s != "PXE"
-            vlan_tagged.push(network_info['vlanId'])
+          if target_boot_device != "iSCSI"
+            if network_info['type'].to_s != "PXE"
+              vlan_tagged.push(network_info['vlanId'])
+            else
+              vlan_untagged.push(network_info['vlanId'])
+            end
           else
-            vlan_untagged.push(network_info['vlanId'])
+            if network_info['type'].to_s != "STORAGE_ISCSI_SAN"
+              vlan_tagged.push(network_info['vlanId'])
+            else
+              vlan_untagged.push(network_info['vlanId'])
+            end
           end
+
         end
         fabric_vlan_info["#{fabric}"]['tagged_vlan'] = vlan_tagged.uniq
         fabric_vlan_info["#{fabric}"]['untagged_vlan'] = vlan_untagged.uniq
