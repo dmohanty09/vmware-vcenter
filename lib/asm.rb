@@ -1,6 +1,7 @@
 require 'logger'
 require 'fileutils'
 require 'asm/service_deployment'
+require 'asm/service_migration_deployment'
 require 'asm/deployment_teardown'
 require 'asm/update_deployment'
 require 'asm/errors'
@@ -68,11 +69,22 @@ module ASM
     service_deployment.log("Deployment has completed")
   end
 
+  def self.process_deployment_migration(deployment)
+    ASM::ServiceMigrationDeployment.process_deployment_migration(deployment)
+  end
+
   def self.process_deployment_request(request)
     payload = request.body.read
     data = JSON.parse(payload)
     deployment = data
     ASM.process_deployment(deployment)
+  end
+
+  def self.process_deployment_request_migration(request)
+    payload = request.body.read
+    data = JSON.parse(payload)
+    deployment = data
+    ASM.process_deployment_migration(deployment)
   end
 
   def self.track_service_deployments(id)
