@@ -2000,7 +2000,7 @@ class ASM::ServiceDeployment
 
     if puppet_classes || server
       # Wait for first agent run to complete
-      await_agent_run_completion(certname)
+      await_agent_run_completion(vm.certname)
     end
   end
 
