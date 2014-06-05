@@ -112,13 +112,12 @@ class ASM::ServiceDeployment
       # Will need to access other component types during deployment
       # of a given component type in the future, e.g. VSwitch configuration
       # information is contained in the server component type data
+      @components_by_type = components_by_type(service_deployment)
       if service_deployment['migration']
         logger.debug("Processing the service deployment migration")
         @components_for_migration = ASM::ServiceMigrationDeployment.components_for_migration(service_deployment)
         reset_servers(@components_for_migration)
       end
-      
-      @components_by_type = components_by_type(service_deployment)
       
       get_all_switches()
       @rack_server_switchhash = self.populate_rack_switch_hash()
@@ -2725,9 +2724,12 @@ class ASM::ServiceDeployment
         # power on the new server to support the iDRAC module
         endpoint = ASM::Util.parse_device_config(server_cert)
         ASM::WsMan.poweroff(endpoint,logger)
+        
+        # Cleanup compellent server object
+        cleanup_compellent(migration_component,old_server_cert)
       rescue Exception => e
         logger.debug("Exception occured during the server cleanup/poweroff. Message: #{e.message}")
-        logger.debug("Stack Trace: #{e.inspect}")
+        logger.debug("Stack Trace: #{e.inspect}\n\n#{e.backtrace}")
       end
     end
   end
@@ -2765,6 +2767,44 @@ class ASM::ServiceDeployment
       new_conf['asm::idrac'][old_server_cert]['network_configuration'] =  net_config.to_hash
 
       process_generic(old_server_cert, new_conf, 'apply', 'true')
+    end
+  end
+  
+  def cleanup_compellent(component,old_cert_name)
+    server_cert_name = component['puppetCertName']
+    logger.debug("Cert name: #{server_cert_name}")
+    related_storage_components = find_related_components('STORAGE', component)
+    server_fc_cleanup_hash = {}
+    service_tag=ASM::Util.cert2serial(old_cert_name)
+    boot_server_object="ASM_#{service_tag}"
+          
+    related_storage_components.each do |related_storage_component|
+      compellent_cert_name = related_storage_component['puppetCertName']
+      resource_hash = ASM::Util.build_component_configuration(related_storage_component, :decrypt => decrypt?)
+      if resource_hash['compellent::createvol']
+        volume_name = resource_hash['compellent::createvol'].keys[0]
+        params = resource_hash['compellent::createvol'][volume_name]
+        if params['boot'] == true
+          server_fc_cleanup_hash['compellent::unmapvolume'] ||= {}
+          server_fc_cleanup_hash['compellent::unmapvolume'][volume_name] ||= {}
+          server_fc_cleanup_hash['compellent::unmapvolume'][volume_name] = {
+            'volumefolder' => params['volumefolder'],
+            'force' => 'true',
+            'servername' => boot_server_object,
+          }
+        end
+      end
+      logger.debug("ASM FC Cleanup resource hash: #{server_fc_cleanup_hash}")
+      if server_fc_cleanup_hash
+        process_generic(
+        compellent_cert_name,
+        server_fc_cleanup_hash,
+        'device',
+        true,
+        nil,
+        component['asmGUID']
+        )
+      end
     end
   end
 
