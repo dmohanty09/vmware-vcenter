@@ -1951,7 +1951,7 @@ class ASM::ServiceDeployment
     vm_title = vm_resource.keys[0]
 
     log("Creating VM #{hostname}")
-    certname = "vm-#{hostname}"
+    certname = "vm-#{hostname.downcase}"
     process_generic(certname, resource_hash, 'apply')
 
     puppet_classes = get_classification_data(component, hostname)
