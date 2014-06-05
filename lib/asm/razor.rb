@@ -78,6 +78,7 @@ module ASM
     def task_status(node_name, policy_name)
       logs = get('nodes', node_name, 'log')
       ret = nil
+      n_boot_local = 0
       logs.each do |log|
         # Check for policy-related events
         if log['event'] == 'bind'
@@ -86,6 +87,7 @@ module ASM
           else
             ret = nil
           end
+          n_boot_local = 0
         elsif log['event'] == 'reinstall'
           ret = :reinstall if ret
         end
@@ -102,11 +104,12 @@ module ASM
             when 'boot_wim' # for windows
               ret = :boot_install
             when 'boot_local'
-              if ret != :boot_local
+              if n_boot_local == 0
                 ret = :boot_local
               else
                 ret = :boot_local_2
               end
+              n_boot_local += 1
             else
               logger.warn("Unknown boot template #{log['template']}") if logger
           end
