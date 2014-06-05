@@ -1954,6 +1954,13 @@ class ASM::ServiceDeployment
     certname = "vm-#{hostname}"
     process_generic(certname, resource_hash, 'apply')
 
+    puppet_classes = get_classification_data(component, hostname)
+    if puppet_classes
+      agent_cert_name = vm.certname
+      config = {agent_cert_name => {'classes' => puppet_classes}}
+      puppet_node_yaml(agent_cert_name, config)
+    end
+
     if server
       uuid = nil
       begin
@@ -1989,17 +1996,11 @@ class ASM::ServiceDeployment
         version = server['os_image_version'] || server['os_image_type']
         razor.block_until_task_complete(serial_number, server['policy_name'],
                                         version, :boot_install)
-
-        # Wait for first agent run to complete
-        await_agent_run_completion(vm.certname)
       end
     end
 
-    puppet_classes = get_classification_data(component, hostname)
-    if puppet_classes
-      certname = vm.certname
-      config = {certname => {'classes' => puppet_classes}}
-      puppet_node_yaml(certname, config)
+    if puppet_classes || server
+      # Wait for first agent run to complete
       await_agent_run_completion(certname)
     end
   end
