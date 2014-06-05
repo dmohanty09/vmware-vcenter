@@ -157,6 +157,17 @@ describe ASM::Razor do
       end
     end
 
+    describe 'when boot_local event exists thrice' do
+      it 'should return :boot_local_2' do
+        items = @logs['items'].slice(0, 11)
+        # Last item is the 2nd boot_local log, add another copy so there are 3
+        items.push(items.last)
+        @logs['items'] = items
+        RestClient.stubs(:get).with(@node_url).returns(mock_response(200, @logs))
+        @razor.task_status(@node_name, @policy_name).should == :boot_local_2
+      end
+    end
+
     describe 'when reinstall event exists twice' do
       it 'should return :reinstall' do
         @logs['items'] = @logs['items'].slice(0, 12)
