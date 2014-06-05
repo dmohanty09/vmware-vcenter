@@ -2784,15 +2784,14 @@ class ASM::ServiceDeployment
       if resource_hash['compellent::createvol']
         volume_name = resource_hash['compellent::createvol'].keys[0]
         params = resource_hash['compellent::createvol'][volume_name]
-        if params['boot'] == true
-          server_fc_cleanup_hash['compellent::unmapvolume'] ||= {}
-          server_fc_cleanup_hash['compellent::unmapvolume'][volume_name] ||= {}
-          server_fc_cleanup_hash['compellent::unmapvolume'][volume_name] = {
-            'volumefolder' => params['volumefolder'],
-            'force' => 'true',
-            'servername' => boot_server_object,
-          }
-        end
+        server_fc_cleanup_hash['compellent::volume_map'] ||= {}
+        server_fc_cleanup_hash['compellent::volume_map'][volume_name] ||= {}
+        server_fc_cleanup_hash['compellent::volume_map'][volume_name] = {
+          'ensure' => 'absent',
+          'volumefolder' => params['volumefolder'],
+          'force' => 'true',
+          'servername' => boot_server_object,
+        }
       end
       logger.debug("ASM FC Cleanup resource hash: #{server_fc_cleanup_hash}")
       if server_fc_cleanup_hash
