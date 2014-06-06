@@ -22,7 +22,7 @@ describe ASM::DeviceManagement do
   end
 
   after do
-    ASM.clear_mutex
+    ASM.reset
     FileUtils.remove_entry_secure @test_dir
   end
 

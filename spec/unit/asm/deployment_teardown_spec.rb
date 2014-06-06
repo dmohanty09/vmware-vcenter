@@ -18,7 +18,7 @@ describe ASM::DeploymentTeardown do
   end
 
   after do
-    ASM.clear_mutex
+    ASM.reset
   end
 
   it 'should be able to find certs' do

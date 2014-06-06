@@ -9,7 +9,9 @@ describe ASM::ServiceDeployment do
   before do
     ASM.init
     @tmp_dir = Dir.mktmpdir
-    @sd = ASM::ServiceDeployment.new('8000')
+    @deployment_db = mock('deploymentdb')
+    @deployment_db.stub_everything
+    @sd = ASM::ServiceDeployment.new('8000', @deployment_db)
     razor = mock('razor')
     razor.stubs(:find_node).returns({})
     razor.stubs(:block_until_task_complete)
@@ -33,7 +35,7 @@ describe ASM::ServiceDeployment do
   end
 
   after do
-    ASM.clear_mutex
+    ASM.reset
   end
 
   describe 'when data is valid' do
@@ -301,7 +303,7 @@ describe ASM::ServiceDeployment do
         {:content_type => :json, :accept => :json})
          .returns('[{"name":"host"}]')
 
-      ASM::ServiceDeployment.new('123').await_agent_run_completion('host', 10).should be_true
+      ASM::ServiceDeployment.new('123', @deployment_db).await_agent_run_completion('host', 10).should be_true
     end
 
     it 'should raise PuppetEventException if a node has a recent failed event' do
@@ -311,7 +313,7 @@ describe ASM::ServiceDeployment do
          .returns('[{"name":"host", "status":"failure"}]')
 
 
-      expect{ASM::ServiceDeployment.new('123').await_agent_run_completion('host', 10)}.to raise_exception(ASM::ServiceDeployment::PuppetEventException)
+      expect{ASM::ServiceDeployment.new('123', @deployment_db).await_agent_run_completion('host', 10)}.to raise_exception(ASM::ServiceDeployment::PuppetEventException)
     end 
   end
 

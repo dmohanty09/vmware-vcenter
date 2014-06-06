@@ -53,6 +53,10 @@ class ASM::App < Sinatra::Base
     ASM::Util.get_status(id).to_json
   end
 
+  get '/deployments/:id/status' do |id|
+    ASM.get_deployment_status(id).to_json
+  end
+
   put '/deployments/:id' do |id|
     ASM.retry_deployment(id, JSON.parse(request.body.read))
   end

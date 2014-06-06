@@ -33,22 +33,15 @@ module ASM
       ASM::UpdateDeployment.backup_directory(id)
     end
     
-    def self.process_deployment_migration(data)
+    def self.prep_deployment_dir(data)
       id = data['id']
       begin
         dir = File.join(ASM::base_dir, id)
         raise 'Deployment directory not found for retry' unless File.directory?(dir)
 
         # Back up the current deployment directory
-        ASM.logger.info("Backing up current deployment directory ...")
-        backup = ASM::UpdateDeployment.backup_directory(dir)
-
-        deployment_file = File.join(backup, 'deployment.json')
-        data['migration'] = 'true'
-        data['retry'] = 'true'
-
-        ASM.logger.info("Initiating the server migration")
-        ASM.process_deployment(data)
+        ASM.logger.info('Backing up current deployment directory ...')
+        ASM::UpdateDeployment.backup_directory(dir)
       end
     end
 

@@ -4,15 +4,20 @@ require 'asm/service_deployment'
 require 'asm/service_migration_deployment'
 require 'asm/deployment_teardown'
 require 'asm/update_deployment'
+require 'asm/config'
 require 'asm/errors'
+require 'asm/data/deployment'
+require 'sequel'
 
 module ASM
 
   # TODO these methods shoudl be initialized from sinatra b/c their first invocation
   # is not thread safe
 
+  class UninitializedException < StandardError; end
+
   def self.initialized?
-    if @deployment_mutex and @certname_mutex and @hostlist_mutex
+    if @initialized
       true
     else
       nil
@@ -28,25 +33,34 @@ module ASM
       @deployment_mutex = Mutex.new
       @hostlist_mutex   = Mutex.new
       @running_cert_list = []
+      @base_dir = begin
+        dir = '/opt/Dell/ASM/deployments'
+        FileUtils.mkdir_p(dir)
+        dir
+      end
+      @logger = Logger.new(File.join(@base_dir, 'asm_puppet.log'))
+      @config = ASM::Config.new
+      @database = Sequel.connect(@config.database_url, :loggers => [@logger])
+      @initialized = true
     end
-  end
-
-  def self.logger
-    @logger ||= Logger.new(File.join("#{base_dir}", 'asm_puppet.log'))
   end
 
   def self.base_dir
-    @base_dir ||= begin
-      dir = '/opt/Dell/ASM/deployments'
-      FileUtils.mkdir_p(dir)
-      dir
-    end
+    @base_dir or raise(UninitializedException)
+  end
+
+  def self.logger
+    @logger or raise(UninitializedException)
+  end
+
+  def self.database
+    @database or raise(UninitializedException)
   end
 
   # serves as a single place to create all deployments
   # ensures that only a single deployment is not done
   # at the same time
-  def self.process_deployment(data)
+  def self.process_deployment(data, deployment_db)
     id = data['id']
     service_deployment = nil
     unless @deployment_mutex
@@ -58,7 +72,7 @@ module ASM
             )
     end
     begin
-      service_deployment = ASM::ServiceDeployment.new(id)
+      service_deployment = ASM::ServiceDeployment.new(id, deployment_db)
       service_deployment.debug = ASM::Util.to_boolean(data['debug'])
       service_deployment.noop = ASM::Util.to_boolean(data['noop'])
       service_deployment.is_retry = ASM::Util.to_boolean(data['retry'])
@@ -69,15 +83,50 @@ module ASM
     service_deployment.log("Deployment has completed")
   end
 
-  def self.process_deployment_migration(deployment)
-    ASM::ServiceMigrationDeployment.process_deployment_migration(deployment)
+  def self.process_deployment_migration(request)
+    payload = request.body.read
+    deployment = JSON.parse(payload)
+
+    ASM::ServiceMigrationDeployment.prep_deployment_dir(deployment)
+
+    ASM.logger.info('Initiating the server migration')
+    deployment['migration'] = 'true'
+    deployment['retry'] = 'true'
+    data = ASM::Data::Deployment.new(database)
+    data.create(deployment['id'], deployment['deploymentName'])
+    ASM.process_deployment(deployment, data)
   end
 
   def self.process_deployment_request(request)
     payload = request.body.read
-    data = JSON.parse(payload)
-    deployment = data
-    ASM.process_deployment(deployment)
+    deployment = JSON.parse(payload)
+    data = ASM::Data::Deployment.new(database)
+    data.create(deployment['id'], deployment['deploymentName'])
+    ASM.process_deployment(deployment, data)
+  end
+
+  # TODO: 404 on not found
+
+  def self.clean_deployment(id)
+    data = ASM::Data::Deployment.new(database)
+    data.load(deployment['id'])
+    data.delete
+    ASM::DeploymentTeardown.clean_deployment(id, logger)
+  end
+
+  def self.retry_deployment(id, deployment)
+    ASM::UpdateDeployment.backup_deployment_dirs(id,deployment)
+
+    ASM.logger.info("Re-running deployment; this will take awhile ...")
+    data = ASM::Data::Deployment.new(database)
+    data.load(deployment['id'])
+    ASM.process_deployment(deployment, data)
+  end
+
+  def self.get_deployment_status(asm_guid)
+    deployment_data = ASM::Data::Deployment.new(database)
+    deployment_data.load(asm_guid)
+    deployment_data.get_execution(0)
   end
 
   def self.process_deployment_request_migration(request)
@@ -122,6 +171,7 @@ module ASM
   end
 
   def self.block_hostlist(hostlist)
+    raise(UninitializedException) unless self.initialized?
     @hostlist_mutex.synchronize do
       dup_certs = @running_cert_list & hostlist
       if dup_certs.empty?
@@ -145,21 +195,18 @@ module ASM
     end
   end
 
-  def self.clean_deployment(id)
-    ASM::DeploymentTeardown.clean_deployment(id, logger)
-  end
-
-  def self.retry_deployment(id,deployment)
-    ASM::UpdateDeployment.retry_deployment(id,deployment)
-  end
-
   private
-  
-  def self.clear_mutex
-    @certname_mutex = nil
+
+  def self.reset
+    @certname_mutex   = nil
     @deployment_mutex = nil
     @hostlist_mutex   = nil
     @running_cert_list = nil
+    @logger = nil
+    @config = nil
+    @database = nil
+    @base_dir = nil
+    @initialized = false
   end
 
   def self.track_service_deployments_locked(id)
