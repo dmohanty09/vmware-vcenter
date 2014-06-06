@@ -1678,13 +1678,16 @@ class ASM::ServiceDeployment
                     end
                     resource_hash['asm::datastore'] ||= {}
                     resource_hash['asm::datastore']["#{hostip}:#{storage_title}:datastore"] = asm_datastore
+                    
+                    target_iqn = ASM::Util.get_eql_volume_iqn(storage_cert,storage_title)
+                    raise(Exception,"Unable to find the IQN for volume #{storage_title}") if target_iqn.length == 0
 
                     resource_hash['esx_datastore'] ||= {}
                     resource_hash['esx_datastore']["#{hostip}:#{storage_title}"] ={
                       'ensure' => 'present',
                       'datastore' => storage_title,
                       'type' => 'vmfs',
-                      'lun' => '0',
+                      'target_iqn' => target_iqn,
                       'require' => "Asm::Datastore[#{hostip}:#{storage_title}:datastore]",
                       'transport' => 'Transport[vcenter]'
                     }

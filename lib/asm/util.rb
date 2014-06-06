@@ -300,6 +300,20 @@ module ASM
         end
       end
     end
+    
+    def self.get_eql_volume_iqn(storage_cert,storage_title)
+      target_iqn = ""
+      facts = facts_find(storage_cert)
+      volume_properties = facts['VolumesProperties']
+      volume_data = JSON.parse(volume_properties)
+      volume_data.keys.each do |vol_name|
+        if vol_name == storage_title
+          vol_data_json = JSON.parse(volume_data[vol_name])
+          target_iqn = vol_data_json['TargetIscsiName']
+        end
+      end
+      target_iqn
+    end
 
     def self.first_host_ip
       Socket.ip_address_list.detect do |intf|
