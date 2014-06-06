@@ -83,8 +83,18 @@ module ASM
     service_deployment.log("Deployment has completed")
   end
 
-  def self.process_deployment_migration(deployment)
-    ASM::ServiceMigrationDeployment.process_deployment_migration(deployment)
+  def self.process_deployment_migration(request)
+    payload = request.body.read
+    deployment = JSON.parse(payload)
+
+    ASM::ServiceMigrationDeployment.prep_deployment_dir(deployment)
+
+    ASM.logger.info('Initiating the server migration')
+    deployment['migration'] = 'true'
+    deployment['retry'] = 'true'
+    data = ASM::Data::Deployment.new(database)
+    data.create(deployment['id'], deployment['deploymentName'])
+    ASM.process_deployment(deployment, data)
   end
 
   def self.process_deployment_request(request)
@@ -186,7 +196,7 @@ module ASM
   end
 
   private
-  
+
   def self.reset
     @certname_mutex   = nil
     @deployment_mutex = nil
