@@ -5,7 +5,8 @@ require 'rspec/core/rake_task'
 
 RSpec::Core::RakeTask.new(:spec)
 
-# task :default => :spec
+# Run unit tests by default
+task :default => 'spec:suite:unit'
 
 # To run unit tests:                 bundle exec rake spec:suite:unit
 # To run database integration tests: bundle exec rake spec:suite:db

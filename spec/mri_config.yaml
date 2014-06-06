@@ -1,0 +1,2 @@
+---
+database_url: 'postgres://orion:Password123$@localhost/asm_dev'

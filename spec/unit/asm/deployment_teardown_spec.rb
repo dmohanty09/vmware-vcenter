@@ -5,7 +5,7 @@ require 'asm'
 describe ASM::DeploymentTeardown do
 
   before do
-    ASM.init
+    ASM.init_for_tests
     @id = '123'
     @names = ["agent-winbaremetal", "agent-gs1vmwin1", "agent-gs1vmwin2", "agent-gs1vmlin1", "agent-gs1vmlin2"]
 
