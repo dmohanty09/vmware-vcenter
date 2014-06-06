@@ -10,5 +10,5 @@ then
 else
   gem install hashie
   gem install inifile
-  ruby puppet_certname.rb
+  ruby /usr/local/bin/puppet_certname.rb
 fi
