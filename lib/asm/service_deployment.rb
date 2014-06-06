@@ -47,6 +47,7 @@ class ASM::ServiceDeployment
     @blade_server_switchhash = {}
     @brocade_san_switchhash = {}
     @db = db
+    @supported_os_postinstall = ['vmware_esxi', 'hyperv']
   end
 
   def logger
@@ -787,18 +788,6 @@ class ASM::ServiceDeployment
 
     # Need to process for the ToR Switches for each Fabric
     ["Fabric A", "Fabric B", "Fabric C"].each do |fabric|
-      logger.debug "Configuring IOM for fabric : #{fabric}"
-      tagged_vlans = []
-      untagged_vlans = []
-      tagged_vlans = server_vlan_info["#{fabric}"]['tagged_vlan'] if !server_vlan_info["#{fabric}"].empty?
-      untagged_vlans = server_vlan_info["#{fabric}"]['untagged_vlan'] if !server_vlan_info["#{fabric}"].empty?
-      logger.debug "In configure_tor tagged vlan list found #{tagged_vlans}"
-      logger.debug "In configure_tor untagged vlan list found #{untagged_vlans}"
-      if (!server_vlan_info["#{fabric}"].empty? and tagged_vlans.length == 0 and untagged_vlans.length == 0)
-        logger.debug("No tagged / untagged VLANS for fabric #{fabric}")
-        next
-      end
-      
       ioaslots = []
       case fabric
       when "Fabric A"
@@ -815,13 +804,20 @@ class ASM::ServiceDeployment
           resource_hash = Hash.new
           switchcertname = ""
           logger.debug "macaddress :: #{macaddress}, intfhash :: #{intfhashes}"
-          
           logger.debug "IOA Slots to process: #{ioaslots}"
           
-          intfhashes.each do |intfhash|
+          intfhashes.each_with_index do |intfhash,index|
             ioaslot = intfhash[2]
             if !ioaslots.include?(ioaslot)
               next
+            end
+            
+            port_count = index + 1
+            vlan_for_port = server_vlan_info[fabric]["Port #{port_count}"]
+            tagged_vlans = vlan_for_port['tagged']
+            untagged_vlans = vlan_for_port['untagged']
+            if tagged_vlans.length == 0 and untagged_vlans == 0
+              logger.debug("No VLAN is requested for Fabric #{fabric}, Port #{index}")
             end
             
             switchcertname = intfhash[0]
@@ -2216,34 +2212,53 @@ class ASM::ServiceDeployment
     server_conf = ASM::Util.build_component_configuration(server_component, :decrypt => decrypt?)
     target_boot_device = ""
     target_boot_device = server_conf['asm::idrac'][server_conf['asm::idrac'].keys[0]]['target_boot_device'] if ASM::Util.dell_cert?(server_cert)
+
+    server = ASM::Resource::Server.create(server_conf).first
+    
+    title = server.title
+    os_image_type = (server.os_image_type || '')
+    logger.debug("OS Image type: #{os_image_type}")
+
     network_params = (server_conf['asm::esxiscsiconfig'] || {})[server_cert]
     # get fabric information
-    network_fabric_info = {}
+    fabric_vlan_info = {}
     if network_params
       network_info = network_params['network_configuration']
       fabrics = network_info['fabrics'].find_all{|fabric| ASM::Util.to_boolean(fabric['enabled'])}
       if fabrics
         fabrics.each do |fabric|
+          fabric_name = fabric['name']
           fabric_networks = []
           fabric_interfaces = fabric['interfaces']
           if fabric_interfaces
+            fabric_vlan_info[fabric_name] ||= {}
             fabric_interfaces.each do |fabric_interface|
-              partitions = fabric_interface['partitions']
-              networks = partitions.collect { |partition| partition['networkObjects'] }.flatten
-              fabric_networks.concat(networks)
+              tagged_vlans = []
+              untagged_vlans = []
+              interface_name = fabric_interface['name']
+              fabric_vlan_info[fabric_name][interface_name] ||= {}
+              fabric_interface['partitions'].each do |partition|
+                partition_network_object = partition['networkObjects']
+                partition_vlan_info = get_vlan_info(partition_network_object,target_boot_device,os_image_type)
+                if partition_vlan_info
+                  tagged_vlans.concat(partition_vlan_info['tagged'])
+                  untagged_vlans.concat(partition_vlan_info['untagged'])
+                end
+              end
+              fabric_vlan_info[fabric_name][interface_name]['tagged'] = tagged_vlans.uniq.compact
+              untagged_vlans = untagged_vlans.uniq.compact
+              fabric_vlan_info[fabric_name][interface_name]['untagged'] = untagged_vlans
+              unless untagged_vlans.size <= 1
+                raise(Exception,"Only one untagged vlan is alloweed per port, identified #{untagged_vlans.size}")
+              end
             end
           end
-          network_fabric_info[fabric['name']] = fabric_networks
         end
       end
-      logger.debug"network_info: #{network_fabric_info}"
+      fabric_vlan_info
     end
 
-    fabric_vlan_info = {}
-    if network_fabric_info
-      fabric_vlan_info = get_fabric_vlan_info(network_fabric_info,target_boot_device)
-      logger.debug("Fabric VLAN INFO: #{fabric_vlan_info}")
-    end
+    logger.debug("Fabric VLAN INFO: #{fabric_vlan_info}")
     fabric_vlan_info
   end
 
@@ -2256,7 +2271,12 @@ class ASM::ServiceDeployment
     target_boot_device = ""
     target_boot_device = server_conf['asm::idrac'][server_conf['asm::idrac'].keys[0]]['target_boot_device'] if ASM::Util.dell_cert?(server_cert)
     network_params = (server_conf['asm::esxiscsiconfig'] || {})[server_cert]
-
+    
+    server = ASM::Resource::Server.create(server_conf).first
+    title = server.title
+    os_image_type = (server.os_image_type || '')
+    logger.debug("OS Image type: #{os_image_type}")
+    
     # get fabric information
     network_fabric_info = {}
     nc = ASM::NetworkConfiguration.new(network_params['network_configuration'])
@@ -2278,20 +2298,10 @@ class ASM::ServiceDeployment
           logger.debug("Partition: #{partition}")
           logger.debug("Network Object #{partition['networkObjects']}")
           networks = partition['networkObjects']
-          partition['networkObjects'].each do |networkObject|
-            if target_boot_device != "iSCSI"
-              if networkObject['type'] == "PXE"
-                untagged_vlans.push(networkObject['vlanId'])
-              else
-                tagged_vlans.push(networkObject['vlanId'])
-              end
-            else
-              if networkObject['type'] == "STORAGE_ISCSI_SAN"
-                untagged_vlans.push(networkObject['vlanId'])
-              else
-                tagged_vlans.push(networkObject['vlanId'])
-              end
-            end
+          partition_vlan_info = get_vlan_info(partition['networkObjects'],target_boot_device,os_image_type)
+          if partition_vlan_info
+            tagged_vlans.concat(partition_vlan_info['tagged'])
+            untagged_vlans.concat(partition_vlan_info['untagged'])
           end
         end
         network_fabric_info[card['card_index']] ||= {}
@@ -2791,6 +2801,35 @@ class ASM::ServiceDeployment
       process_generic(old_server_cert, new_conf, 'apply', 'true')
     end
   end
+
+  def get_vlan_info(partition_network_objects,target_boot_device,os_image_type)
+    vlan_info = {}
+    vlan_info['tagged'] = []
+    vlan_info['untagged'] = []
+    if partition_network_objects.nil?
+      return vlan_info
+    end
+    partition_network_objects.each do |partition_network_object|
+      vlanId = partition_network_object['vlanId']
+      network_type = partition_network_object['type']
+      if target_boot_device == "iSCSI" and network_type == "STORAGE_ISCSI_SAN"
+        logger.debug("Inside iscsi device loop")
+        vlan_info['untagged'].push(vlanId)
+      elsif !@supported_os_postinstall.include?(os_image_type.downcase)
+        logger.debug("Inside other OS loop: #{os_image_type.downcase}")
+        vlan_info['untagged'].push(vlanId)
+      elsif network_type == "PXE"
+        logger.debug("Inside the PXE vlan loop")
+        vlan_info['untagged'].push(vlanId)
+      else
+        logger.debug("Inside the default loop")
+        vlan_info['tagged'].push(vlanId)
+      end
+      logger.debug("VLAN INFO so far: #{vlan_info}")
+    end
+    vlan_info
+  end
+
   
   def cleanup_compellent(component,old_cert_name)
     server_cert_name = component['puppetCertName']
