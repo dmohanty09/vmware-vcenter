@@ -1984,6 +1984,12 @@ class ASM::ServiceDeployment
         # disk and we will not see any :boot_local events
 
         version = server['os_image_version'] || server['os_image_type']
+        begin
+          razor.block_until_task_complete(serial_number, server['policy_name'], version, :bind)
+        rescue
+          logger.info("VM was not able to PXE boot.  Resetting VM.")
+          vm.reset
+        end
         razor.block_until_task_complete(serial_number, server['policy_name'],
                                         version, :boot_install)
 

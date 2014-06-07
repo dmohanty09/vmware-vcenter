@@ -106,6 +106,10 @@ module ASM
           @vm ||= findvm(dc.vmFolder, (self.hostname||@hostname)) 
         end
 
+        def reset
+          vm.ResetVM_Task!
+        end
+
         def findvm(folder, name)
           folder.children.each do |subfolder|
             break if @vm_obj
