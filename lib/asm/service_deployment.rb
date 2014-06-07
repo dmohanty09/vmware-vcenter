@@ -156,6 +156,7 @@ class ASM::ServiceDeployment
       update_vcenters
     end
     db.log(:info, "Deployment completed")
+    db.set_status(:complete)
     log("Status: Completed")
   end
 
@@ -341,16 +342,20 @@ class ASM::ServiceDeployment
             raise(Exception, 'Component has no certname') unless comp['puppetCertName']
             Thread.current[:component_id] = comp['id']
             Thread.current[:certname] = comp['puppetCertName']
+            Thread.current[:component_name] = comp['name']
             db.set_component_status(comp['id'], :in_progress)
+            db.log(:info, "Processing #{comp['name']}", :component_id => comp['id'])
             send("process_#{type.downcase}", comp)
           end
         end.each do |thrd|
           begin
             thrd.join
             log("Status: Completed_component_#{type.downcase}/#{thrd[:certname]}")
+            db.log(:info, "#{thrd[:component_name]} deployment complete", :component_id => thrd[:component_id])
             db.set_component_status(thrd[:component_id], :complete)
           rescue Exception => e
             log("Status: Failed_component_#{type.downcase}/#{thrd[:certname]}")
+            db.log(:error, "#{thrd[:component_name]} deployment failed", :component_id => thrd[:component_id])
             db.set_component_status(thrd[:component_id], :error)
             raise(e)
           end
