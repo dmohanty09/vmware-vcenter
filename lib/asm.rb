@@ -202,6 +202,7 @@ module ASM
     @running_cert_list = nil
     @logger = nil
     @config = nil
+    @database.disconnect if @database
     @database = nil
     @base_dir = nil
     @initialized = false
