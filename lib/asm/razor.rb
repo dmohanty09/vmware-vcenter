@@ -59,6 +59,16 @@ module ASM
       end
     end
 
+    STATUS_ORDER = [ nil, :bind, :reboot, :boot_install, :boot_local, :boot_local_2, ]
+
+    class InvalidStatusException     < Error; end
+
+    def cmp_status(status_1, status_2)
+      index_1 = STATUS_ORDER.find_index(status_1) or raise(InvalidStatusException, "Invalid status: #{status_1}")
+      index_2 = STATUS_ORDER.find_index(status_2) or raise(InvalidStatusException, "Invalid status: #{status_2}")
+      index_1 <=> index_2
+    end
+
     # Given a node name, returns the status of the install of the O/S
     # corresponding to policy_name, or nil if none is found.
     #
@@ -69,8 +79,6 @@ module ASM
     #   :boot_local - install has completed and node has booted into O/S
     #   :boot_local_2 - node has booted into O/S a second time. (In the case
     #                   of ESXi the install is not complete until this event)
-    #   :reinstall - policy has been removed from the node, which will boot
-    #                into the micro-kernel on next boot.
     #
     # Works by going through the razor node logs and looking at events between
     # the bind and reinstall events for the given policy_name. If the
@@ -89,7 +97,7 @@ module ASM
           end
           n_boot_local = 0
         elsif log['event'] == 'reinstall'
-          ret = :reinstall if ret
+          ret = nil
         end
 
         if ret && log['action'] == 'reboot' && log['policy'] == policy_name
@@ -151,7 +159,6 @@ module ASM
       # Max time to wait at each stage
       max_times = {nil => 300,
                    :bind => 300,
-                   :reinstall => 300,
                    :reboot => 300,
                    # for esxi / linux most of the install happens in :boot_install
                    :boot_install => 2700,
@@ -159,7 +166,7 @@ module ASM
                    :boot_local => 2700,
                    :boot_local_2 => 600}
       status = nil
-      while status != terminal_status
+      while cmp_status(status, terminal_status) < 0
         timeout = max_times[status] or raise(Exception, "Invalid status #{status}")
         begin
           new_status = ASM::Util.block_and_retry_until_ready(timeout, ASM::CommandException, 60) do

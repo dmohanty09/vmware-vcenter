@@ -1339,7 +1339,7 @@ class ASM::ServiceDeployment
         version = params['os_image_version'] || params['os_image_type']
         begin
           logger.info("Waiting for razor to get reboot event...")
-          razor.block_until_task_complete(serial_number, params['policy_name'], :reboot)
+          razor.block_until_task_complete(serial_number, params['policy_name'], version, :bind)
         rescue
           logger.info("Server never rebooted.  An old OS may be installed.  Manually rebooting to kick off razor install...")
           ASM::WsMan.reboot({:host=>deviceconf['host'], :user=>deviceconf['user'], :password=>deviceconf['password']})
