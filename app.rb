@@ -2,6 +2,7 @@ require 'sinatra'
 require 'json'
 require 'logger'
 require 'asm'
+require 'asm/data/deployment'
 require 'asm/service_deployment'
 require 'asm/device_management'
 
@@ -11,7 +12,12 @@ class ASM::App < Sinatra::Base
     set :bind, '0.0.0.0'
     # only allow a single request to be processed at a time
     set :lock, true
+
     ASM.init
+    ASM.logger.info('ASM deployment service initialized')
+
+    # Since we have just started there can be no in-progress deployments
+    ASM::Data::Deployment.mark_in_progress_failed(ASM.database, ASM.logger)
   end
 
   # Execute deployment
