@@ -24,6 +24,12 @@ module ASM
   end
 
   def self.init_for_tests
+    require 'asm'
+    require 'logger'
+    # This is an ugly kludge, need to make the base_directory configurable and
+    # just have the logger log to a temporary directory
+    logger = Logger.new('/dev/null')
+    ASM.stubs(:logger).returns(logger)
     ASM.init(self.test_config_file)
   end
 end

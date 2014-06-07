@@ -34,7 +34,7 @@ module ASM
       @hostlist_mutex   = Mutex.new
       @running_cert_list = []
       @config = ASM::Config.new(config_file)
-      @database = Sequel.connect(@config.database_url, :loggers => [@logger])
+      @database = Sequel.connect(@config.database_url, :loggers => [logger])
       @initialized = true
     end
   end
