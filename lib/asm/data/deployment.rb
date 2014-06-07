@@ -32,6 +32,26 @@ module ASM
       attr_accessor :component_ids # map of component uuids to ids
       attr_reader :db
 
+      # Set the status of all in_progress deployments to failed. Intended to
+      # be used across reboots where we know that no deployments are running.
+      # That way in the event of power outage we can mark all the in_progress
+      # deployments as failed so the user can go and delete them
+      def self.mark_in_progress_failed(db, logger = nil)
+        query = <<EOT
+SELECT d.id AS deployment_id, "name", e.id AS "execution_id"
+    FROM deployments AS d JOIN executions AS e ON d.id = e.deployment_id
+    WHERE e.status = 'in_progress'
+EOT
+        db.transaction do
+          db[query].each do |row|
+            msg = "Marking deployment #{row[:name]} ##{row[:deployment_id]} as error"
+            logger.info(msg) if logger
+            db[:executions].where(:id => row[:execution_id]).update(
+                :status => 'error', :message => 'Deployment aborted due to reboot')
+          end
+        end
+      end
+
       def initialize(db)
         @db = db
       end

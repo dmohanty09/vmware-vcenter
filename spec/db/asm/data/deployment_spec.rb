@@ -179,4 +179,37 @@ describe ASM::Data::Deployment do
 
   end
 
+  describe 'mark in-progress as failed' do
+    it 'should mark one execution as failed' do
+      @data.create_execution(@deployment_data)
+      @data.log(:info, 'Test message')
+      # deployment should be in_progress
+      ASM::Data::Deployment.mark_in_progress_failed(@database)
+      @data.get_execution.status.should == 'error'
+      # message should be overwritten with a "deployment failed message"
+      @data.get_execution.message.should_not == 'Test message'
+    end
+
+    it 'should mark two executions as failed' do
+      @data.create_execution(@deployment_data)
+      @data.create_execution(@deployment_data)
+      # deployment should be in_progress
+      ASM::Data::Deployment.mark_in_progress_failed(@database)
+      @data.get_execution.status.should == 'error'
+      @data.get_execution.message.should_not be_nil
+      @data.get_execution(1).status.should == 'error'
+      @data.get_execution(1).message.should_not be_nil
+    end
+
+    it 'should not mark completed executions as failed' do
+      @data.create_execution(@deployment_data)
+      @data.log(:info, 'Test message')
+      @data.set_status('complete')
+      ASM::Data::Deployment.mark_in_progress_failed(@database)
+      @data.get_execution.status.should == 'complete'
+      @data.get_execution.message.should == 'Test message'
+    end
+
+  end
+
 end

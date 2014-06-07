@@ -25,6 +25,13 @@ namespace :spec do
       t.pattern = './spec/db/**/*_spec.rb'
     end
   end
+
+  namespace :suite do
+    desc 'Run all specs in db spec suite'
+    RSpec::Core::RakeTask.new('all') do |t|
+      t.pattern = './spec/**/*_spec.rb'
+    end
+  end
 end
 
 # WARNING: These db tasks do not work properly. Just use the db/schema.sql file
