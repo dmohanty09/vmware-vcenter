@@ -49,13 +49,14 @@ ON executions FOR EACH ROW
 EXECUTE PROCEDURE "public"."set_update_timestamp"();
 
 -- A component in a service deployment execution
+-- NOTE: asm_guid may be null for VMs, apps
 CREATE SEQUENCE components_id_seq;
 CREATE TABLE components
 (
   id             INTEGER                  NOT NULL PRIMARY KEY DEFAULT nextval(
       'components_id_seq'),
   execution_id   INTEGER                  NOT NULL REFERENCES executions (id) ON DELETE CASCADE,
-  asm_guid       CHARACTER VARYING(255)   NOT NULL,
+  asm_guid       CHARACTER VARYING(255),
   component_uuid CHARACTER VARYING(255)   NOT NULL,
   "name"         CHARACTER VARYING(255)   NOT NULL,
   type           CHARACTER VARYING(255)   NOT NULL,
