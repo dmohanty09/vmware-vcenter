@@ -4,8 +4,9 @@ require 'asm'
 describe ASM do
 
   it 'should return hard coded base dir' do
+    config_file = File.join(File.dirname(__FILE__), '..', 'config.yaml')
     FileUtils.expects(:mkdir_p).with('/opt/Dell/ASM/deployments').once
-    ASM.init
+    ASM.init_for_tests
     ASM.base_dir.should == '/opt/Dell/ASM/deployments'
     # this is being called once to verify that mkdir_p is only
     # called once
@@ -16,7 +17,8 @@ describe ASM do
   describe 'tests requiring initialization' do
 
     before do
-      ASM.init
+      config_file = File.join(File.dirname(__FILE__), '..', 'config.yaml')
+      ASM.init_for_tests
     end
 
     after do
@@ -70,7 +72,7 @@ describe ASM do
 
     it 'should fail if we call ASM.init twice' do
       expect do
-        ASM.init
+        ASM.init_for_tests
       end.to raise_error(Exception, 'Can not initialize ASM class twice')
     end
 

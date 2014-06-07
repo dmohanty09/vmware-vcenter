@@ -7,7 +7,7 @@ require 'tmpdir'
 describe ASM::UpdateDeployment do
 
   before do
-    ASM.init
+    ASM.init_for_tests
     @test_dir = Dir.mktmpdir('update_deployment_spec')
     FileUtils.cp_r(File.expand_path('../../../fixtures/deployments', __FILE__), @test_dir)
     ASM.stubs(:base_dir).returns("#{@test_dir}/deployments")

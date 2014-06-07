@@ -12,6 +12,18 @@ require 'rspec/expectations'
 
 require 'puppetlabs_spec_helper/module_spec_helper'
 
+module ASM
+
+  # TODO: we should probably use config.yaml "environments" for this like razor does
+  def self.init_for_tests
+    if RUBY_PLATFORM == 'java'
+      ASM.init(File.join(File.dirname(__FILE__), 'jruby_config.yaml'))
+    else
+      ASM.init(File.join(File.dirname(__FILE__), 'mri_config.yaml'))
+    end
+  end
+end
+
 RSpec.configure do |config|
   # FIXME REVISIT - We may want to delegate to Facter like we do in
   # Puppet::PuppetSpecInitializer.initialize_via_testhelper(config) because

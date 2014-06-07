@@ -7,7 +7,7 @@ require 'asm/util'
 describe ASM::ServiceDeployment do
 
   before do
-    ASM.init
+    ASM.init_for_tests
     @tmp_dir = Dir.mktmpdir
     @deployment_db = mock('deploymentdb')
     @deployment_db.stub_everything

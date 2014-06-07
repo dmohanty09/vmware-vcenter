@@ -25,7 +25,7 @@ module ASM
   end
 
   # provides a single call that can be used to initialize our mutex
-  def self.init
+  def self.init(config_file = nil)
     if ASM.initialized?
       raise("Can not initialize ASM class twice")
     else
@@ -33,24 +33,22 @@ module ASM
       @deployment_mutex = Mutex.new
       @hostlist_mutex   = Mutex.new
       @running_cert_list = []
-      @base_dir = begin
-        dir = '/opt/Dell/ASM/deployments'
-        FileUtils.mkdir_p(dir)
-        dir
-      end
-      @logger = Logger.new(File.join(@base_dir, 'asm_puppet.log'))
-      @config = ASM::Config.new
+      @config = ASM::Config.new(config_file)
       @database = Sequel.connect(@config.database_url, :loggers => [@logger])
       @initialized = true
     end
   end
 
   def self.base_dir
-    @base_dir or raise(UninitializedException)
+    @base_dir ||= begin
+      dir = '/opt/Dell/ASM/deployments'
+      FileUtils.mkdir_p(dir)
+      dir
+    end
   end
 
   def self.logger
-    @logger or raise(UninitializedException)
+    @logger ||= Logger.new(File.join(base_dir, 'asm_puppet.log'))
   end
 
   def self.database

@@ -5,7 +5,7 @@ require 'asm'
 describe ASM::DeviceManagement do
 
   before do
-    ASM.init
+    ASM.init_for_tests
     @test_dir = Dir.mktmpdir('device_mgmt_test')
     @conf_dir = FileUtils.mkdir("#{@test_dir}/devices").first
     @ssl_dir = FileUtils.mkdir("#{@test_dir}/ssl").first
