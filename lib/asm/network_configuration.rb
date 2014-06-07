@@ -328,18 +328,19 @@ module ASM
               end
             end
 
-            if nic
-              partition.nic = nic
-            elsif options[:add_partitions]
-              nic = interface.partitions.first.nic
-              partition.nic = nic.create_with_partition(partition_no)
-            else
+            if nic.nil? && options[:add_partitions]
+              first_nic = interface.partitions.first.nic
+              nic = first_nic.create_with_partition(partition_no) if first_nic
+            end
+
+            unless nic
               msg = "Mac address not found on #{endpoint.host} for #{card.name} #{interface.name} partition #{partition.name}"
               raise(Exception, msg)
             end
 
-            partition.fqdd = partition.nic.fqdd
-            partition.mac_address = partition.nic.mac_address
+            partition.nic = nic
+            partition.fqdd = nic.fqdd
+            partition.mac_address = nic.mac_address
           end
         end
       end

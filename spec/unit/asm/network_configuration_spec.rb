@@ -387,7 +387,7 @@ describe ASM::NetworkConfiguration do
         end
       end
     end
-    
+
     it 'should reset virtual mac addresses' do
       fqdd_to_mac = {'NIC.Integrated.1-1-1' => '00:0A:F7:06:88:50',
                      'NIC.Integrated.1-1-2' => '00:0A:F7:06:88:54',
@@ -402,14 +402,98 @@ describe ASM::NetworkConfiguration do
       net_config = ASM::NetworkConfiguration.new(@data)
       net_config.add_nics!(Hashie::Mash.new({:host => '127.0.0.1'}))
       file_n = File.join(File.dirname(__FILE__), '..', '..',
-                            'fixtures', 'network_configuration', 'wsmanmacs.out')
+                         'fixtures', 'network_configuration', 'wsmanmacs.out')
       ASM::WsMan.stubs(:invoke).returns(File.read(file_n))
-      net_config.reset_virt_mac_addr({:host=>'mock',:user=>'mocker',:password=>'mockest'})
+      net_config.reset_virt_mac_addr({:host => 'mock', :user => 'mocker', :password => 'mockest'})
       partitions = net_config.get_all_partitions
       partitions[0].lanMacAddress.should == '24:B6:FD:F4:4A:1E'
       partitions[0].iscsiMacAddress.should == '24:B6:FD:F4:4A:1E'
       partitions[4].lanMacAddress.should == '24:B6:FD:F4:4A:20'
-      partitions[4].iscsiMacAddress.should == '24:B6:FD:F4:4A:20'  
+      partitions[4].iscsiMacAddress.should == '24:B6:FD:F4:4A:20'
+    end
+
+  end
+
+  describe 'when parsing a quad port rack network config' do
+
+    before do
+      file_name = File.join(File.dirname(__FILE__), '..', '..',
+                            'fixtures', 'network_configuration', 'rack_quad_port.json')
+      @data = JSON.parse(File.read(file_name))
+    end
+
+    it 'should fail if quad port not available' do
+      fqdd_to_mac = {'NIC.Slot.2-1-1' => '00:0A:F7:06:9D:C0',
+                     'NIC.Slot.2-1-2' => '00:0A:F7:06:9D:C4',
+                     'NIC.Slot.2-1-3' => '00:0A:F7:06:9D:C8',
+                     'NIC.Slot.2-1-4' => '00:0A:F7:06:9D:CC',
+                     'NIC.Slot.2-2-1' => '00:0A:F7:06:9D:C2',
+                     'NIC.Slot.2-2-2' => '00:0A:F7:06:9D:C6',
+                     'NIC.Slot.2-2-3' => '00:0A:F7:06:9D:CA',
+                     'NIC.Slot.2-2-4' => '00:0A:F7:06:9D:CE', }
+
+      ASM::WsMan.stubs(:get_mac_addresses).returns(fqdd_to_mac)
+      net_config = ASM::NetworkConfiguration.new(@data, :add_partitions)
+
+      expect do
+        net_config.add_nics!(Hashie::Mash.new({:host => '127.0.0.1'}), :add_partitions => true)
+      end.to raise_error(Exception)
+    end
+
+    it 'should configure if quad port available' do
+      fqdd_to_mac = {'NIC.Integrated.1-1-1' => '00:0A:F7:06:9D:C0',
+                     'NIC.Integrated.1-1-2' => '00:0A:F7:06:9D:C4',
+                     'NIC.Integrated.1-2-1' => '00:0A:F7:06:9D:C8',
+                     'NIC.Integrated.1-2-2' => '00:0A:F7:06:9D:CC',
+                     'NIC.Integrated.1-3-1' => '00:0A:F7:06:9D:C2',
+                     'NIC.Integrated.1-3-2' => '00:0A:F7:06:9D:C6',
+                     'NIC.Integrated.1-4-1' => '00:0A:F7:06:9D:CA',
+                     'NIC.Integrated.1-4-2' => '00:0A:F7:06:9D:CE', }
+
+      ASM::WsMan.stubs(:get_mac_addresses).returns(fqdd_to_mac)
+      net_config = ASM::NetworkConfiguration.new(@data)
+
+      net_config.add_nics!(Hashie::Mash.new({:host => '127.0.0.1'}), :add_partitions => true)
+      net_config.cards.size.should == 1
+      # Verify
+      card1 = net_config.cards.first
+      (1..4).each do |port_no|
+        port = card1.interfaces.find { |p| p.name == "Port #{port_no}" }
+        (1..2).each do |partition_no|
+          fqdd = "NIC.Integrated.1-#{port_no}-#{partition_no}"
+          partition = port.partitions.find { |p| p.name == partition_no.to_s }
+          partition.fqdd.should == fqdd
+          partition.mac_address.should == fqdd_to_mac[fqdd]
+        end
+      end
+    end
+
+    it 'should configure if quad port available and not partitioned' do
+      fqdd_to_mac = {'NIC.Integrated.1-1-1' => '00:0A:F7:06:9D:C0',
+                     'NIC.Integrated.1-2-1' => '00:0A:F7:06:9D:C8',
+                     'NIC.Integrated.1-3-1' => '00:0A:F7:06:9D:C2',
+                     'NIC.Integrated.1-4-1' => '00:0A:F7:06:9D:CA', }
+
+      ASM::WsMan.stubs(:get_mac_addresses).returns(fqdd_to_mac)
+      net_config = ASM::NetworkConfiguration.new(@data, :add_partitions)
+
+      net_config.add_nics!(Hashie::Mash.new({:host => '127.0.0.1'}), :add_partitions => true)
+      net_config.cards.size.should == 1
+      # Verify
+      card1 = net_config.cards.first
+      (1..4).each do |port_no|
+        port = card1.interfaces.find { |p| p.name == "Port #{port_no}" }
+        (1..2).each do |partition_no|
+          fqdd = "NIC.Integrated.1-#{port_no}-#{partition_no}"
+          partition = port.partitions.find { |p| p.name == partition_no.to_s }
+          partition.fqdd.should == fqdd
+          if partition_no == 1
+            partition.mac_address.should == fqdd_to_mac[fqdd]
+          else
+            partition.mac_address.should be_nil
+          end
+        end
+      end
     end
 
   end
