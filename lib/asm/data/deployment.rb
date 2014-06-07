@@ -97,7 +97,7 @@ EOT
       # Pass nothing to get the last execution created on this object
       def get_execution(order = nil)
         execution_query = <<EOT
-SELECT asm_guid AS "id", "name", "status", "message", start_time, end_time
+SELECT e.id AS "execution_id", asm_guid AS "id", "name", "status", "message", start_time, end_time
     FROM deployments AS d JOIN executions AS e ON d.id = e.deployment_id
 EOT
         if order
@@ -122,7 +122,7 @@ EOT
             raise(NotFoundException, "No execution #{execution_selector} for deployment #{id}")
           end
           ret['components'] = []
-          db[components_query, execution_id].each do |component|
+          db[components_query, ret[:execution_id]].each do |component|
             ret['components'].push(component)
           end
         end

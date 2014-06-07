@@ -212,4 +212,31 @@ describe ASM::Data::Deployment do
 
   end
 
+  describe 'redeployment tests' do
+    before do
+      @data.create_execution(@deployment_data)
+      @execution = @data.get_execution
+    end
+
+    it 'should create new components' do
+      orig = @execution.components.first
+      orig.should_not be_nil
+      @data.set_component_status(orig.id, 'complete')
+      e1 = @data.get_execution(0)
+      new = e1.components.first
+      new.component_id.should == orig.component_id
+      new.status.should == 'complete'
+
+      # create 2nd execution
+      @data.create_execution(@deployment_data)
+
+      # Verify the old execution hasn't changed
+      e1 = @data.get_execution(1)
+      new = e1.components.first
+      new.component_id.should == orig.component_id
+      new.status.should == 'complete'
+    end
+
+  end
+
 end
