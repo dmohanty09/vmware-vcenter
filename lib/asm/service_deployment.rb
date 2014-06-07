@@ -1692,8 +1692,13 @@ class ASM::ServiceDeployment
                     end
                     resource_hash['asm::datastore'] ||= {}
                     resource_hash['asm::datastore']["#{hostip}:#{storage_title}:datastore"] = asm_datastore
-                    
-                    target_iqn = ASM::Util.get_eql_volume_iqn(storage_cert,storage_title)
+
+                    # HACK: process_generic kicks off asynchronous device
+                    # re-inventory through the java REST services. We expect that
+                    # would be complete by the time we get here. BUT, java side
+                    # uses asmGUID as the puppet certificate name, so we have to
+                    # use that here.
+                    target_iqn = ASM::Util.get_eql_volume_iqn(storage_component['asmGUID'], storage_title)
                     raise(Exception,"Unable to find the IQN for volume #{storage_title}") if target_iqn.length == 0
 
                     resource_hash['esx_datastore'] ||= {}
