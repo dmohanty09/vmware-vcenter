@@ -15,12 +15,16 @@ require 'puppetlabs_spec_helper/module_spec_helper'
 module ASM
 
   # TODO: we should probably use config.yaml "environments" for this like razor does
-  def self.init_for_tests
+  def self.test_config_file
     if RUBY_PLATFORM == 'java'
-      ASM.init(File.join(File.dirname(__FILE__), 'jruby_config.yaml'))
+      File.join(File.dirname(__FILE__), 'jruby_config.yaml')
     else
-      ASM.init(File.join(File.dirname(__FILE__), 'mri_config.yaml'))
+      File.join(File.dirname(__FILE__), 'mri_config.yaml')
     end
+  end
+
+  def self.init_for_tests
+    ASM.init(self.test_config_file)
   end
 end
 

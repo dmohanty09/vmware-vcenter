@@ -41,8 +41,7 @@ CREATE TABLE executions
   message       TEXT,
   start_time    TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW(),
   end_time      TIMESTAMP WITH TIME ZONE,
-  update_time   TIMESTAMP WITH TIME ZONE NOT NULL,
-  UNIQUE (deployment_id, "order")
+  update_time   TIMESTAMP WITH TIME ZONE NOT NULL
 );
 
 CREATE TRIGGER "trg_set_executions_update_time" BEFORE INSERT OR UPDATE

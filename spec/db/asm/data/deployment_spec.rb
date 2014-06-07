@@ -6,8 +6,7 @@ require 'asm/data/deployment'
 describe ASM::Data::Deployment do
 
   before do
-    config_file = File.join(File.dirname(__FILE__), '..', '..', '..', '..', 'config.yaml')
-    config = ASM::Config.new(config_file)
+    config = ASM::Config.new(ASM.test_config_file)
     @database = Sequel.connect(config.database_url)
     @test_guid = "test-guid-#{Time.new.to_i}"
     @data = ASM::Data::Deployment.new(@database)
