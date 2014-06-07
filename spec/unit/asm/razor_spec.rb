@@ -169,10 +169,10 @@ describe ASM::Razor do
     end
 
     describe 'when reinstall event exists twice' do
-      it 'should return :reinstall' do
+      it 'should return nil' do
         @logs['items'] = @logs['items'].slice(0, 12)
         RestClient.stubs(:get).with(@node_url).returns(mock_response(200, @logs))
-        @razor.task_status(@node_name, @policy_name).should == :reinstall
+        @razor.task_status(@node_name, @policy_name).should == nil
       end
     end
 
@@ -201,6 +201,23 @@ describe ASM::Razor do
         RestClient.stubs(:get).with(@node_url).returns(mock_response(200, @logs))
         @razor.task_status(@node_name, @policy_name).should == :bind
       end
+    end
+
+    describe 'when comparing statuses' do
+
+      it 'should get the right ordering' do
+        @razor.cmp_status(nil, :bind).should < 0
+        @razor.cmp_status(:bind, :boot_local_2).should < 0
+        @razor.cmp_status(:bind, :bind).should == 0
+        @razor.cmp_status(:boot_local_2, :bind).should > 0
+      end
+
+      it 'should fail with invalid status' do
+        expect do
+          @razor.cmp_status(:foo, :bar)
+        end.to raise_error(ASM::Razor::InvalidStatusException)
+      end
+
     end
 
     describe 'block_until_task_complete' do
