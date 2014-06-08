@@ -53,6 +53,8 @@ describe ASM::ServiceDeployment do
       File.open( "#{@tmp_dir}/8000/server-cert.out", 'w') do |fh|
         fh.write('Results: For 0 resources. 0 from our run failed. 0 not from our run failed. 0 updated successfully.')
       end
+      @sd.stubs(:iterate_file).with(@o_file).returns(@o_file)
+      @sd.stubs(:iterate_file).with(@r_file).returns(@r_file)
       ASM::Util.expects(:run_command_streaming).with(
         "sudo puppet asm process_node --debug --trace --filename #{@r_file} --run_type apply --statedir #{@tmp_dir}/8000/resources  --always-override server-cert", "#{@o_file}")
       @data['serviceTemplate']['components'][0]['type'] = 'TEST'
@@ -270,15 +272,15 @@ describe ASM::ServiceDeployment do
     end
     it 'should be able to create file counters labeled 2 when files exist' do
       write_counter_files
-      @sd.iterate_resource_file(@counter_files.first).should == File.join(@tmp_dir, 'existing_file___2.yaml')
+      @sd.iterate_file(@counter_files.first).should == File.join(@tmp_dir, 'existing_file___2.yaml')
     end
     it 'should increment existing counter files' do
       @counter_files.push(File.join(@tmp_dir, 'existing_file___4.yaml'))
       write_counter_files
-      @sd.iterate_resource_file(@counter_files.first).should == File.join(@tmp_dir, 'existing_file___5.yaml')
+      @sd.iterate_file(@counter_files.first).should == File.join(@tmp_dir, 'existing_file___5.yaml')
     end
     it 'should return passed in file when no file exists' do
-      @sd.iterate_resource_file(@counter_files.first).should == File.join(@tmp_dir, 'existing_file.yaml')
+      @sd.iterate_file(@counter_files.first).should == File.join(@tmp_dir, 'existing_file.yaml')
     end
   end
 

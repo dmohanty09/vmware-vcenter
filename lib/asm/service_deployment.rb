@@ -402,9 +402,9 @@ class ASM::ServiceDeployment
       while(yet_to_run_command)
         if ASM.block_certname(cert_name)
           yet_to_run_command = false
-          puppet_out = deployment_file("#{cert_name}.out")
+          puppet_out = iterate_file(deployment_file("#{cert_name}.out"))
           # synchronize creation of file counter
-          resource_file = iterate_resource_file(resource_file)
+          resource_file = iterate_file(resource_file)
           File.open(resource_file, 'w') do |fh|
             fh.write(config.to_yaml)
           end
@@ -467,21 +467,22 @@ class ASM::ServiceDeployment
   # NOTE : This method is not thread safe. I expects it's calling
   # method to invoke it in a way that is thread safe
   #
-  def iterate_resource_file(resource_file)
-    if File.exists?(resource_file)
+  def iterate_file(file)
+    if File.exists?(file)
+      file_ext = file.split('.').last
       # search for all files that match our pattern, increment us!
-      base_name = File.basename(resource_file, '.yaml')
-      dir       = File.dirname(resource_file)
+      base_name = File.basename(file, ".#{file_ext}")
+      dir       = File.dirname(file)
       matching_files = File.join(dir, "#{base_name}___*")
       i = 1
-      Dir[matching_files].each do |file|
-        f_split   = File.basename(file, '.yaml').split('___')
+      Dir[matching_files].each do |f|
+        f_split   = File.basename(f, ".#{file_ext}").split('___')
         num = Integer(f_split.last)
         i = num > i ? num : i
       end
-      resource_file = File.join(dir, "#{base_name}___#{i + 1}.yaml")
+      file = File.join(dir, "#{base_name}___#{i + 1}.#{file_ext}")
     else
-      resource_file
+      file
     end
   end
 
@@ -2047,6 +2048,10 @@ class ASM::ServiceDeployment
     if puppet_classes || server
       # Wait for first agent run to complete
       await_agent_run_completion(vm.certname)
+      logger.info("Running puppet on VM #{vm_title} one more time to reconfigure networks.")
+      vm_resource[vm_title]['network_interfaces'].delete_if{|item| item['portgroup']=="VM Network"}
+      #Rerun one more time to remove PXE network. 
+      process_generic(certname, resource_hash, 'apply')
     end
   end
 
