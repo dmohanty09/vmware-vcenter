@@ -1333,6 +1333,7 @@ class ASM::ServiceDeployment
     resource_hash.delete('asm::esxiscsiconfig')
     resource_hash.delete('asm::baseserver')
     process_generic(component['puppetCertName'], resource_hash, 'apply', 'true')
+    reboot_required = true
     unless @debug || @bfs
       (resource_hash['asm::server'] || []).each do |title, params|
         type = params['os_image_type']
@@ -1341,8 +1342,13 @@ class ASM::ServiceDeployment
           logger.info("Waiting for razor to get reboot event...")
           razor.block_until_task_complete(serial_number, params['policy_name'], version, :bind)
         rescue
+          
           logger.info("Server never rebooted.  An old OS may be installed.  Manually rebooting to kick off razor install...")
-          ASM::WsMan.reboot({:host=>deviceconf['host'], :user=>deviceconf['user'], :password=>deviceconf['password']})
+          if type == 'hyperv' and is_retry? and ASM::Util.get_puppet_certs.include?(hostname_to_certname(params['hostname']))
+              logger.debug("Server #{params['hostname']} is configured correctly.")
+              reboot_required = false
+          end
+          ASM::WsMan.reboot({:host=>deviceconf['host'], :user=>deviceconf['user'], :password=>deviceconf['password']}) if reboot_required
         end
         node = razor.block_until_task_complete(serial_number,
                                                params['policy_name'], version)
@@ -1350,7 +1356,14 @@ class ASM::ServiceDeployment
           raise(Exception, "Static management IP address was not specified for #{serial_number}") unless static_ip
           block_until_esxi_ready(title, params, static_ip, timeout = 900)
         else
-          deployment_status = await_agent_run_completion(ASM::Util.hostname_to_certname(os_host_name), timeout = 3600)
+          # for retry case, if the agent is already there, no need to wait again for this step
+          if reboot_required
+            logger.debug("Non HyperV deployment which already exists")
+            deployment_status = await_agent_run_completion(ASM::Util.hostname_to_certname(os_host_name), timeout = 3600)
+          else
+            logger.debug("HyperV deployment for retry case and server already exists. Skipping wait for agent check")
+            deployment_status = nil
+          end
           if (deployment_status and os_image_type == 'hyperv')
              hyperv_post_installation(ASM::Util.hostname_to_certname(os_host_name), cert_name, timeout=3600)
           end
