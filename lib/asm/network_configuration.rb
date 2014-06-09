@@ -352,6 +352,15 @@ module ASM
       get_all_partitions.each do |partition|
         partition['lanMacAddress'] = permanent_macs[partition.fqdd]
         partition['iscsiMacAddress'] = permanent_macs[partition.fqdd]
+        partition['iscsiIQN'] = ''
+        partition.networkObjects.each do |net|
+          if net.static
+            static_net = net.staticNetworkConfiguration
+            static_net.gateway = '0.0.0.0'
+            static_net.subnet = '0.0.0.0'
+            static_net.ipAddress = '0.0.0.0'
+          end
+        end
         partition.delete('nic')
       end
     end

@@ -14,6 +14,26 @@ module ASM
         self.clean_puppetdb_nodes(names)
         logger.debug("Cleaned puppet certs #{names.join(',')} from deployment id #{id}") if logger
       end
+      self.clean_deployment_servers(id, logger)
+      logger.debug("Cleaning deployment servers...") if logger
+    end
+
+    #Removes Virtual Identities from deployment servers
+    def self.clean_deployment_servers(id, logger=nil)
+      deployment = deployment_data(id)
+      servers = deployment['serviceTemplate']['components'].select{|c|c['type']=='SERVER'}
+      (servers || []).each do |server|
+        idrac = server['resources'].detect{|r|r['id']=='asm::idrac'}
+        next if idrac.nil?
+        target_boot_device = idrac['parameters'].detect{|p|p['id']=='target_boot_device'}['value']
+        service_deployment = ASM::ServiceDeployment.new(id, ASM.database)
+        Thread.new do
+          logger.debug("Cleaning virtual identities from #{server['puppetCertName']}") if logger
+          service_deployment.cleanup_server(server,server['puppetCertName'])
+          endpoint = ASM::Util.parse_device_config(server['puppetCertName'])
+          ASM::WsMan.poweroff(endpoint,logger)
+        end
+      end
     end
 
     def self.clean_deployment_certs(certs)
