@@ -1918,7 +1918,7 @@ class ASM::ServiceDeployment
       unless partitions.empty?
         networks = partitions.collect do |partition|
           partition.networkObjects.reject { |network| network.type == 'PXE' }
-        end.flatten.compact.uniq
+        end.uniq.flatten.compact
         logger.debug("Found networks for #{vswitch_type} vswitch: #{networks}")
         if networks && !networks.empty?
           vmnics = yield vswitch_type, partitions
