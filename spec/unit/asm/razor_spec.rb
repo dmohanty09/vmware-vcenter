@@ -89,11 +89,11 @@ describe ASM::Razor do
       end
     end
 
-    describe 'when no bind events exist' do
-      it 'should return nil' do
+    describe 'when a microkernel boot event exists' do
+      it 'should return :microkernel' do
         @logs['items'] = @logs['items'].slice(0, 1)
         RestClient.stubs(:get).with(@node_url).returns(mock_response(200, @logs))
-        @razor.task_status(@node_name, @policy_name).should == nil
+        @razor.task_status(@node_name, @policy_name).should == :microkernel
       end
     end
 
