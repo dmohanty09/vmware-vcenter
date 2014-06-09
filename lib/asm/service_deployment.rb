@@ -1764,12 +1764,12 @@ class ASM::ServiceDeployment
                         'vnics'                  => vnics,
                         'vnics_ipaddress'        => vnics_ipaddress
                       }
-                      if storage_params.has_key? 'chap_user_name' and not storage_params['chap_user_name'].empty?
-                        chap = {
-                          'iscsi_chapuser'         => storage_params['chap_user_name'],
-                          'iscsi_chapsecret'       => storage_params['passwd'] }
-                        esx_mem.merge! chap
-                      end
+#                      if storage_params.has_key? 'chap_user_name' and not storage_params['chap_user_name'].empty?
+#                        chap = {
+#                          'iscsi_chapuser'         => storage_params['chap_user_name'],
+#                          'iscsi_chapsecret'       => storage_params['passwd'] }
+#                        esx_mem.merge! chap
+#                      end
                       resource_hash['esx_mem'] ||= {}
                       resource_hash['esx_mem'][hostip] = esx_mem
                     else # We will set up round robin pathing here
