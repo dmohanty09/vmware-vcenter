@@ -224,7 +224,7 @@ describe ASM::Data::Deployment do
       @data.set_component_status(orig.id, 'complete')
       e1 = @data.get_execution(0)
       new = e1.components.first
-      new.component_id.should == orig.component_id
+      new.id.should == orig.id
       new.status.should == 'complete'
 
       # create 2nd execution
@@ -233,8 +233,34 @@ describe ASM::Data::Deployment do
       # Verify the old execution hasn't changed
       e1 = @data.get_execution(1)
       new = e1.components.first
-      new.component_id.should == orig.component_id
+      new.id.should == orig.id
       new.status.should == 'complete'
+    end
+
+    it 'should retain previous execution statuses' do
+      orig = @execution.components.first
+      orig.id.should_not be_nil
+      @data.set_component_status(orig.id, 'complete')
+
+      # create 2nd execution
+      @data.create_execution(@deployment_data)
+
+      # Verify the old execution hasn't changed
+      new = @data.get_execution.components.first
+      new.id.should == orig.id
+      new.status.should == 'complete'
+
+      # Reset to in_progress
+      @data.set_component_status(orig.id, 'in_progress')
+
+      # create 3nd execution
+      @data.create_execution(@deployment_data)
+
+      # Verify the old execution hasn't changed
+      new = @data.get_execution.components.first
+      new.id.should == orig.id
+      new.status.should == 'in_progress'
+
     end
 
   end
