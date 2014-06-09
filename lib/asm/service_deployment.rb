@@ -82,6 +82,20 @@ class ASM::ServiceDeployment
     @is_retry
   end
 
+  def handle_exception(base_name, e)
+    if e.class == ASM::UserException
+      logger.error(e.to_s)
+      db.log(:error, e.to_s)
+    end
+    backtrace = (e.backtrace || []).join("\n")
+    File.write(
+        deployment_file("#{base_name}.log"),
+        "#{e.inspect}\n\n#{backtrace}"
+    )
+    log("Status: Error")
+    db.set_status(:error)
+  end
+
   def process(service_deployment)
     begin
       
@@ -140,17 +154,7 @@ class ASM::ServiceDeployment
       process_san_switches()
       process_components()
     rescue Exception => e
-      if e.class == ASM::UserException
-        logger.error(e.to_s)
-        db.log(:error, e.to_s)
-      end
-      backtrace = (e.backtrace || []).join("\n")
-      File.write(
-          deployment_file('exception.log'),
-          "#{e.inspect}\n\n#{backtrace}"
-      )
-      log("Status: Error")
-      db.set_status(:error)
+      handle_exception('exception', e)
       raise(e)
     ensure
       update_vcenters
@@ -333,6 +337,7 @@ class ASM::ServiceDeployment
         log("Processing components of type #{type}")
         log("Status: Processing_#{type.downcase}")
         db.log(:info, "Processing #{type.downcase} components")
+        exceptions = []
         components.collect do |comp|
           #
           # TODO: this is some pretty primitive thread management, we need to use
@@ -340,28 +345,45 @@ class ASM::ServiceDeployment
           #
           Thread.new do
             raise(Exception, 'Component has no certname') unless comp['puppetCertName']
-            Thread.current[:component_id] = comp['id']
-            Thread.current[:certname] = comp['puppetCertName']
-            Thread.current[:component_name] = comp['name']
+            thrd = Thread.current
+            thrd[:component_id] = comp['id']
+            thrd[:certname] = comp['puppetCertName']
+            thrd[:component_name] = comp['name']
             db.set_component_status(comp['id'], :in_progress)
             db.log(:info, "Processing #{comp['name']}", :component_id => comp['id'])
-            send("process_#{type.downcase}", comp)
+
+            begin
+              send("process_#{type.downcase}", comp)
+              log("Status: Completed_component_#{type.downcase}/#{thrd[:certname]}")
+              db.log(:info, "#{thrd[:component_name]} deployment complete", :component_id => thrd[:component_id])
+              db.set_component_status(thrd[:component_id], :complete)
+            rescue Exception => e
+              thrd[:exception] = e
+              log("Status: Failed_component_#{type.downcase}/#{thrd[:certname]}")
+              db.log(:error, "#{thrd[:component_name]} deployment failed", :component_id => thrd[:component_id])
+              db.set_component_status(thrd[:component_id], :error)
+              handle_exception("#{thrd[:certname]}_exception", e)
+            end
           end
         end.each do |thrd|
-          begin
-            thrd.join
-            log("Status: Completed_component_#{type.downcase}/#{thrd[:certname]}")
-            db.log(:info, "#{thrd[:component_name]} deployment complete", :component_id => thrd[:component_id])
-            db.set_component_status(thrd[:component_id], :complete)
-          rescue Exception => e
-            log("Status: Failed_component_#{type.downcase}/#{thrd[:certname]}")
-            db.log(:error, "#{thrd[:component_name]} deployment failed", :component_id => thrd[:component_id])
-            db.set_component_status(thrd[:component_id], :error)
-            raise(e)
+          thrd.join
+          if thrd[:exception]
+            exceptions.push(thrd[:exception])
           end
         end
-        log("Finished components of type #{type}")
-        db.log(:info, "Finished processing #{type.downcase} components")
+
+        if exceptions.empty?
+          log("Finished components of type #{type}")
+          db.log(:info, "Finished processing #{type.downcase} components")
+        else
+          msg = "Error while processing #{type.downcase} components"
+          log(msg)
+          db.log(:error, msg)
+
+          # Failing by raising *one of* the exceptions thrown in the process thread
+          # Other failures will be captured in exception log files.
+          raise exceptions.first
+        end
       end
     end
   end
