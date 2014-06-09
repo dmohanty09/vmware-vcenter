@@ -14,20 +14,29 @@ describe ASM::Razor do
   end
 
   describe 'razor find_node' do
+
+    def build_node_data(name, serial_number, facts = {})
+      facts['serial_number'] = serial_number
+      {'name' => name,
+       'hw_info' => {'serial' => serial_number.downcase},
+       'facts' => facts}
+    end
+
     before do
       @node_name = 'node1'
       fake_api_url = 'http://foo/bar'
       @nodes_url = "#{fake_api_url}/collections/nodes"
       @razor = ASM::Razor.new(:api_url => fake_api_url)
-      @nodes = {'items' => [{'name' => 'node1', 'name' => 'node2'}]}
+      @nodes = {'items' => [{'name' => 'node1'}, {'name' => 'node2'}]}
       RestClient.stubs(:get).with(@nodes_url).
           returns(mock_response(200, @nodes))
 
-      @node1 = {'facts' => {'serialnumber' => 'NODE_1_SERIAL_NUMBER'}}
+      @node1 = build_node_data('node1', 'NODE_1_SERIAL_NUMBER')
       RestClient.stubs(:get).with("#{@nodes_url}/node1").
           returns(mock_response(200, @node1))
 
-      @node2 = {'facts' => {'serialnumber' => 'NODE_2_SERIAL_NUMBER', 'ipaddress' => '192.168.1.100'}}
+      @node2 = build_node_data('node2', 'NODE_2_SERIAL_NUMBER',
+                               {'ipaddress' => '192.168.1.100'})
       RestClient.stubs(:get).with("#{@nodes_url}/node2").
           returns(mock_response(200, @node2))
 
@@ -60,6 +69,21 @@ describe ASM::Razor do
 
       it 'should return node' do
         @razor.find_node('NODE_2_SERIAL_NUMBER').should == @node2
+      end
+
+      it 'fail if multiple node matches found' do
+        node3 = build_node_data('node3', 'NODE_2_SERIAL_NUMBER',
+                                {'ipaddress' => '192.168.1.101'})
+        RestClient.stubs(:get).with("#{@nodes_url}/node3").
+            returns(mock_response(200, node3))
+
+        @nodes = {'items' => [{'name' => 'node1'}, {'name' => 'node2'}, {'name' => 'node3'}]}
+        RestClient.stubs(:get).with(@nodes_url).
+            returns(mock_response(200, @nodes))
+
+        expect do
+          @razor.find_node('NODE_2_SERIAL_NUMBER').should == @node2
+        end.to raise_exception
       end
 
       it 'should return ip' do
