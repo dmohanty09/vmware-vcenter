@@ -588,6 +588,15 @@ class ASM::ServiceDeployment
         new_wwns = wwpns.compact.map {|s| s.gsub(/:/, '')}
         resource_hash['compellent::createvol'][title]['wwn'] = new_wwns
         server_servicetag = ASM::Util.cert2serial(server_comp['puppetCertName'])
+        
+        vol_size = resource_hash['compellent::createvol'][title]['size']
+        if vol_size.nil?
+          logger.debug("Processing existing compellent volume")
+          resource_hash = ASM::Util.update_compellent_resource_hash(component['puppetCertName'],
+            resource_hash,title,logger)
+          configure_san = true
+        end 
+
         if configure_san
           resource_hash['compellent::createvol'][title]['servername'] = "ASM_#{server_servicetag}"
         else
@@ -646,20 +655,30 @@ class ASM::ServiceDeployment
       resource_hash['netapp::create_nfs_export'][title]['readonly'] = ''
 
       size_param = resource_hash['netapp::create_nfs_export'][title]['size']
-      if size_param.include?('GB')
-        resource_hash['netapp::create_nfs_export'][title]['size'] = size_param.gsub(/GB/,'g')
-      end
-      if size_param.include?('MB')
-        resource_hash['netapp::create_nfs_export'][title]['size'] = size_param.gsub(/MB/,'m')
-      end
-      if size_param.include?('TB')
-        resource_hash['netapp::create_nfs_export'][title]['size'] = size_param.gsub(/TB/,'t')
+      if !size_param.nil?
+        if size_param.include?('GB')
+          resource_hash['netapp::create_nfs_export'][title]['size'] = size_param.gsub(/GB/,'g')
+        end
+        if size_param.include?('MB')
+          resource_hash['netapp::create_nfs_export'][title]['size'] = size_param.gsub(/MB/,'m')
+        end
+        if size_param.include?('TB')
+          resource_hash['netapp::create_nfs_export'][title]['size'] = size_param.gsub(/TB/,'t')
+        end
+      else
+        # default parameter which is not applicable if volume exists
+        resource_hash['netapp::create_nfs_export'][title]['size'] = '10g'
       end
 
       resource_hash['netapp::create_nfs_export'][title].delete('path')
       resource_hash['netapp::create_nfs_export'][title].delete('nfs_network')
       snapresv = resource_hash['netapp::create_nfs_export'][title]['snapresv']
-      resource_hash['netapp::create_nfs_export'][title]['snapresv'] = snapresv.to_s
+      if !snapresv.nil?
+        resource_hash['netapp::create_nfs_export'][title]['snapresv'] = snapresv.to_s
+      else
+        resource_hash['netapp::create_nfs_export'][title]['snapresv'] = '0'.to_s
+        resource_hash['netapp::create_nfs_export'][title]['append_readwrite'] = 'true'
+      end
 
       # handling anon
       resource_hash['netapp::create_nfs_export'][title].delete('anon')
@@ -1339,16 +1358,17 @@ class ASM::ServiceDeployment
       (resource_hash['asm::server'] || []).each do |title, params|
         type = params['os_image_type']
         version = params['os_image_version'] || params['os_image_type']
+        hyperv_cert_name = ASM::Util.hostname_to_certname(params['os_host_name'])
+        if os_image_type == 'hyperv' and is_retry? and ASM::Util.get_puppet_certs.include?(hyperv_cert_name)
+          logger.debug("Server #{params['hostname']} is configured correctly.")
+          reboot_required = false
+        end
+        
         begin
           logger.info("Waiting for razor to get reboot event...")
           razor.block_until_task_complete(serial_number, params['policy_name'], version, :bind)
-        rescue
-          
+        rescue          
           logger.info("Server never rebooted.  An old OS may be installed.  Manually rebooting to kick off razor install...")
-          if type == 'hyperv' and is_retry? and ASM::Util.get_puppet_certs.include?(hostname_to_certname(params['hostname']))
-              logger.debug("Server #{params['hostname']} is configured correctly.")
-              reboot_required = false
-          end
           ASM::WsMan.reboot({:host=>deviceconf['host'], :user=>deviceconf['user'], :password=>deviceconf['password']}) if reboot_required
         end
         node = razor.block_until_task_complete(serial_number,

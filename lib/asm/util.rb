@@ -12,6 +12,7 @@ module ASM
   module Util
 
     SERVER_RA_URL='http://localhost:9080/ServerRA/Server'
+    NETWORKS_RA_URL='http://localhost:9080/VirtualServices/Network'
     CHASSIS_RA_URL='http://localhost:9080/ChassisRA/Chassis'
     MANAGED_DEVICE_URL='http://localhost:9080/AsmManager/ManagedDevice'
     # TODO: give razor user access to this directory
@@ -298,6 +299,25 @@ module ASM
           end
         end
       end
+    end
+    
+    def self.update_compellent_resource_hash(storage_cert,r_hash,volume_name,logger)
+      resource_hash = r_hash.dup
+      facts = facts_find(storage_cert)
+      volume_properties = JSON.parse(facts['volume_data'])
+      vol_info = volume_properties['volume']
+      vol_info.each do |v_info|
+        if v_info['Name'][0] == volume_name
+          volume_size = v_info['ConfigSize'][0]
+          vol_size_data = volume_size.match(/(\d+).(\d+)\s+(\S+)/)
+          resource_hash['compellent::createvol'][volume_name]['size'] = "#{vol_size_data[1]}#{vol_size_data[3]}"
+          foldername = v_info['Folder'][0]
+          foldername = '' if foldername.size == 0
+          resource_hash['compellent::createvol'][volume_name]['volumefolder'] = foldername
+          break
+        end
+      end
+      resource_hash
     end
     
     def self.get_eql_volume_iqn(storage_cert,storage_title)
