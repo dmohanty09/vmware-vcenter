@@ -1752,7 +1752,7 @@ class ASM::ServiceDeployment
                         'require'                => [
                           "Esx_datastore[#{hostip}:#{storage_title}]",
                           "Esx_syslog[#{hostip}]"],
-                        'configure_mem'          => true,
+                        'configure_mem'          => false,
                         'install_mem'            => true,
                         'script_executable_path' => '/opt/Dell/scripts/EquallogicMEM',
                         'setup_script_filepath'  => 'setup.pl',
