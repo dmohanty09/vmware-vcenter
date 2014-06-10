@@ -36,9 +36,16 @@ module ASM
     end
 
     def find_node(serial_num)
-      get('nodes').collect { |node| get('nodes', node['name']) }.find do |details|
+      matches = get('nodes').collect { |node| get('nodes', node['name']) }.find_all do |details|
         details.extend Hashie::Extensions::DeepFetch
-        details.deep_fetch('facts', 'serialnumber') { |k| nil } == serial_num
+        details.deep_fetch('hw_info', 'serial') { |k| nil } == serial_num.downcase
+      end
+
+      if matches.size <= 1
+        matches.first
+      else
+        dups = matches.collect {|n| n['name']}.join(', ')
+        raise(Exception, "Multiple razor node matches found for serial number #{serial_num}: #{dups}")
       end
     end
 
