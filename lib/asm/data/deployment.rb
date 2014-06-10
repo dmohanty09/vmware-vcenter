@@ -76,16 +76,31 @@ EOT
       def create_execution(deployment_data)
         db.transaction do
           db['UPDATE executions SET "order" = "order" + 1 WHERE deployment_id = ?', id].update
+          query = <<EOT
+SELECT component_uuid, c.status
+       FROM deployments AS d JOIN executions AS e
+       ON d.id = e.deployment_id JOIN components AS c ON e.id = c.execution_id
+       WHERE e."order" = 1 AND d.id = ?
+EOT
+          old_statuses = db[query, id].inject({}) do |hash, element|
+            hash[element[:component_uuid]] = element[:status]
+            hash
+          end
           row = {:deployment_id => id, :order => 0, :status => 'in_progress'}
           self.execution_id = db[:executions].insert(row)
           self.component_ids = {}
           deployment_data['serviceTemplate']['components'].each do |comp|
+            status = if old_statuses[comp['id']]
+                       old_statuses[comp['id']]
+                     else
+                       'in_progress'
+                     end
             row = {:execution_id => execution_id,
                    :asm_guid => comp['asmGUID'],
                    :component_uuid => comp['id'],
                    :name => comp['name'],
                    :type => comp['type'],
-                   :status => 'in_progress'}
+                   :status => status}
             component_ids[comp['id']] = db[:components].insert(row)
           end
         end
