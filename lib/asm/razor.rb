@@ -59,9 +59,10 @@ module ASM
       end
     end
 
-    STATUS_ORDER = [ nil, :bind, :reboot, :boot_install, :boot_local, :boot_local_2, ]
+    STATUS_ORDER = [nil, :microkernel, :bind, :reboot, :boot_install, :boot_local, :boot_local_2,]
 
-    class InvalidStatusException     < Error; end
+    class InvalidStatusException < Error;
+    end
 
     def cmp_status(status_1, status_2)
       index_1 = STATUS_ORDER.find_index(status_1) or raise(InvalidStatusException, "Invalid status: #{status_1}")
@@ -73,6 +74,7 @@ module ASM
     # corresponding to policy_name, or nil if none is found.
     #
     # Possible statuses (in order of occurrence) are:
+    #   :microkernel - node has booted the razor microkernel
     #   :bind - razor policy has been attached to the node
     #   :reboot - node has rebooted to begin running O/S installer
     #   :boot_install - node has booted into the O/S installer
@@ -89,38 +91,44 @@ module ASM
       n_boot_local = 0
       logs.each do |log|
         # Check for policy-related events
-        if log['event'] == 'bind'
-          if log['policy'] == policy_name
-            ret = :bind
-          else
-            ret = nil
-          end
-          n_boot_local = 0
-        elsif log['event'] == 'reinstall'
-          ret = nil
-        end
-
-        if ret && log['action'] == 'reboot' && log['policy'] == policy_name
-          ret = :reboot
-        end
-
-        # If we have seen a policy event for our policy, look for boot events
-        if ret && log['event'] == 'boot'
-          case log['template']
-            when 'boot_install'
-              ret = :boot_install
-            when 'boot_wim' # for windows
-              ret = :boot_install
-            when 'boot_local'
-              if n_boot_local == 0
-                ret = :boot_local
-              else
-                ret = :boot_local_2
-              end
-              n_boot_local += 1
+        case log['event']
+          when 'bind'
+            if log['policy'] == policy_name
+              ret = :bind
             else
-              logger.warn("Unknown boot template #{log['template']}") if logger
-          end
+              ret = nil
+            end
+            n_boot_local = 0
+          when 'reinstall'
+            ret = nil
+          when 'boot'
+            if ret
+              case log['template']
+                when 'boot_install'
+                  ret = :boot_install
+                when 'boot_wim' # for windows
+                  ret = :boot_install
+                when 'boot_local'
+                  if n_boot_local == 0
+                    ret = :boot_local
+                  else
+                    ret = :boot_local_2
+                  end
+                  n_boot_local += 1
+                else
+                  logger.warn("Unknown boot template #{log['template']}") if logger
+              end
+            elsif log['task'] == 'microkernel'
+              # NOTE: The bind event has not occurred yet, so we don't really know
+              # if this event will result in progress towards installing the specified
+              # policy. Nevertheless this is useful status information, i.e.
+              # that razor is progressing.
+              ret = :microkernel
+            end
+          else
+            if ret && log['action'] == 'reboot' && log['policy'] == policy_name
+              ret = :reboot
+            end
         end
       end
       ret
@@ -146,10 +154,10 @@ module ASM
     def block_until_task_complete(serial_number, policy_name, task_name, terminal_status = nil)
       # The vmware ESXi installer has to reboot twice before being complete
       terminal_status ||= if task_name.start_with?('vmware') || task_name.start_with?('windows')
-                          :boot_local_2
-                        else
-                          :boot_local
-                        end
+                            :boot_local_2
+                          else
+                            :boot_local
+                          end
       logger.debug("Waiting for server #{serial_number} to PXE boot") if logger
       node = find_node_blocking(serial_number, 600) or
           raise(UserException, "Server #{serial_number} failed to PXE boot")
@@ -158,6 +166,7 @@ module ASM
 
       # Max time to wait at each stage
       max_times = {nil => 300,
+                   :microkernel => 300,
                    :bind => 300,
                    :reboot => 300,
                    # for esxi / linux most of the install happens in :boot_install
