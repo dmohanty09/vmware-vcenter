@@ -1436,7 +1436,7 @@ class ASM::ServiceDeployment
       end
     end
   end
-
+    
   # Find components of the given type which are related to component
   def find_related_components(type, component)
     related_hash = component['relatedComponents']
@@ -1559,6 +1559,7 @@ class ASM::ServiceDeployment
 
   def process_cluster(component)
     cert_name = component['puppetCertName']
+    ha_clusters = []
     raise(Exception, 'Component has no certname') unless cert_name
     log("Processing cluster component: #{cert_name}")
 
@@ -1572,6 +1573,9 @@ class ASM::ServiceDeployment
     (resource_hash['asm::cluster'] || {}).each do |title, params|
       resource_hash['asm::cluster'][title]['vcenter_options'] = { 'insecure' => true }
       resource_hash['asm::cluster'][title]['ensure'] = 'present'
+      if ASM::Util.to_boolean params['ha_config'] 
+        ha_clusters.push "#{params['datacenter']}/#{params['cluster']}"
+      end
 
       # Add ESXi hosts and creds as separte resources
       (find_related_components('SERVER', component) || []).each do |server_component|
@@ -1596,6 +1600,7 @@ class ASM::ServiceDeployment
               raise(Exception, msg)
             end
             hostip = static['ipAddress']
+
 
             raise(Exception, "Could not find host ip for #{server_cert}") unless hostip
             serverdeviceconf = ASM::Util.parse_device_config(server_cert)
@@ -1768,7 +1773,6 @@ class ASM::ServiceDeployment
                         'require'                => [
                           "Esx_datastore[#{hostip}:#{storage_title}]",
                           "Esx_syslog[#{hostip}]"],
-                        'configure_mem'          => true,
                         'install_mem'            => true,
                         'script_executable_path' => '/opt/Dell/scripts/EquallogicMEM',
                         'setup_script_filepath'  => 'setup.pl',
@@ -1781,12 +1785,12 @@ class ASM::ServiceDeployment
                         'vnics'                  => vnics,
                         'vnics_ipaddress'        => vnics_ipaddress
                       }
-                      if storage_params.has_key? 'chap_user_name' and not storage_params['chap_user_name'].empty?
-                        chap = {
-                          'iscsi_chapuser'         => storage_params['chap_user_name'],
-                          'iscsi_chapsecret'       => storage_params['passwd'] }
-                        esx_mem.merge! chap
-                      end
+#                      if storage_params.has_key? 'chap_user_name' and not storage_params['chap_user_name'].empty?
+#                        chap = {
+#                          'iscsi_chapuser'         => storage_params['chap_user_name'],
+#                          'iscsi_chapsecret'       => storage_params['passwd'] }
+#                        esx_mem.merge! chap
+#                      end
                       resource_hash['esx_mem'] ||= {}
                       resource_hash['esx_mem'][hostip] = esx_mem
                     else # We will set up round robin pathing here
@@ -1881,6 +1885,7 @@ class ASM::ServiceDeployment
       # Try it again for good measure.
       process_generic(cert_name, resource_hash, 'apply')
       mark_vcenter_as_needs_update(component['asmGUID'])
+      reconfigure_ha_for_clusters(cert_name, ha_clusters)
     end
   end
 
@@ -2920,6 +2925,31 @@ class ASM::ServiceDeployment
         )
       end
     end
+  end
+
+  def reconfigure_ha_for_clusters(certname, clusters)
+    conf = ASM::Util.parse_device_config(certname)
+    require 'rbvmomi'
+
+    options = {
+      :host => conf.host,
+      :user => conf.user,
+      :password => conf.password,
+      :insecure => true,
+    }
+    vim = RbVmomi::VIM.connect(options)
+    clusters.each do |path|
+      dc = vim.serviceInstance.find_datacenter(path.split('/').first)
+      dc.hostFolder.childEntity.each do |cluster|
+        if cluster.name == path.split('/').last
+          cluster.host.each do |host|
+            host.ReconfigureHostForDAS_Task
+          end 
+        end
+      end
+    end
+    # we must wait for these tasks to finish
+    sleep (300)
   end
 
 end
