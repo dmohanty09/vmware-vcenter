@@ -1436,7 +1436,7 @@ class ASM::ServiceDeployment
       end
     end
   end
-    
+
   # Find components of the given type which are related to component
   def find_related_components(type, component)
     related_hash = component['relatedComponents']
@@ -1559,7 +1559,7 @@ class ASM::ServiceDeployment
 
   def process_cluster(component)
     cert_name = component['puppetCertName']
-    ha_clusters = []
+    hadrs_clusters = {}
     raise(Exception, 'Component has no certname') unless cert_name
     log("Processing cluster component: #{cert_name}")
 
@@ -1573,8 +1573,19 @@ class ASM::ServiceDeployment
     (resource_hash['asm::cluster'] || {}).each do |title, params|
       resource_hash['asm::cluster'][title]['vcenter_options'] = { 'insecure' => true }
       resource_hash['asm::cluster'][title]['ensure'] = 'present'
-      if ASM::Util.to_boolean params['ha_config'] 
-        ha_clusters.push "#{params['datacenter']}/#{params['cluster']}"
+
+      # remove ha and drs configs from the cluster hash 
+      ha_config = resource_hash['asm::cluster'][title].delete 'ha_config'
+      drs_config = resource_hash['asm::cluster'][title].delete 'drs_config'
+      hadrs_clusters[title] ||= {}
+      cluster_path = "/#{params['datacenter']}/#{params['cluster']}"
+      if ASM::Util.to_boolean ha_config
+        hadrs_clusters[title][cluster_path] ||= {}
+        hadrs_clusters[title][cluster_path]['ha_config'] = true 
+      end
+      if ASM::Util.to_boolean drs_config
+        hadrs_clusters[title][cluster_path] ||= {}
+        hadrs_clusters[title][cluster_path]['drs_config'] = true 
       end
 
       # Add ESXi hosts and creds as separte resources
@@ -1592,7 +1603,6 @@ class ASM::ServiceDeployment
             network_config = ASM::NetworkConfiguration.new(network_params['network_configuration'], logger)
             mgmt_network = network_config.get_network('HYPERVISOR_MANAGEMENT')
             static = mgmt_network['staticNetworkConfiguration']
-            static = mgmt_network['staticNetworkConfiguration']
             unless static
               # This should have already been checked previously
               msg = "Static network is required for hypervisor network"
@@ -1600,7 +1610,6 @@ class ASM::ServiceDeployment
               raise(Exception, msg)
             end
             hostip = static['ipAddress']
-
 
             raise(Exception, "Could not find host ip for #{server_cert}") unless hostip
             serverdeviceconf = ASM::Util.parse_device_config(server_cert)
@@ -1785,12 +1794,6 @@ class ASM::ServiceDeployment
                         'vnics'                  => vnics,
                         'vnics_ipaddress'        => vnics_ipaddress
                       }
-#                      if storage_params.has_key? 'chap_user_name' and not storage_params['chap_user_name'].empty?
-#                        chap = {
-#                          'iscsi_chapuser'         => storage_params['chap_user_name'],
-#                          'iscsi_chapsecret'       => storage_params['passwd'] }
-#                        esx_mem.merge! chap
-#                      end
                       resource_hash['esx_mem'] ||= {}
                       resource_hash['esx_mem'][hostip] = esx_mem
                     else # We will set up round robin pathing here
@@ -1885,7 +1888,27 @@ class ASM::ServiceDeployment
       # Try it again for good measure.
       process_generic(cert_name, resource_hash, 'apply')
       mark_vcenter_as_needs_update(component['asmGUID'])
-      reconfigure_ha_for_clusters(cert_name, ha_clusters)
+      
+      # Running configuration for HA and DRS well after the clusters and their datastores are setup
+      hadrs_hash = {}
+      hadrs_clusters.each do |title, clusters|
+        clusters.each do |cluster_path,flags|
+          hadrs_hash['asm::cluster::vcenter_hadrs'] ||= {}
+          hadrs_hash['asm::cluster::vcenter_hadrs'][title] ||= {}
+          hadrs_hash['asm::cluster::vcenter_hadrs'][title]['cluster_path'] = cluster_path
+          hadrs_hash['asm::cluster::vcenter_hadrs'][title]['vcenter_options'] = { 'insecure' => true }
+          if flags.has_key? 'ha_config'
+            hadrs_hash['asm::cluster::vcenter_hadrs'][title]['ha_config'] = true
+          end
+          if flags.has_key? 'drs_config'
+            hadrs_hash['asm::cluster::vcenter_hadrs'][title]['drs_config'] = true
+          end
+        end
+      end
+      if not hadrs_hash.empty?
+        process_generic(cert_name, hadrs_hash, 'apply')
+      end
+      #reconfigure_ha_for_clusters(cert_name, ha_clusters)
     end
   end
 
