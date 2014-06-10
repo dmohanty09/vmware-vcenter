@@ -1436,7 +1436,7 @@ class ASM::ServiceDeployment
       end
     end
   end
-    
+
   # Find components of the given type which are related to component
   def find_related_components(type, component)
     related_hash = component['relatedComponents']
@@ -1600,7 +1600,6 @@ class ASM::ServiceDeployment
               raise(Exception, msg)
             end
             hostip = static['ipAddress']
-
 
             raise(Exception, "Could not find host ip for #{server_cert}") unless hostip
             serverdeviceconf = ASM::Util.parse_device_config(server_cert)
@@ -1785,12 +1784,6 @@ class ASM::ServiceDeployment
                         'vnics'                  => vnics,
                         'vnics_ipaddress'        => vnics_ipaddress
                       }
-#                      if storage_params.has_key? 'chap_user_name' and not storage_params['chap_user_name'].empty?
-#                        chap = {
-#                          'iscsi_chapuser'         => storage_params['chap_user_name'],
-#                          'iscsi_chapsecret'       => storage_params['passwd'] }
-#                        esx_mem.merge! chap
-#                      end
                       resource_hash['esx_mem'] ||= {}
                       resource_hash['esx_mem'][hostip] = esx_mem
                     else # We will set up round robin pathing here
