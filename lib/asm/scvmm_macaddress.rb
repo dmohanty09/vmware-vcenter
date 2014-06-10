@@ -22,7 +22,7 @@ def winrm
   )
 end
 
-result = winrm.powershell("Import-Module VirtualMachineManager; Get-VM -Name #{@opts[:vmname]} | Select -ExpandProperty Virtualnetworkadapters | Select MACAddress")
+result = winrm.powershell("Import-Module VirtualMachineManager; Get-VMMServer -ComputerName localhost; Get-VM -Name #{@opts[:vmname]} | Select -ExpandProperty Virtualnetworkadapters | Select MACAddress")
 stdout = result[:data].collect{|l| l[:stdout]}.join
 puts stdout 
 exit 0

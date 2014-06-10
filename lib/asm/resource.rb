@@ -212,7 +212,8 @@ module ASM
             result = ASM::Util.run_command_success("#{cmd} -u '#{user}' -d '#{domain}' -p '#{@conf.password}' -s #{@conf.host} -v #{self.hostname||@hostname}")
           end
           result = result.stdout.each_line.collect{|line| line.chomp.rstrip.gsub(':', '')}
-          macaddress = result.find{|x| x =~ /^[0-9a-fA-F]{12}$/}
+          macaddress = result.find{|x| x =~ /^MACAddress\s+[0-9a-fA-F]{12}$/}
+          macaddress = macaddress.match(/MACAddress\s+(\S+)/)[1]
           raise(Exception, 'Virtual machine needs to power on first.') if macaddress == '00000000000000'
           macaddress
         end
