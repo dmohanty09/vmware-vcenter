@@ -2273,6 +2273,45 @@ class ASM::ServiceDeployment
     @components_by_type ||= {}
     @components_by_type[type] = components
   end
+  
+  #Resets VirtualMac Addresses to permanent mac addresses
+  def cleanup_server(server_component, old_server_cert)
+    server_conf = ASM::Util.build_component_configuration(server_component, :decrypt => decrypt?)
+    server_cert = server_component['puppetCertName']
+    network_params = (server_conf['asm::esxiscsiconfig'] || {})[server_cert]
+    net_config = nil
+    device_conf = {}
+    # get fabric information
+    if network_params
+      net_config = ASM::NetworkConfiguration.new(network_params['network_configuration'])
+      device_conf = ASM::Util.parse_device_config(old_server_cert)
+      options = { :add_partitions => true }
+      net_config.add_nics!(device_conf, options)
+      logger.debug("Resetting virtual mac addresses to permanent mac addresses for: #{old_server_cert}")
+      net_config.reset_virt_mac_addr(device_conf)
+
+      network_params['network_configuration'] = net_config.to_hash
+      server_conf.delete('asm::server')
+      server_conf.delete('asm::baseserver')
+      server_conf.delete('asm::esxiscsiconfig')
+      # Rename the cert name in the resource hash from new cert to old certname
+      new_conf = {}
+      new_conf['asm::idrac'] = Hash[server_conf['asm::idrac'].map {|k,v| [old_server_cert,v]}]
+      #new_conf['asm::esxiscsiconfig'] = Hash[server_conf['asm::esxiscsiconfig'].map {|k,v| [old_server_cert,v]}]
+
+      inventory = ASM::Util.fetch_server_inventory(old_server_cert)
+      new_conf['asm::idrac'][old_server_cert]['nfsipaddress'] = ASM::Util.get_preferred_ip(device_conf[:host])
+      new_conf['asm::idrac'][old_server_cert]['nfssharepath'] = '/var/nfs/idrac_config_xml'
+      new_conf['asm::idrac'][old_server_cert]['servicetag'] = inventory['serviceTag']
+      new_conf['asm::idrac'][old_server_cert]['model'] = inventory['model'].split(' ').last.downcase
+      new_conf['asm::idrac'][old_server_cert]['network_configuration'] =  net_config.to_hash
+
+      new_conf['asm::idrac'][old_server_cert]['target_ip'] =  '0.0.0.0'
+      new_conf['asm::idrac'][old_server_cert]['target_iscsi'] =  ''
+
+      process_generic(old_server_cert, new_conf, 'apply', 'true')
+    end
+  end
 
   private
 
@@ -2880,42 +2919,7 @@ class ASM::ServiceDeployment
     end
   end
 
-  #Resets VirtualMac Addresses to permanent mac addresses
-  def cleanup_server(server_component, old_server_cert)
-    server_conf = ASM::Util.build_component_configuration(server_component, :decrypt => decrypt?)
-    server_cert = server_component['puppetCertName']
-    network_params = (server_conf['asm::esxiscsiconfig'] || {})[server_cert]
-    net_config = nil
-    device_conf = {}
-    # get fabric information
-    if network_params
-      net_config = ASM::NetworkConfiguration.new(network_params['network_configuration'])
-      device_conf = ASM::Util.parse_device_config(old_server_cert)
-      options = { :add_partitions => true }
-      net_config.add_nics!(device_conf, options)
-      logger.debug("Resetting virtual mac addresses to permanent mac addresses for: #{old_server_cert}")
-      net_config.reset_virt_mac_addr(device_conf)
-
-      network_params['network_configuration'] = net_config.to_hash
-      server_conf.delete('asm::server')
-      server_conf.delete('asm::baseserver')
-      server_conf.delete('asm::esxiscsiconfig')
-      # Rename the cert name in the resource hash from new cert to old certname
-      new_conf = {}
-      new_conf['asm::idrac'] = Hash[server_conf['asm::idrac'].map {|k,v| [old_server_cert,v]}]
-      #new_conf['asm::esxiscsiconfig'] = Hash[server_conf['asm::esxiscsiconfig'].map {|k,v| [old_server_cert,v]}]
-
-      inventory = ASM::Util.fetch_server_inventory(old_server_cert)
-      new_conf['asm::idrac'][old_server_cert]['nfsipaddress'] = ASM::Util.get_preferred_ip(device_conf[:host])
-      new_conf['asm::idrac'][old_server_cert]['nfssharepath'] = '/var/nfs/idrac_config_xml'
-      new_conf['asm::idrac'][old_server_cert]['servicetag'] = inventory['serviceTag']
-      new_conf['asm::idrac'][old_server_cert]['model'] = inventory['model'].split(' ').last.downcase
-      new_conf['asm::idrac'][old_server_cert]['network_configuration'] =  net_config.to_hash
-
-      process_generic(old_server_cert, new_conf, 'apply', 'true')
-    end
-  end
-
+  
   def get_vlan_info(partition_network_objects,target_boot_device,os_image_type)
     vlan_info = {}
     vlan_info['tagged'] = []

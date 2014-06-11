@@ -106,10 +106,13 @@ module ASM
   # TODO: 404 on not found
 
   def self.clean_deployment(id)
-    data = ASM::Data::Deployment.new(database)
-    data.load(deployment['id'])
-    data.delete
-    ASM::DeploymentTeardown.clean_deployment(id, logger)
+    Thread.new do
+      ASM::DeploymentTeardown.clean_deployment(id, logger)
+      deployment = ASM::DeploymentTeardown.deployment_data(id)
+      data = ASM::Data::Deployment.new(database)
+      data.load(deployment['id'])
+      data.delete
+    end
   end
 
   def self.retry_deployment(id, deployment)
