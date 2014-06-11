@@ -91,7 +91,7 @@ module ASM
     deployment['migration'] = 'true'
     deployment['retry'] = 'true'
     data = ASM::Data::Deployment.new(database)
-    data.create(deployment['id'], deployment['deploymentName'])
+    data.load(deployment['id'])
     ASM.process_deployment(deployment, data)
   end
 
