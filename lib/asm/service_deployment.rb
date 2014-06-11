@@ -845,6 +845,10 @@ class ASM::ServiceDeployment
         ioaslots = ["C1", "C2"]
       end
       
+      if !server_vlan_info[fabric]
+        logger.debug("No VLANs requested for fabric #{fabric}")
+        next
+      end
       
       switchportdetail.each do |switchportdetailhash|
         switchportdetailhash.each do |macaddress,intfhashes|
@@ -853,14 +857,20 @@ class ASM::ServiceDeployment
           logger.debug "macaddress :: #{macaddress}, intfhash :: #{intfhashes}"
           logger.debug "IOA Slots to process: #{ioaslots}"
           
+          port_count = 0
           intfhashes.each_with_index do |intfhash,index|
             ioaslot = intfhash[2]
             if !ioaslots.include?(ioaslot)
               next
+            else
+              port_count +=1
             end
+            #port_count = index + 1
+            logger.debug("Port count: #{port_count}, index: #{index}")
+            logger.debug("port_count: #{port_count}")
             
-            port_count = index + 1
             vlan_for_port = server_vlan_info[fabric]["Port #{port_count}"]
+            logger.debug("vlan_for_port: #{vlan_for_port}")
             tagged_vlans = vlan_for_port['tagged']
             untagged_vlans = vlan_for_port['untagged']
             if tagged_vlans.length == 0 and untagged_vlans == 0
