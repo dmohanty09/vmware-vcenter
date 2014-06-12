@@ -22,8 +22,9 @@ module ASM
 
     class Deployment
 
-      VALID_STATUS_LIST = %w(in_progress complete error)
+      VALID_STATUS_LIST = %w(pending in_progress complete error cancelled)
       TERMINAL_STATUS_LIST = %w(complete error)
+      INCOMPLETE_STATUS_LIST = %w(pending in_progress)
 
       VALID_LOG_LEVEL_LIST = %w(debug info warn error)
 
@@ -47,7 +48,10 @@ EOT
             msg = "Marking deployment #{row[:name]} ##{row[:deployment_id]} as error"
             logger.info(msg) if logger
             db[:executions].where(:id => row[:execution_id]).update(
-                :status => 'error', :message => 'Deployment aborted due to reboot')
+                :status => 'error', :message => 'Aborted due to reboot')
+            db[:components].where(:execution_id => row[:execution_id],
+                                  :status => INCOMPLETE_STATUS_LIST).update(
+                :status => 'cancelled', :message => 'Aborted due to reboot')
           end
         end
       end
@@ -93,7 +97,7 @@ EOT
             status = if old_statuses[comp['id']]
                        old_statuses[comp['id']]
                      else
-                       'in_progress'
+                       'pending'
                      end
             row = {:execution_id => execution_id,
                    :asm_guid => comp['asmGUID'],
@@ -156,9 +160,16 @@ EOT
                   'UPDATE executions SET status = ? WHERE id = ?'
                 end
 
-        unless db[query, status, execution_id].update == 1
-          msg = "Failed to set deployment #{id} execution #{execution_id} status to #{status}"
-          raise(UpdateFailed, msg)
+        db.transaction do
+          unless db[query, status, execution_id].update == 1
+            msg = "Failed to set deployment #{id} execution #{execution_id} status to #{status}"
+            raise(UpdateFailed, msg)
+          end
+          if TERMINAL_STATUS_LIST.include?(status)
+            db[:components].where(:execution_id => execution_id,
+                                  :status => 'pending').update(
+                :status => 'cancelled')
+          end
         end
       end
 
