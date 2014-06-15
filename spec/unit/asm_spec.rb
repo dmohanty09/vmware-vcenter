@@ -50,7 +50,7 @@ describe ASM do
         mock_deployment_db.stub_everything
         [@basic_data_1, @basic_data_2].collect do |data|
           Thread.new do
-            ASM.process_deployment(data, mock_deployment_db)
+            ASM.process_deployment(data, mock_deployment_db) {}
           end
         end.each do |thd|
           thd.join
