@@ -55,10 +55,12 @@ module ASM
     @database or raise(UninitializedException)
   end
 
-  # serves as a single place to create all deployments
-  # ensures that only a single deployment is not done
-  # at the same time
-  def self.process_deployment(data, deployment_db)
+  # Serves as a single place to execute deployments and ensure that the same
+  # deployment is not executed more than once concurrently.
+  #
+  # setup_block will be executed within the exclusion so that it is not
+  # executed concurrently either.
+  def self.process_deployment(data, deployment_db, &setup_block)
     id = data['id']
     service_deployment = nil
     unless @deployment_mutex
@@ -70,6 +72,8 @@ module ASM
             )
     end
     begin
+      yield setup_block
+
       service_deployment = ASM::ServiceDeployment.new(id, deployment_db)
       service_deployment.debug = ASM::Util.to_boolean(data['debug'])
       service_deployment.noop = ASM::Util.to_boolean(data['noop'])
@@ -85,22 +89,24 @@ module ASM
     payload = request.body.read
     deployment = JSON.parse(payload)
 
-    ASM::ServiceMigrationDeployment.prep_deployment_dir(deployment)
-
-    ASM.logger.info('Initiating the server migration')
-    deployment['migration'] = 'true'
-    deployment['retry'] = 'true'
     data = ASM::Data::Deployment.new(database)
-    data.load(deployment['id'])
-    ASM.process_deployment(deployment, data)
+    ASM.process_deployment(deployment, data) do
+      ASM::ServiceMigrationDeployment.prep_deployment_dir(deployment)
+
+      ASM.logger.info('Initiating the server migration')
+      deployment['migration'] = 'true'
+      deployment['retry'] = 'true'
+      data.load(deployment['id'])
+    end
   end
 
   def self.process_deployment_request(request)
     payload = request.body.read
     deployment = JSON.parse(payload)
     data = ASM::Data::Deployment.new(database)
-    data.create(deployment['id'], deployment['deploymentName'])
-    ASM.process_deployment(deployment, data)
+    ASM.process_deployment(deployment, data) do
+      data.create(deployment['id'], deployment['deploymentName'])
+    end
   end
 
   # TODO: 404 on not found
@@ -116,12 +122,13 @@ module ASM
   end
 
   def self.retry_deployment(id, deployment)
-    ASM::UpdateDeployment.backup_deployment_dirs(id,deployment)
-
-    ASM.logger.info("Re-running deployment; this will take awhile ...")
     data = ASM::Data::Deployment.new(database)
-    data.load(deployment['id'])
-    ASM.process_deployment(deployment, data)
+    ASM.process_deployment(deployment, data) do
+      ASM::UpdateDeployment.backup_deployment_dirs(id,deployment)
+
+      ASM.logger.info("Re-running deployment; this will take awhile ...")
+      data.load(deployment['id'])
+    end
   end
 
   def self.get_deployment_status(asm_guid)
