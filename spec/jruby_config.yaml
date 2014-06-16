@@ -1,2 +1,4 @@
 ---
 database_url: 'jdbc:postgresql:asm_dev?user=orion&password=Password123$'
+base_dir: '/opt/Dell/ASM/deployments'
+logger: "require 'logger'; Logger.new('/opt/Dell/ASM/deployments/asm_puppet.log')"
