@@ -213,6 +213,15 @@ module ASM
           end
           result = result.stdout.each_line.collect{|line| line.chomp.rstrip.gsub(':', '')}
           macaddress = result.find{|x| x =~ /^MACAddress\s+[0-9a-fA-F]{12}$/}
+          if macaddress.nil?
+            # It seems MAC address is not available, wait for a minute before retrying
+            sleep(60)
+            Bundler.with_clean_env do
+              result = ASM::Util.run_command_success("#{cmd} -u '#{user}' -d '#{domain}' -p '#{@conf.password}' -s #{@conf.host} -v #{self.hostname||@hostname}")
+            end
+            result = result.stdout.each_line.collect{|line| line.chomp.rstrip.gsub(':', '')}
+            macaddress = result.find{|x| x =~ /^MACAddress\s+[0-9a-fA-F]{12}$/}
+          end
           macaddress = macaddress.match(/MACAddress\s+(\S+)/)[1]
           raise(Exception, 'Virtual machine needs to power on first.') if macaddress == '00000000000000'
           macaddress
