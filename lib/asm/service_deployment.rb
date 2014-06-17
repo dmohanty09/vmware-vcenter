@@ -852,7 +852,7 @@ class ASM::ServiceDeployment
       
       switchportdetail.each do |switchportdetailhash|
         switchportdetailhash.each do |macaddress,intfhashes|
-          resource_hash = Hash.new
+          #resource_hash = Hash.new
           switchcertname = ""
           logger.debug "macaddress :: #{macaddress}, intfhash :: #{intfhashes}"
           logger.debug "IOA Slots to process: #{ioaslots}"
@@ -865,11 +865,30 @@ class ASM::ServiceDeployment
             else
               port_count +=1
             end
+            
+            resource_hash = Hash.new
             #port_count = index + 1
             logger.debug("Port count: #{port_count}, index: #{index}")
             logger.debug("port_count: #{port_count}")
             
             vlan_for_port = server_vlan_info[fabric]["Port #{port_count}"]
+            # For quater height blades, the ordering of the NICS has to be reversed for slot b and d
+            server = serverhash.keys[0]
+            logger.debug("Server hash: #{serverhash[server]}")
+            if serverhash[server]['servermodel'] == "M420"
+              logger.debug("Server is M420, need to some tweaks to the vlan for slot b and d")
+              slot_num = serverhash[server]['slot_num']
+              if slot_num.include?('b') or slot_num.include?('d')
+                logger.debug("Server is in slot b/d")
+                if port_count == 1
+                  vlan_for_port = server_vlan_info[fabric]["Port 2"]
+                elsif port_count == 2
+                  vlan_for_port = server_vlan_info[fabric]["Port 1"]
+                end
+              end
+            end
+
+            
             logger.debug("vlan_for_port: #{vlan_for_port}")
             tagged_vlans = vlan_for_port['tagged']
             untagged_vlans = vlan_for_port['untagged']
@@ -1065,7 +1084,8 @@ class ASM::ServiceDeployment
     servicetag = inv['serviceTag']
     model = inv['model'].split(' ').last
     logger.debug "servicetag :: #{servicetag} model :: #{model}\n"
-    if (model =~ /R620/ || model =~ /R720/)
+    server_type = inv['serverType']
+    if server_type != 'BLADE'
       serverpropertyhash['bladetype'] = "rack"
     else
       serverpropertyhash['bladetype'] = "blade"
