@@ -1,2 +1,4 @@
 ---
 database_url: 'postgres://orion:Password123$@localhost/asm_dev'
+base_dir: '/opt/Dell/ASM/deployments'
+logger: "require 'logger'; Logger.new('/opt/Dell/ASM/deployments/asm_puppet.log')"

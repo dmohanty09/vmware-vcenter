@@ -39,16 +39,24 @@ module ASM
     end
   end
 
+  def self.config
+    @config
+  end
+
   def self.base_dir
     @base_dir ||= begin
-      dir = '/opt/Dell/ASM/deployments'
+      dir = config.base_dir
       FileUtils.mkdir_p(dir)
       dir
     end
   end
 
   def self.logger
-    @logger ||= Logger.new(File.join(base_dir, 'asm_puppet.log'))
+    @logger ||= begin
+      # NOTE: using eval to build the logger. Anyone with write access to our
+      # config file can do code injection. Do not do this with user-provided input!
+      eval(config.logger)
+    end
   end
 
   def self.database
