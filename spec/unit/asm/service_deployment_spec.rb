@@ -286,8 +286,6 @@ describe ASM::ServiceDeployment do
 
   describe 'when checking agent status' do
     before do
-      Time.stubs(:now).returns(Time.new("1969-01-01 00:00:00 -0600"))
-      
       RestClient.stubs(:get)
         .with(URI.escape("http://localhost:7080/v3/nodes?query=[\"and\", [\"=\", [\"node\", \"active\"], true], [\"=\", \"name\", \"host\"]]]"),
         {:content_type => :json, :accept => :json})
@@ -296,7 +294,7 @@ describe ASM::ServiceDeployment do
       RestClient.stubs(:get)
         .with(URI.escape("http://localhost:7080/v3/reports?query=[\"=\", \"certname\", \"host\"]&order-by=[{\"field\": \"receive-time\", \"order\": \"desc\"}]&limit=1"),
         {:content_type => :json, :accept => :json})
-          .returns('[{"receive-time":"1969-01-01 01:00:00 -0600", "hash":"fooreport"}]')
+          .returns('[{"receive-time":"1970-01-01 01:00:00 +0000", "hash":"fooreport"}]')
     end
 
     it 'should be able to detect when a node has checked in' do
@@ -305,7 +303,7 @@ describe ASM::ServiceDeployment do
         {:content_type => :json, :accept => :json})
          .returns('[{"name":"host"}]')
 
-      ASM::ServiceDeployment.new('123', @deployment_db).await_agent_run_completion('host', 10).should be_true
+      ASM::ServiceDeployment.new('123', @deployment_db).await_agent_run_completion('host', Time.at(0), 1).should be_true
     end
 
     it 'should raise PuppetEventException if a node has a recent failed event' do
@@ -315,7 +313,7 @@ describe ASM::ServiceDeployment do
          .returns('[{"name":"host", "status":"failure"}]')
 
 
-      expect{ASM::ServiceDeployment.new('123', @deployment_db).await_agent_run_completion('host', 10)}.to raise_exception(ASM::ServiceDeployment::PuppetEventException)
+      expect{ASM::ServiceDeployment.new('123', @deployment_db).await_agent_run_completion('host', Time.at(0), 1)}.to raise_exception(ASM::ServiceDeployment::PuppetEventException)
     end 
   end
 

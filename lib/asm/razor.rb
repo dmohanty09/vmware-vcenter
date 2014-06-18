@@ -94,32 +94,33 @@ module ASM
     # policy_name is reused for more than one install this will cause p
     def task_status(node_name, policy_name)
       logs = get('nodes', node_name, 'log')
-      ret = nil
+      result = nil
       n_boot_local = 0
       logs.each do |log|
         # Check for policy-related events
+        timestamp = Time.parse(log['timestamp'])
         case log['event']
           when 'bind'
             if log['policy'] == policy_name
-              ret = :bind
+              result = {:status=> :bind, :timestamp => timestamp}
             else
-              ret = nil
+              result = {:status=> nil, :timestamp => timestamp}
             end
             n_boot_local = 0
           when 'reinstall'
-            ret = nil
+            result = {:status=> nil, :timestamp => timestamp}
           when 'boot'
-            if ret
+            if result
               case log['template']
                 when 'boot_install'
-                  ret = :boot_install
+                  result = {:status=> :boot_install, :timestamp => timestamp}
                 when 'boot_wim' # for windows
-                  ret = :boot_install
+                  result = {:status=> :boot_install, :timestamp => timestamp}
                 when 'boot_local'
                   if n_boot_local == 0
-                    ret = :boot_local
+                    result = {:status=> :boot_local, :timestamp => timestamp}
                   else
-                    ret = :boot_local_2
+                    result = {:status=> :boot_local_2, :timestamp => timestamp}
                   end
                   n_boot_local += 1
                 else
@@ -130,15 +131,15 @@ module ASM
               # if this event will result in progress towards installing the specified
               # policy. Nevertheless this is useful status information, i.e.
               # that razor is progressing.
-              ret = :microkernel
+              result = {:status=> :microkernel, :timestamp => timestamp}
             end
           else
-            if ret && log['action'] == 'reboot' && log['policy'] == policy_name
-              ret = :reboot
+            if result && log['action'] == 'reboot' && log['policy'] == policy_name
+              result = {:status=> :reboot, :timestamp => timestamp}
             end
         end
       end
-      ret
+      result
     end
 
     def os_name(task_name)
@@ -182,23 +183,24 @@ module ASM
                    :boot_local => 2700,
                    :boot_local_2 => 600}
       status = nil
+      result = nil
       while cmp_status(status, terminal_status) < 0
         timeout = max_times[status] or raise(Exception, "Invalid status #{status}")
         begin
-          new_status = ASM::Util.block_and_retry_until_ready(timeout, ASM::CommandException, 60) do
+          result = new_status = ASM::Util.block_and_retry_until_ready(timeout, ASM::CommandException, 60) do
             temp_status = task_status(node['name'], policy_name)
-            logger.debug("Current install status for server #{serial_number} and policy #{policy_name} is #{temp_status}") if logger
-            if temp_status == status
+            logger.debug("Current install status for server #{serial_number} and policy #{policy_name} is #{temp_status[:status]}") if logger
+            if temp_status[:status] == status
               raise(ASM::CommandException, "Task status remains #{status}")
             else
               temp_status
             end
           end
-
-          if new_status == status
+          result = new_status
+          if new_status[:status] == status
             raise(UserException, "Server #{serial_number} O/S install has failed to make progress, aborting.")
           else
-            status = new_status
+            status = new_status[:status]
           end
 
           logger.debug("Server #{serial_number} O/S status has progressed to #{status}") if logger
@@ -218,7 +220,7 @@ module ASM
           raise(UserException, "Server #{serial_number} O/S install timed out")
         end
       end
-      node
+      result
     end
 
   end
