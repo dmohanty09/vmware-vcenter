@@ -33,6 +33,7 @@ describe ASM::UpdateDeployment do
     ASM::ServiceDeployment.any_instance.stubs(:process_tor_switches).returns(nil)
     ASM::ServiceDeployment.any_instance.stubs(:process_san_switches).returns(nil)
     ASM::ServiceDeployment.any_instance.stubs(:process_components).returns(nil)
+    ASM::ServiceDeployment.any_instance.stubs(:reboot_all_servers).returns(nil)
 
     mock = mock('deployment_data')
     mock.stub_everything

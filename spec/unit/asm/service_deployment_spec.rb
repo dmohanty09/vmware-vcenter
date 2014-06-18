@@ -19,6 +19,7 @@ describe ASM::ServiceDeployment do
     @sd.stubs(:create_broker_if_needed).returns('STUB-BROKER-NAME')
     @sd.stubs(:get_server_inventory).returns({})
     @sd.stubs(:update_inventory_through_controller)
+    @sd.stubs(:reboot_all_servers).returns(nil)
     ASM.stubs(:base_dir).returns(@tmp_dir)
     network = {
       'id' => '1', 'name' => 'Test Network', 'vlanId' => '28', 

@@ -174,5 +174,30 @@ module ASM
       mac_info
     end
 
+    #Gets LC status
+    def self.lcstatus (endpoint, logger = nil)
+      invoke(endpoint, 'GetRemoteServicesAPIStatus','http://schemas.dmtf.org/wbem/wscim/1/cim-schema/2/root/dcim/DCIM_LCService?SystemCreationClassName="DCIM_ComputerSystem",CreationClassName="DCIM_LCService",SystemName="DCIM:ComputerSystem",Name="DCIM:LCService"', :selector => '//n1:LCStatus', :logger => logger)
+    end
+
+    #This function will exit when the LC status is 0, or a puppet error will be raised if the LC status never is 0 (never stops being busy)
+    def self.wait_for_lc_ready(endpoint, logger = nil, attempts=0, max_attempts=30)
+      if(attempts > max_attempts)
+        raise Exception, "Life cycle controller is busy"
+      else
+        status = lcstatus(endpoint, logger).to_i
+        if(status == 0)
+          return
+        else
+          logger.debug "LC status is busy: status code #{status}. Waiting..." if logger
+          sleep sleep_time
+          wait_for_lc_ready(endpoint, logger, attempts+1, max_attempts)
+        end
+      end
+    end
+
+    def self.sleep_time
+      60
+    end
+
   end
 end
