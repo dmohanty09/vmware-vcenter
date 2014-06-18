@@ -1120,7 +1120,7 @@ class ASM::ServiceDeployment
     managed_devices = ASM::Util.fetch_managed_inventory()
     certs = []
     managed_devices.each do |managed_device|
-      certs.push(managed_device['refId']) if managed_device['deviceType'] == "dellswitch"
+      certs.push(managed_device['refId']) if managed_device['deviceType'] == "dellswitch" and managed_device['state'] != 'UNMANAGED'
     end
     
     @configured_rack_switches = certs.find_all do |x|
