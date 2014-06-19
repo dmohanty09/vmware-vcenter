@@ -1435,7 +1435,7 @@ class ASM::ServiceDeployment
           # for retry case, if the agent is already there, no need to wait again for this step
           if reboot_required
             logger.debug("Non HyperV deployment which already exists")
-            deployment_status = await_agent_run_completion(ASM::Util.hostname_to_certname(os_host_name), timeout = 3600)
+            deployment_status = await_agent_run_completion(ASM::Util.hostname_to_certname(os_host_name))
           else
             logger.debug("HyperV deployment for retry case and server already exists. Skipping wait for agent check")
             deployment_status = nil
@@ -2096,7 +2096,6 @@ class ASM::ServiceDeployment
     log("Creating VM #{hostname}")
     certname = "vm-#{hostname.downcase}"
     process_generic(certname, resource_hash, 'apply')
-
     puppet_classes = get_classification_data(component, hostname)
     if puppet_classes
       agent_cert_name = vm.certname
@@ -2128,29 +2127,28 @@ class ASM::ServiceDeployment
       server.title = vm_title # TODO: clean this up
       resource_hash['asm::server'] = server.to_puppet
       process_generic(certname, resource_hash, 'apply')
-      unless @debug
-        # Unlike in bare-metal installs we only wait for the :boot_install
-        # log event in razor. At that point the O/S installer has just been
-        # launched, it is not complete. This is done because our VMs have hard
-        # disk earlier in the boot order than PXE. Therefore the nodes do not
-        # check in with razor at all once they have an O/S laid down on hard
-        # disk and we will not see any :boot_local events
 
-        version = server['os_image_version'] || server['os_image_type']
-        begin
-          razor.block_until_task_complete(serial_number, server['policy_name'], version, :bind)
-        rescue
-          logger.info("VM was not able to PXE boot.  Resetting VM.")
-          vm.reset
-        end
-        razor.block_until_task_complete(serial_number, server['policy_name'],
-                                        version, :boot_install)
+    unless @debug
+      # Unlike in bare-metal installs we only wait for the :boot_install
+      # log event in razor. At that point the O/S installer has just been
+      # launched, it is not complete. This is done because our VMs have hard
+      # disk earlier in the boot order than PXE. Therefore the nodes do not
+      # check in with razor at all once they have an O/S laid down on hard
+      # disk and we will not see any :boot_local events
+      version = server['os_image_version'] || server['os_image_type']
+      begin
+        razor.block_until_task_complete(serial_number, server['policy_name'], version, :bind)
+      rescue
+        logger.info("VM was not able to PXE boot.  Resetting VM.")
+        vm.reset
+      end
+      razor_result = razor.block_until_task_complete(serial_number, server['policy_name'],
+                                      version, :boot_install)
       end
     end
 
     if puppet_classes || server
-      # Wait for first agent run to complete
-      await_agent_run_completion(vm.certname)
+      await_agent_run_completion(vm.certname, razor_result[:timestamp]) unless @debug
       logger.info("Running puppet on VM #{vm_title} one more time to reconfigure networks.")
       vm_resource[vm_title]['network_interfaces'].delete_if{|item| item['portgroup']=="VM Network"}
       #Rerun one more time to remove PXE network. 
@@ -2163,11 +2161,7 @@ class ASM::ServiceDeployment
     File.write(filename, config.to_yaml)
   end
 
-  def await_agent_run_completion(certname, timeout = 3600)
-    #get the time that this method starts so can check for reports that happen afterwards
-    function_start = Time.now
-
-
+  def await_agent_run_completion(certname, timestamp=Time.now, timeout = 3600)
     ASM::Util.block_and_retry_until_ready(timeout, CommandException, 60) do
       # check if cert is in list of active nodes
       log("Waiting for puppet agent to check in for #{certname}")
@@ -2190,7 +2184,7 @@ class ASM::ServiceDeployment
       #Check if report ended after the await_agent_run_completion function started
       #The agent shouldn't check in so fast that it checks in before this function has been called.  Takes many minutes to provision/insall OS
       report_receive_time = Time.parse(resp.first["receive-time"])
-      if(report_receive_time < function_start)
+      if(report_receive_time < timestamp)
         raise(CommandException, "Reports found, but not from recent runs.  Retrying...")
       end
 
@@ -2242,7 +2236,7 @@ class ASM::ServiceDeployment
 
     # Wait puppet agent to respond
     log("Agent #{certname} Waiting for puppet agent to respond after reboot")
-    await_agent_run_completion(os_host_name,timeout = 3600)
+    await_agent_run_completion(os_host_name)
     true
   end
 

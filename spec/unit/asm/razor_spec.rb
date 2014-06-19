@@ -117,7 +117,7 @@ describe ASM::Razor do
       it 'should return :microkernel' do
         @logs['items'] = @logs['items'].slice(0, 1)
         RestClient.stubs(:get).with(@node_url).returns(mock_response(200, @logs))
-        @razor.task_status(@node_name, @policy_name).should == :microkernel
+        @razor.task_status(@node_name, @policy_name)[:status].should == :microkernel
       end
     end
 
@@ -125,7 +125,7 @@ describe ASM::Razor do
       it 'should return :bind' do
         @logs['items'] = @logs['items'].slice(0, 2)
         RestClient.stubs(:get).with(@node_url).returns(mock_response(200, @logs))
-        @razor.task_status(@node_name, @policy_name).should == :bind
+        @razor.task_status(@node_name, @policy_name)[:status].should == :bind
       end
     end
 
@@ -133,7 +133,7 @@ describe ASM::Razor do
       it 'should return :reboot' do
         @logs['items'] = @logs['items'].slice(0, 3)
         RestClient.stubs(:get).with(@node_url).returns(mock_response(200, @logs))
-        @razor.task_status(@node_name, @policy_name).should == :reboot
+        @razor.task_status(@node_name, @policy_name)[:status].should == :reboot
       end
     end
 
@@ -141,7 +141,7 @@ describe ASM::Razor do
       it 'should return :boot_install' do
         @logs['items'] = @logs['items'].slice(0, 4)
         RestClient.stubs(:get).with(@node_url).returns(mock_response(200, @logs))
-        @razor.task_status(@node_name, @policy_name).should == :boot_install
+        @razor.task_status(@node_name, @policy_name)[:status].should == :boot_install
       end
     end
 
@@ -153,7 +153,7 @@ describe ASM::Razor do
         @logs['items'][3]['template'] = 'boot_wim'
 
         RestClient.stubs(:get).with(@node_url).returns(mock_response(200, @logs))
-        @razor.task_status(@node_name, @policy_name).should == :boot_install
+        @razor.task_status(@node_name, @policy_name)[:status].should == :boot_install
       end
     end
 
@@ -161,7 +161,7 @@ describe ASM::Razor do
       it 'should return :boot_install' do
         @logs['items'] = @logs['items'].slice(0, 7)
         RestClient.stubs(:get).with(@node_url).returns(mock_response(200, @logs))
-        @razor.task_status(@node_name, @policy_name).should == :boot_install
+        @razor.task_status(@node_name, @policy_name)[:status].should == :boot_install
       end
     end
 
@@ -169,7 +169,13 @@ describe ASM::Razor do
       it 'should return :boot_local' do
         @logs['items'] = @logs['items'].slice(0, 10)
         RestClient.stubs(:get).with(@node_url).returns(mock_response(200, @logs))
-        @razor.task_status(@node_name, @policy_name).should == :boot_local
+        @razor.task_status(@node_name, @policy_name)[:status].should == :boot_local
+      end
+
+      it 'should return the right timestamp' do 
+        @logs['items'] = @logs['items'].slice(0, 10)
+        RestClient.stubs(:get).with(@node_url).returns(mock_response(200, @logs))
+        @razor.task_status(@node_name, @policy_name)[:timestamp].should == Time.parse("2014-04-28T16:00:03+00:00")
       end
     end
 
@@ -177,7 +183,7 @@ describe ASM::Razor do
       it 'should return :boot_local_2' do
         @logs['items'] = @logs['items'].slice(0, 11)
         RestClient.stubs(:get).with(@node_url).returns(mock_response(200, @logs))
-        @razor.task_status(@node_name, @policy_name).should == :boot_local_2
+        @razor.task_status(@node_name, @policy_name)[:status].should == :boot_local_2
       end
     end
 
@@ -188,7 +194,7 @@ describe ASM::Razor do
         items.push(items.last)
         @logs['items'] = items
         RestClient.stubs(:get).with(@node_url).returns(mock_response(200, @logs))
-        @razor.task_status(@node_name, @policy_name).should == :boot_local_2
+        @razor.task_status(@node_name, @policy_name)[:status].should == :boot_local_2
       end
     end
 
@@ -196,7 +202,7 @@ describe ASM::Razor do
       it 'should return nil' do
         @logs['items'] = @logs['items'].slice(0, 12)
         RestClient.stubs(:get).with(@node_url).returns(mock_response(200, @logs))
-        @razor.task_status(@node_name, @policy_name).should == nil
+        @razor.task_status(@node_name, @policy_name)[:status].should == nil
       end
     end
 
@@ -204,26 +210,26 @@ describe ASM::Razor do
       it 'should still return :bind' do
         @logs['items'] = @logs['items'] + @logs['items'].slice(0, 2)
         RestClient.stubs(:get).with(@node_url).returns(mock_response(200, @logs))
-        @razor.task_status(@node_name, @policy_name).should == :bind
+        @razor.task_status(@node_name, @policy_name)[:status].should == :bind
       end
     end
 
     describe 'when different install has started afterward' do
       it 'should return nil' do
-        unrelated_bind = [{'event' => 'bind', 'policy' => 'unrelated_policy'}]
+        unrelated_bind = [{'event' => 'bind', 'policy' => 'unrelated_policy', 'timestamp' =>'2014-04-30T15:46:33+00:00'}]
         @logs['items'] = @logs['items'] + unrelated_bind
         RestClient.stubs(:get).with(@node_url).returns(mock_response(200, @logs))
-        @razor.task_status(@node_name, @policy_name).should == nil
+        @razor.task_status(@node_name, @policy_name)[:status].should == nil
       end
     end
 
     describe 'where there was a previous install' do
       it 'should return :bind after a bind event' do
-        previous_logs = [{'event' => 'bind', 'policy' => 'unrelated_policy'},
-                         {'event' => 'reinstall', 'policy' => 'unrelated_policy'}]
+        previous_logs = [{'event' => 'bind', 'policy' => 'unrelated_policy', 'timestamp' =>'2014-04-30T15:46:33+00:00'},
+                         {'event' => 'reinstall', 'policy' => 'unrelated_policy', 'timestamp' =>'2014-04-30T16:46:33+00:00'}]
         @logs['items'] = previous_logs + @logs['items'].slice(0, 2)
         RestClient.stubs(:get).with(@node_url).returns(mock_response(200, @logs))
-        @razor.task_status(@node_name, @policy_name).should == :bind
+        @razor.task_status(@node_name, @policy_name)[:status].should == :bind
       end
     end
 
@@ -261,13 +267,8 @@ describe ASM::Razor do
 
       describe 'when node found' do
 
-        before do
-          @node = {'name' => 'node1'}
-          @razor.stubs(:find_node_blocking).returns(@node)
-        end
-
         it 'should fail if status does not advance' do
-          ASM::Util.stubs(:block_and_retry_until_ready).returns(:boot_install)
+          ASM::Util.stubs(:block_and_retry_until_ready).returns({:status => :boot_install})
           expect do
             @razor.block_until_task_complete('serial_no', 'policy', 'task')
           end.to raise_error(ASM::UserException)
@@ -277,25 +278,25 @@ describe ASM::Razor do
           ASM::Util.stubs(:block_and_retry_until_ready).raises(Timeout::Error)
           expect do
             @razor.block_until_task_complete('serial_no', 'policy', 'task')
-          end.to raise_error(ASM::UserException)
+          end.to raise_error(Timeout::Error)
         end
 
         it 'should succeed when status is terminal' do
-          ASM::Util.stubs(:block_and_retry_until_ready).returns(:boot_local)
+          ASM::Util.stubs(:block_and_retry_until_ready).returns({:status=>:boot_local})
           @razor.block_until_task_complete('serial_no', 'policy', 'task').
-              should == @node
+              should == {:status=>:boot_local}
         end
 
         it 'should wait for :boot_local_2 when task is vmware' do
-          ASM::Util.stubs(:block_and_retry_until_ready).returns(:boot_local_2)
+          ASM::Util.stubs(:block_and_retry_until_ready).returns({:status=>:boot_local_2})
           @razor.block_until_task_complete('serial_no', 'policy', 'vmware-esxi').
-              should == @node
+              should == {:status=>:boot_local_2}
         end
 
         it 'should wait for :boot_local_2 when task is windows' do
-          ASM::Util.stubs(:block_and_retry_until_ready).returns(:boot_local_2)
+          ASM::Util.stubs(:block_and_retry_until_ready).returns({:status=>:boot_local_2})
           @razor.block_until_task_complete('serial_no', 'policy', 'windows').
-              should == @node
+              should == {:status=>:boot_local_2}
         end
       end
 
