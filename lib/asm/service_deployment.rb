@@ -2406,8 +2406,20 @@ class ASM::ServiceDeployment
               tagged_vlans = []
               untagged_vlans = []
               interface_name = fabric_interface['name']
+              is_partitioned = fabric_interface['partitioned']
               fabric_vlan_info[fabric_name][interface_name] ||= {}
-              fabric_interface['partitions'].each do |partition|
+              
+              # Read the first interface partition only, if partition set is false in deployment.json
+              fabric_partitions = []
+              if is_partitioned
+                fabric_partitions = fabric_interface['partitions']
+              else
+                fabric_partitions.push(fabric_interface['partitions'][0])
+              end
+              
+              logger.debug("is_partitioned: #{is_partitioned}")
+              logger.debug("fabric_partitions: #{fabric_partitions}")
+              fabric_partitions.each do |partition|
                 partition_network_object = partition['networkObjects']
                 partition_vlan_info = get_vlan_info(partition_network_object,target_boot_device,os_image_type)
                 if partition_vlan_info
