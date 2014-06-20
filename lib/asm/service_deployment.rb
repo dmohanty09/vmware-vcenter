@@ -2145,7 +2145,8 @@ class ASM::ServiceDeployment
     end
 
     if puppet_classes || server
-      await_agent_run_completion(vm.certname, razor_result[:timestamp]) unless @debug
+      timestamp = razor_result.nil? ? Time.now : razor_result[:timestamp]
+      await_agent_run_completion(vm.certname, timestamp) unless @debug
       logger.info("Running puppet on VM #{vm_title} one more time to reconfigure networks.")
       vm_resource[vm_title]['network_interfaces'].delete_if{|item| item['portgroup']=="VM Network"}
       #Rerun one more time to remove PXE network. 
