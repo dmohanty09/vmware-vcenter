@@ -14,7 +14,7 @@ describe ASM::ServiceDeployment do
     @sd = ASM::ServiceDeployment.new('8000', @deployment_db)
     razor = mock('razor')
     razor.stubs(:find_node).returns({})
-    razor.stubs(:block_until_task_complete)
+    razor.stubs(:block_until_task_complete).returns({:status=>:boot_install, :timestamp=>Time.new("1969-01-01 00:00:00 -0600")})
     @sd.stubs(:razor).returns(razor)
     @sd.stubs(:create_broker_if_needed).returns('STUB-BROKER-NAME')
     @sd.stubs(:get_server_inventory).returns({})
@@ -104,8 +104,6 @@ describe ASM::ServiceDeployment do
         .with(URI.escape("http://localhost:7080/v3/events?query=[\"=\", \"report\", \"fooreport\"]"),
         {:content_type => :json, :accept => :json})
         .returns('[{"name":"agent-foo"}]')
-
-        Time.stubs(:now).returns(Time.new("1969-01-01 00:00:00 -0600"))
         #1388534400 is time at Jan 1, 2014.  Used in the rule_number function.
         @sd.stubs(:rule_number).returns(1388534400)
 

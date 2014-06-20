@@ -1423,7 +1423,7 @@ class ASM::ServiceDeployment
           logger.info("Server never rebooted.  An old OS may be installed.  Manually rebooting to kick off razor install...")
           ASM::WsMan.reboot({:host=>deviceconf['host'], :user=>deviceconf['user'], :password=>deviceconf['password']}) if reboot_required
         end
-        node = razor.block_until_task_complete(serial_number,
+        razor_result = razor.block_until_task_complete(serial_number,
                                                params['policy_name'], version)
         if type == 'vmware_esxi'
           raise(Exception, "Static management IP address was not specified for #{serial_number}") unless static_ip
@@ -1432,7 +1432,7 @@ class ASM::ServiceDeployment
           # for retry case, if the agent is already there, no need to wait again for this step
           if reboot_required
             logger.debug("Non HyperV deployment which already exists")
-            deployment_status = await_agent_run_completion(ASM::Util.hostname_to_certname(os_host_name))
+            deployment_status = await_agent_run_completion(ASM::Util.hostname_to_certname(os_host_name), razor_result[:timestamp])
           else
             logger.debug("HyperV deployment for retry case and server already exists. Skipping wait for agent check")
             deployment_status = nil
