@@ -148,9 +148,6 @@ class ASM::ServiceDeployment
       @blade_server_switchhash = self.populate_blade_switch_hash()
       @brocade_san_switchhash = self.populate_brocade_san_switch_hash()
       
-      #Reboot servers and wait for lc ready
-      reboot_all_servers(@components_by_type)
-      
       # Changing the ordering of SAN and LAN configuration
       # To ensure that the server boots with razor image
       process_tor_switches()
