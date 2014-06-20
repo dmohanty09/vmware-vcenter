@@ -31,6 +31,7 @@ module ASM
           logger.debug("Cleaning virtual identities from #{server['puppetCertName']}") if logger
           service_deployment.cleanup_server(server,server['puppetCertName'])
           endpoint = ASM::Util.parse_device_config(server['puppetCertName'])
+          ASM::WsMan.wait_for_lc_ready(endpoint,logger)
           ASM::WsMan.poweroff(endpoint,logger)
         end
       end
