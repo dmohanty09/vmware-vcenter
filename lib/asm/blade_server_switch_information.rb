@@ -17,7 +17,7 @@ class Blade_server_switch_information
     slot=@sinfo['slot_num']
     logger.debug "A-- #{serviceTag} #{serverModel} #{chassisip} #{idracIp} #{slot}  #{chassisusername}  #{chassispassword} #{@sinfo}"
     quaterBladeModelList = [ "M420" ]
-    halfBladeModelList = [ "M620" ]
+    halfBladeModelList = [ "M620", "M520" ]
     fullBladeModelList = [ "M820" ]
     #logger.debug "A-- racadm -r  #{chassisip} -u #{chassisusername} -p #{chassispassword} getioinfo"
     #out = `racadm -r  #{chassisip} -u #{chassisusername} -p #{chassispassword} getioinfo`
