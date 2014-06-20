@@ -2862,6 +2862,9 @@ class ASM::ServiceDeployment
   
   def get_iscsi_fabric(server_component,server_cert)
     server_conf = ASM::Util.build_component_configuration(server_component, :decrypt => decrypt?)
+    if server_cert.include?('rackserver')
+      return get_iscsi_fabric_rackserver(server_component,server_cert)
+    end
     network_params = (server_conf['asm::esxiscsiconfig'] || {})[server_cert]
     # get fabric information
     if network_params
@@ -2897,6 +2900,55 @@ class ASM::ServiceDeployment
     end
       
     fabric_iscsi_info.compact.uniq
+  end
+  
+  def get_iscsi_fabric_rackserver(server_component,server_cert)
+    server_conf = ASM::Util.build_component_configuration(server_component, :decrypt => decrypt?)
+    network_params = (server_conf['asm::esxiscsiconfig'] || {})[server_cert]
+    # get fabric information
+      
+    network_fabric_info = {}
+    iscsi_fabric = []
+    nc = ASM::NetworkConfiguration.new(network_params['network_configuration'])
+    device_conf = ASM::Util.parse_device_config(server_cert)
+    nc.cards.each do |card|
+      logger.debug("Card name: #{card}")
+      card.interfaces.each do |interface|
+        fabric_networks = []
+        tagged_vlans = []
+        untagged_vlans = []
+        interface_mac = ""
+        logger.debug("Interface name: #{interface['name']}")
+        interface.partitions.each do |partition|
+          logger.debug("Partition: #{partition}")
+          logger.debug("Network Object #{partition['networkObjects']}")
+          partition['networkObjects'].each do |networkObject|
+            if networkObject['type'].to_s == "STORAGE_ISCSI_SAN"
+              iscsi_fabric.push(card['card_index'])
+            end
+          end
+        end
+      end
+    end
+    
+    unless iscsi_fabric.uniq.size == 1
+      raise(Exception, "Expected to find only one iscsi fabric, found #{iscsi_fabric.uniq.size}")
+    end
+
+    card_to_fabric(iscsi_fabric.compact.uniq)
+  end
+  
+  def card_to_fabric(card)
+    logger.debug("Card name: #{card}")
+    fabric_name = []
+    card_num = card[0].to_i
+    ('A'..'Z').each_with_index do |fabric_prefix,index|
+      if card_num == index
+        fabric_name.push("Fabric #{fabric_prefix}")
+      end
+    end
+    logger.debug("fabric name: #{fabric_name}")
+    fabric_name
   end
   
   def get_iscsi_fabric_vlan_info(network_fabric_info)
